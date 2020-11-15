@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <title>lavalamp.app</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
-<body>
-<svg xmlns="http://www.w3.org/2000/svg" version="1.1">
-    <defs>
-        <filter id="lava">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="20" result="blur" />
-            <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -7" result="lava" />
-            <feBlend in="SourceGraphic" in2="lava" />
-        </filter>
-    </defs>
-</svg>
-<script src="lavalamp.js" type="module"></script>
-
+<body style="font-family: Arial">
+    <svg id="svg-filter" xmlns="http://www.w3.org/2000/svg" version="1.1">
+        <defs>
+            <filter id="lava">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="55" result="blur" edgeMode="duplicate" />
+                <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 55 -5" result="lava" />
+                <feBlend in="SourceGraphic" in2="lava" />
+            </filter>
+        </defs>
+    </svg>
+    <script src="lavalamp.js" type="module"></script>
 
 </body>
 </html>
