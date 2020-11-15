@@ -50,16 +50,16 @@
     const defaultLavaHue = 290
     let defaultBgHsl = { h: 115, s: 67, l: 54 }
     let defaultSpeed = 1
-    let defaultAmountOfLava = Math.trunc( 50 * ( window.innerWidth / 1000 ) )
+    let defaultAmountOfLava = ()=>Math.trunc(window.innerWidth / 5)
     let defaultLavaFuzziness = 32
-    let defaultLavaSizeFactor = 1.2
+    let defaultLavaSizeFactor = ()=>(window.innerHeight / 500).toFixed(1)
 
     let bgHsl = fnstate( defaultBgHsl )
     let lavaHue = fnstate( defaultLavaHue )
     let lavaFuzziness = fnstate( defaultLavaFuzziness )
     let speed = fnstate( defaultSpeed )
-    let lavaSizeFactor = fnstate( defaultLavaSizeFactor )
-    let amountOfLava = fnstate( defaultAmountOfLava )
+    let lavaSizeFactor = fnstate( defaultLavaSizeFactor() )
+    let amountOfLava = fnstate( defaultAmountOfLava() )
 
     let filter = div()
     filter.innerHTML = ``
@@ -96,8 +96,8 @@
         bgHsl( defaultBgHsl )
         lavaFuzziness( defaultLavaFuzziness )
         speed( defaultSpeed )
-        lavaSizeFactor( defaultLavaSizeFactor )
-        amountOfLava( defaultAmountOfLava )
+        lavaSizeFactor( defaultLavaSizeFactor() )
+        amountOfLava( defaultAmountOfLava() )
     }
 
     const randomBetween = ( min, max ) => Math.trunc( Math.random() * ( max - min ) + min )
@@ -231,8 +231,8 @@
                                          type: 'range',
                                          value: amountOfLava.bindAttr( amountOfLava ),
                                          step: 1,
-                                         min: 1,
-                                         max: 100,
+                                         min: 5,
+                                         max: Math.trunc(defaultAmountOfLava() * 4),
                                          oninput: ( e ) => amountOfLava( e.target.value )
                                      } )
                           ),
@@ -336,9 +336,9 @@
 
         const createLava = () => {
             let lavaMin = 60
-            let lavaMax = 700 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
+            let lavaMax = 1200 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
 
-            const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 2 )
+            const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 4 )
             let left = randomBetween( -40, window.innerWidth + 10 )
             let lavaTop = Math.trunc( -( lavaSize * .3 ) )
             let lavaBottom = Math.trunc( window.innerHeight - ( lavaSize * .75 ) )
@@ -375,19 +375,18 @@
                 nextIsRise = !nextIsRise
                 lava.animate( frames, animateTime )
                 lava.style.transform = frames[ 1 ].transform
-                setTimeout( animate, animateTime + randomNormalDistribution( 500, 15000 ) / speed() )
+                setTimeout( animate, animateTime + randomNormalDistribution( 700, 15000 ) / speed() )
             }
             setTimeout( animate, lastTime + randomNormalDistribution( 500, 15000 ) / speed() )
-            lastTime += randomNormalDistribution( 150, 2000, 2 ) / speed()
+            lastTime += randomNormalDistribution( 250, 4000, 2 ) / speed()
         }
 
-        for( let i = 0; i < amountOfLava() * ( window.innerWidth / 250 ); i++ ) {
+        for( let i = 0; i < amountOfLava(); i++ ) {
             createLava()
         }
     }
 
     const reset = () => {
-        defaultAmountOfLava = Math.trunc( 25 * ( window.innerHeight / 1000 ) )
         if( current ) current.remove()
         let lamp = lavalamp()
         document.body.append( current = bg( lamp ) )
