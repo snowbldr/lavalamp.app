@@ -16,7 +16,274 @@
             </filter>
         </defs>
     </svg>
-    <script src="lavalamp.js" type="module"></script>
+    <script type="module">
+        import { button, div, img, input, label, style } from 'https://cdn.jsdelivr.net/npm/fntags@0.4.10/src/fnelements.js'
+        import { fnstate } from 'https://cdn.jsdelivr.net/npm/fntags@0.4.10/src/fntags.js'
 
+        const defaultLavaColor = '#BE01E4'
+        let defaultBgColor = '#ff5100'
+        let defaultSpeed = 1
+
+        let lavaColor = fnstate( defaultLavaColor )
+        let bgColor = fnstate( defaultBgColor )
+        let speed = fnstate( defaultSpeed )
+        let defaultAmountOfLava = Math.trunc(25 * (window.innerHeight/1000))
+        let amountOfLava = fnstate( defaultAmountOfLava )
+        let lavaCount = amountOfLava()
+
+        document.body.append( style( `
+    #lavalamp {
+        filter: url("#lava");
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        right: 0;
+    }
+
+    .lava {
+        border-radius: 50%;
+        position: absolute;
+        transition-timing-function: linear;
+    }
+` ) )
+
+        let filter = div()
+        filter.innerHTML = ``
+
+        let settingsKey = 'lavalamp.app-settings'
+        if( localStorage.getItem( settingsKey ) ) {
+            let stored = JSON.parse( localStorage.getItem( settingsKey ) )
+            lavaColor( stored.lavaColor || lavaColor() )
+            bgColor( stored.bgColor || bgColor() )
+            speed( stored.speed || speed() )
+        }
+
+        const saveSettings = () => {
+            localStorage.setItem( settingsKey, JSON.stringify( { lavaColor: lavaColor(), bgColor: bgColor(), speed: speed() } ) )
+        }
+
+        const resetDefaults = () => {
+            localStorage.removeItem( settingsKey )
+            lavaColor( defaultLavaColor )
+            bgColor( defaultBgColor )
+            speed( defaultSpeed )
+            amountOfLava( defaultAmountOfLava )
+        }
+
+
+        document.body.style.background = bgColor()
+        bgColor.subscribe( () => {
+            document.body.style.background = bgColor()
+        } )
+
+        const randomBetween = ( min, max ) => Math.trunc( Math.random() * ( max - min ) + min )
+
+        function randomNormalDistribution( min, max, skew = 1 ) {
+            let u = 0, v = 0
+            while( u === 0 ) {
+                u = Math.random()
+            } //Converting [0,1) to (0,1)
+            while( v === 0 ) {
+                v = Math.random()
+            }
+            let num = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v )
+
+            num = num / 10.0 + 0.5 // Translate to 0 -> 1
+            if( num > 1 || num < 0 ) num = randomNormalDistribution( min, max, skew ) // resample between 0 and 1 if out of range
+            num = Math.pow( num, skew ) // Skew
+            num *= max - min // Stretch to fill range
+            num += min // offset to min
+            return Math.trunc( num )
+        }
+
+
+        const animateLava = () => {
+            let lastTime = 0
+
+            const createLava = () => {
+                const lavaSize = randomNormalDistribution( 100, 500, 3 ) * ( window.innerWidth / 1500 )
+                let left = randomBetween( -40, window.innerWidth + 10 )
+                let lavaTop = window.innerHeight
+                let lavaBottom = -( lavaSize / 2 )
+                let lava = div(
+                    {
+                        style: {
+                            position: 'absolute',
+                            'border-radius': '50%',
+                            height: lavaSize + 'px',
+                            width: lavaSize + 'px',
+                            background: lavaColor(),
+                            bottom: lavaBottom + 'px',
+                            left: left + 'px'
+                        }
+                    } )
+
+                lavalamp.appendChild( lavaColor.bindAs( lava, () => lava.style.backgroundColor = lavaColor() ) )
+                let nextIsRise = true
+                const animate = () => {
+                    let animateTime = ( randomNormalDistribution( 15, 45, 1 ) * 1000 ) / speed()
+
+                    let frames = [
+                        { bottom: `${lavaBottom}px`, ease: 'ease-in' },
+                        { bottom: `${lavaTop}px`, ease: 'ease-out' }
+                    ]
+
+                    if( !nextIsRise )
+                        frames = frames.reverse()
+
+                    nextIsRise = !nextIsRise
+                    lava.animate( frames, animateTime )
+                    lava.style.bottom = frames[ 1 ].bottom
+                    setTimeout( animate, animateTime + randomNormalDistribution( 500, 15000 ) / speed() )
+                }
+                setTimeout( animate, lastTime + randomNormalDistribution( 500, 15000 ) / speed() )
+                lastTime += randomNormalDistribution( 400, 5000 ) / speed()
+            }
+
+            for( let i = 0; i < lavaCount; i++ ) {
+                createLava()
+            }
+        }
+
+        const formInput = ( inputLabel, theInput ) =>
+            div(
+                {
+                    style: {
+                        display: 'flex',
+                        'flex-direction': 'row',
+                        'width': '100%',
+                        margin: '10px',
+                        'justify-content': 'space-between'
+                    }
+                },
+                label( { for: theInput.getAttribute( 'id' ) }, inputLabel ),
+                theInput
+            )
+
+        const settings = div( {
+                                  style: {
+                                      position: 'fixed',
+                                      bottom: '20px',
+                                      right: '20px',
+                                      background: 'rgb(255,255,255,.75)',
+                                      'z-index': 20,
+                                      padding: '25px 50px',
+                                      display: 'flex',
+                                      'border-radius': '10px',
+                                      'flex-direction': 'column',
+                                      'justify-content': 'space-evenly',
+                                      'align-items': 'center'
+                                  }
+                              },
+                              formInput(
+                                  'Background Color',
+                                  input( { id: 'bgColor', type: 'color', value: bgColor.bindAttr(bgColor), onchange: ( e ) => bgColor( e.target.value ),
+                                             style: {
+                                                 'border-radius': '5px',
+                                                 padding: '5px'
+                                             }, } )
+                              ),
+                              formInput(
+                                  'Lava Color',
+                                  input( { id: 'lavaColor', type: 'color', value: lavaColor.bindAttr(lavaColor), onchange: ( e ) => lavaColor( e.target.value ),
+                                             style: {
+                                                 'border-radius': '5px',
+                                                 padding: '5px'
+                                             } } )
+                              ),
+                              formInput(
+                                  'Speed',
+                                  input( { id: 'speed', type: 'range', value: speed.bindAttr(speed), step: 0.1, min: 0.1, max: 8, onchange: ( e ) => speed( e.target.value ) } )
+                              ),
+                              formInput(
+                                  'Amount of Lava',
+                                  input( { id: 'lava-amount', type: 'range', value: amountOfLava.bindAttr(amountOfLava), step: 5, min: Math.trunc(defaultAmountOfLava / 2), max: Math.trunc(defaultAmountOfLava*2), onchange: ( e ) => amountOfLava( e.target.value ) } )
+                              ),
+                              formInput(
+                                  'Save',
+                                  button( { id: 'save', onclick: saveSettings,
+                                              style: {
+                                                  'border-radius': '5px',
+                                                  padding: '5px'
+                                              } }, 'Save' )
+                              ),
+                              formInput( 'Reset Defaults', button( { id: 'reset', onclick: resetDefaults,
+                                                                       style: {
+                                                                           'border-radius': '5px',
+                                                                           padding: '5px'
+                                                                       } }, 'Reset Defaults' ) ),
+                              div( {
+                                       style: {
+                                           position: 'absolute',
+                                           top: '3px',
+                                           right: '18px',
+                                           'font-style': 'sans-serif',
+                                           'font-size': '26px',
+                                           cursor: 'pointer'
+                                       },
+                                       onclick: () => settings.remove()
+                                   },
+                                   'x'
+                              )
+        )
+        let lavalamp = div(
+            {
+                id: 'lavalamp'
+            } )
+        const bg = div( {
+                            style: {
+                                position: 'fixed',
+                                'z-index': -100,
+                                background: bgColor()
+                            }
+                        } )
+        const showSettings = () =>
+            document.body.append( settings )
+
+
+        const settingsIcon = div(
+            {
+                style: {
+                    position: 'fixed',
+                    bottom: '10px',
+                    right: '10px',
+                    cursor: 'pointer',
+                    'z-index': 10
+                }
+            },
+            img( {
+                     src: 'data:image/png;base64,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',
+                     width: '32px', height: '32px', onclick: showSettings } )
+        )
+        const reset = () => {
+            defaultAmountOfLava = Math.trunc(25 * (window.innerHeight/1000))
+            while(lavalamp.firstChild){
+                lavalamp.firstChild.remove()
+            }
+            lavalamp.remove()
+            bg.remove()
+            settingsIcon.remove()
+
+            document.body.append( lavalamp )
+            document.body.append( bg )
+            document.body.append( settingsIcon )
+
+
+            animateLava()
+
+
+        }
+        window.addEventListener( 'resize', reset )
+        speed.subscribe( reset )
+        amountOfLava.subscribe( ()=>{
+            lavaCount = amountOfLava() * (window.innerWidth/1000)
+            reset()
+        } )
+
+
+        reset()
+
+    </script>
 </body>
 </html>
