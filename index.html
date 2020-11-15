@@ -27,7 +27,7 @@
         let lavaColor = fnstate( defaultLavaColor )
         let bgColor = fnstate( defaultBgColor )
         let speed = fnstate( defaultSpeed )
-        let defaultAmountOfLava = Math.trunc(25 * (window.innerHeight/1000))
+        let defaultAmountOfLava = Math.trunc(40 * (window.innerWidth/1000))
         let amountOfLava = fnstate( defaultAmountOfLava )
         let lavaCount = amountOfLava()
 
@@ -102,7 +102,10 @@
             let lastTime = 0
 
             const createLava = () => {
-                const lavaSize = randomNormalDistribution( 100, 500, 3 ) * ( window.innerWidth / 1500 )
+                let lavaMin = 65
+                let lavaMax = 500 * ( window.innerWidth / 1500 )
+
+                const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 5 )
                 let left = randomBetween( -40, window.innerWidth + 10 )
                 let lavaTop = window.innerHeight
                 let lavaBottom = -( lavaSize / 2 )
@@ -164,11 +167,11 @@
         const settings = div( {
                                   style: {
                                       position: 'fixed',
-                                      bottom: '20px',
-                                      right: '20px',
+                                      bottom: '5px',
+                                      right: '5px',
                                       background: 'rgb(255,255,255,.75)',
                                       'z-index': 20,
-                                      padding: '25px 50px',
+                                      padding: '22px 22px',
                                       display: 'flex',
                                       'border-radius': '10px',
                                       'flex-direction': 'column',
@@ -198,7 +201,7 @@
                               ),
                               formInput(
                                   'Amount of Lava',
-                                  input( { id: 'lava-amount', type: 'range', value: amountOfLava.bindAttr(amountOfLava), step: 5, min: Math.trunc(defaultAmountOfLava / 2), max: Math.trunc(defaultAmountOfLava*2), onchange: ( e ) => amountOfLava( e.target.value ) } )
+                                  input( { id: 'lava-amount', type: 'range', value: amountOfLava.bindAttr(amountOfLava), step: 1, min: 1, max: 100, onchange: ( e ) => amountOfLava( e.target.value ) } )
                               ),
                               formInput(
                                   'Save',
