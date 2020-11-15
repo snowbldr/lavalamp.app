@@ -61,6 +61,7 @@
 
         const saveSettings = () => {
             localStorage.setItem( settingsKey, JSON.stringify( { lavaColor: lavaColor(), bgColor: bgColor(), speed: speed() } ) )
+            settings.remove()
         }
 
         const resetDefaults = () => {
@@ -102,10 +103,10 @@
             let lastTime = 0
 
             const createLava = () => {
-                let lavaMin = 65
+                let lavaMin = 60
                 let lavaMax = 500 * ( window.innerWidth / 1500 )
 
-                const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 5 )
+                const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 4 )
                 let left = randomBetween( -40, window.innerWidth + 10 )
                 let lavaTop = window.innerHeight
                 let lavaBottom = -( lavaSize / 2 )
@@ -149,8 +150,9 @@
             }
         }
 
-        const formInput = ( inputLabel, theInput ) =>
-            div(
+        const formInput = ( inputLabel, theInput ) => {
+            theInput.style.cursor = 'pointer'
+            return div(
                 {
                     style: {
                         display: 'flex',
@@ -163,7 +165,7 @@
                 label( { for: theInput.getAttribute( 'id' ) }, inputLabel ),
                 theInput
             )
-
+        }
         const settings = div( {
                                   style: {
                                       position: 'fixed',
@@ -209,7 +211,7 @@
                                               style: {
                                                   'border-radius': '5px',
                                                   padding: '5px'
-                                              } }, 'Save' )
+                                              } }, 'Save and Close' )
                               ),
                               formInput( 'Reset Defaults', button( { id: 'reset', onclick: resetDefaults,
                                                                        style: {
