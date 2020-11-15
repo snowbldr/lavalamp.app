@@ -29,7 +29,7 @@ const lavalamp = div(
 document.body.style.background = bgColor()
 bgColor.subscribe( () => document.body.style.background = bgColor() )
 
-const randomBetween = ( min, max ) => Math.random() * ( max - min ) + min
+const randomBetween = ( min, max ) => Math.trunc( Math.random() * ( max - min ) + min )
 
 function randomNormalDistribution( min, max, skew = 1 ) {
     let u = 0, v = 0
@@ -46,10 +46,10 @@ function randomNormalDistribution( min, max, skew = 1 ) {
     num = Math.pow( num, skew ) // Skew
     num *= max - min // Stretch to fill range
     num += min // offset to min
-    return num
+    return Math.trunc( num )
 }
 
-let lavaCount = window.innerWidth/40
+let lavaCount = window.innerWidth / 40
 
 const animateLava = () => {
     let lastTime = 0
@@ -57,19 +57,19 @@ const animateLava = () => {
     const createLava = () => {
         const lavaSize = randomNormalDistribution( 1, 75, 2 )
         let left = randomBetween( -40, window.innerWidth + 10 )
-        let lavaBottom = window.innerHeight - lavaSize
+        let lavaTop = window.innerHeight - lavaSize
+        let lavaBottom = -( lavaSize*2 )
         let lava = div(
             {
                 style: {
                     position: 'absolute',
-                    'transition-timing-function': 'linear',
+                    'transition-timing-function': 'ease-in-out',
                     'border-radius': '50%',
                     height: lavaSize + 'vh',
                     width: lavaSize + 'vh',
                     background: lavaColor(),
-                    transform: `translateY(${lavaBottom}px)`,
-                    transition: 'transform 500ms ease',
-                    left: left+'px'
+                    bottom: lavaBottom+'px',
+                    left: left + 'px'
                 }
             } )
 
@@ -79,8 +79,8 @@ const animateLava = () => {
             let animateTime = randomNormalDistribution( 15, 45, 1 ) * 1000
 
             let frames = [
-                { transform: `translateY(${lavaBottom}px)` },
-                { transform: `translateY(${-lavaSize}px)` }
+                { bottom: `${lavaBottom}px` },
+                { bottom: `${lavaTop}px` }
             ]
 
             if( !nextIsRise )
@@ -88,7 +88,7 @@ const animateLava = () => {
 
             nextIsRise = !nextIsRise
             lava.animate( frames, animateTime )
-            setTimeout( () => lava.style.transform = frames[ 1 ].transform )
+            lava.style.bottom = frames[ 1 ].bottom
             setTimeout( animate, animateTime + randomNormalDistribution( 500, 15000 ) )
         }
         setTimeout( animate, lastTime + randomNormalDistribution( 500, 15000 ) )
@@ -101,5 +101,13 @@ const animateLava = () => {
 }
 
 document.body.append( bgColor.bindAs( lavalamp, () => lavalamp.style.backgroundColor = bgColor() ) )
-
+document.body.append( div(
+    {
+        style: {
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px'
+        }
+    }
+) )
 animateLava( lavalamp )
