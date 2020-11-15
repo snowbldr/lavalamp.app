@@ -336,7 +336,7 @@
 
         const createLava = () => {
             let lavaMin = 60
-            let lavaMax = 700 * ( window.innerWidth / 1500 ) * lavaSizeFactor()
+            let lavaMax = 700 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
 
             const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 2 )
             let left = randomBetween( -40, window.innerWidth + 10 )
