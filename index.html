@@ -39,7 +39,7 @@
             {
                 style: {
                     position: 'fixed',
-                    top: '20px',
+                    bottom: '20px',
                     width: '100vw',
                     'text-align': 'center',
                     'line-height': '100px',
@@ -70,7 +70,7 @@
     let defaultSpeed = 1
     let defaultAmountOfLava = () => Math.trunc( window.innerWidth / 10 )
     let defaultLavaFuzziness = 28
-    let defaultLavaSizeFactor = () => ( window.innerHeight / 1000 ).toFixed( 1 )
+    let defaultLavaSizeFactor = () => ( window.innerHeight / 850 ).toFixed( 1 )
 
     let bgHsl = fnstate( Object.assign( {}, defaultBgHsl ) )
     let lavaHsl = fnstate( Object.assign( {}, defaultLavaHsl ) )
@@ -242,12 +242,12 @@
 
     const settings = div( {
                               style: {
-                                  bottom: '5px',
-                                  right: '5px',
+                                  float: 'right',
                                   background: 'rgb(150,150,150,.6)',
                                   'z-index': 20,
                                   padding: '22px 22px',
                                   display: 'flex',
+                                  'max-width': '700px',
                                   'border-radius': '10px',
                                   'flex-direction': 'column',
                                   'justify-content': 'space-evenly',
