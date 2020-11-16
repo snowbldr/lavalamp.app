@@ -34,26 +34,43 @@
 
     function enableNoSleep() {
         document.removeEventListener( 'click', enableNoSleep, false )
-        document.removeEventListener( 'mousemove', enableNoSleep, false )
-        document.removeEventListener( 'scroll', enableNoSleep, false )
-        document.removeEventListener( 'keydown', enableNoSleep, false )
-        document.removeEventListener( 'touchstart', enableNoSleep, false )
         noSleep.enable()
-        console.log( 'NoSleep enabled' )
+        let activated = div(
+            {
+                style: {
+                    position: 'fixed',
+                    top: '20px',
+                    width: '100vw',
+                    'text-align': 'center',
+                    'line-height': '100px',
+                    'font-size': '25px',
+                    'z-index': 100
+                }
+            },
+            'Wake Lock Activated'
+        )
+        document.body.append( activated )
+        let notifyTime = 1500
+        activated.animate(
+            [
+                { opacity: 1 },
+                { opacity: 0 }
+            ],
+            notifyTime
+        )
+        activated.style.opacity = 0
+        setTimeout( () => activated.remove(), notifyTime )
+
     }
 
     document.addEventListener( 'click', enableNoSleep, false )
-    document.addEventListener( 'scroll', enableNoSleep, false )
-    document.addEventListener( 'keydown', enableNoSleep, false )
-    document.addEventListener( 'touchstart', enableNoSleep, false )
-    document.addEventListener( 'mousemove', enableNoSleep, false )
 
     let defaultBgHsl = { h: 115, s: 67, l: 54 }
     let defaultLavaHsl = { h: 290, s: 100, l: 50 }
     let defaultSpeed = 1
     let defaultAmountOfLava = () => Math.trunc( window.innerWidth / 10 )
     let defaultLavaFuzziness = 32
-    let defaultLavaSizeFactor = () => ( window.innerHeight / 500 ).toFixed( 1 )
+    let defaultLavaSizeFactor = () => ( window.innerHeight / 1000 ).toFixed( 1 )
 
     let bgHsl = fnstate( Object.assign( {}, defaultBgHsl ) )
     let lavaHsl = fnstate( Object.assign( {}, defaultLavaHsl ) )
@@ -205,7 +222,7 @@
             }
         },
         name,
-        hr({width:'30%'}),
+        hr( { width: '30%' } ),
         div(
             {
                 style: {
@@ -379,7 +396,7 @@
 
         const createLava = () => {
             let lavaMin = 60
-            let lavaMax = 1200 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
+            let lavaMax = 1000 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
             const minLeft = -40
             const maxLeft = window.innerWidth + 10
             const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 4 )
@@ -407,28 +424,28 @@
             let nextIsRise = true
             const animate = () => {
                 let animateTime = ( randomNormalDistribution( 15, 45, 1 ) * 1000 ) / speed()
-                let lateralMotion =  randomNormalDistribution( 5, 125, .75 )
-                if(randomBetween(1,100) % 2 === 0){
+                let lateralMotion = randomNormalDistribution( 5, 125, .75 )
+                if( randomBetween( 1, 100 ) % 2 === 0 ) {
                     lateralMotion *= -1
                 }
                 let oldLeft = left
                 left = left + lateralMotion
-                if(left > window.innerWidth+10){
-                    left = window.innerWidth+10
-                } else if(left<-40){
+                if( left > window.innerWidth + 10 ) {
+                    left = window.innerWidth + 10
+                } else if( left < -40 ) {
                     left = -40
                 }
                 let frames
 
-                if(nextIsRise){
+                if( nextIsRise ) {
                     frames = [
-                        { transform: `translate(${oldLeft}px, ${lavaBottom}px)`, ease: 'ease-in' },
-                        { transform: `translate(${left}px, ${lavaTop}px)`, ease: 'ease-out' }
+                        { transform: `translate(${oldLeft}px, ${lavaBottom}px)`, ease: 'ease-in-out' },
+                        { transform: `translate(${left}px, ${lavaTop}px)`, ease: 'ease-in-out' }
                     ]
                 } else {
                     frames = [
-                        { transform: `translate(${oldLeft}px, ${lavaTop}px)`, ease: 'ease-out' },
-                        { transform: `translate(${left}px, ${lavaBottom}px)`, ease: 'ease-in' }
+                        { transform: `translate(${oldLeft}px, ${lavaTop}px)`, ease: 'ease-in-out' },
+                        { transform: `translate(${left}px, ${lavaBottom}px)`, ease: 'ease-in-in' }
                     ]
                 }
 
@@ -437,7 +454,7 @@
                 lava.style.transform = frames[ 1 ].transform
                 setTimeout( animate, animateTime + randomNormalDistribution( 700, 15000 ) / speed() )
             }
-            setTimeout( animate, lastTime + randomNormalDistribution( 500, 15000 ) / speed() )
+            setTimeout( animate, lastTime === 0 ? 0 : lastTime + randomNormalDistribution( 500, 15000 ) / speed() )
             lastTime += randomNormalDistribution( 250, 4000, 2 ) / speed()
         }
 
