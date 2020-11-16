@@ -65,11 +65,11 @@
 
     document.addEventListener( 'click', enableNoSleep, false )
 
-    let defaultBgHsl = { h: 115, s: 67, l: 54 }
-    let defaultLavaHsl = { h: 290, s: 100, l: 50 }
+    let defaultBgHsl = { h: 130, s: 100, l: 50 }
+    let defaultLavaHsl = { h: 285, s: 100, l: 65 }
     let defaultSpeed = 1
     let defaultAmountOfLava = () => Math.trunc( window.innerWidth / 10 )
-    let defaultLavaFuzziness = 32
+    let defaultLavaFuzziness = 28
     let defaultLavaSizeFactor = () => ( window.innerHeight / 1000 ).toFixed( 1 )
 
     let bgHsl = fnstate( Object.assign( {}, defaultBgHsl ) )
