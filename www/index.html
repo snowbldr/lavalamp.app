@@ -391,15 +391,16 @@
     const showSettings = () =>
         document.body.append( settings )
 
+
     const animateLava = ( lamp ) => {
         let lastTime = 0
+        let lavaMinSize = 60
+        let lavaMaxSize = 1000 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
+        const minLeft = -40
+        const maxLeft = window.innerWidth + 10
 
         const createLava = () => {
-            let lavaMin = 60
-            let lavaMax = 1000 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
-            const minLeft = -40
-            const maxLeft = window.innerWidth + 10
-            const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 4 )
+            const lavaSize = randomNormalDistribution( lavaMinSize, lavaMaxSize, 4 )
             let left = randomBetween( minLeft, maxLeft )
             let lavaTop = Math.trunc( -( lavaSize * .3 ) )
             let lavaBottom = Math.trunc( window.innerHeight - ( lavaSize * .75 ) )
@@ -452,7 +453,10 @@
                 nextIsRise = !nextIsRise
                 lava.animate( frames, animateTime )
                 lava.style.transform = frames[ 1 ].transform
-                setTimeout( animate, animateTime + randomNormalDistribution( 700, 15000 ) / speed() )
+
+                //big ones are slower
+                let waitAdjust = Math.pow(lavaSize, 3) / 1500
+                setTimeout( animate, waitAdjust + animateTime + randomNormalDistribution( 500, 15000, .9 ) / speed() )
             }
             setTimeout( animate, lastTime === 0 ? 0 : lastTime + randomNormalDistribution( 500, 15000 ) / speed() )
             lastTime += randomNormalDistribution( 250, 4000, 2 ) / speed()
