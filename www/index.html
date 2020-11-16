@@ -24,7 +24,7 @@
         img,
         input,
         label,
-        style,
+        hr,
         a,
         sub
     } from 'https://cdn.jsdelivr.net/npm/fntags@0.4.10/src/fnelements.js'
@@ -47,15 +47,17 @@
     document.addEventListener( 'keydown', enableNoSleep, false )
     document.addEventListener( 'touchstart', enableNoSleep, false )
     document.addEventListener( 'mousemove', enableNoSleep, false )
-    const defaultLavaHue = 290
-    let defaultBgHsl = { h: 115, s: 67, l: 54 }
-    let defaultSpeed = 1
-    let defaultAmountOfLava = ()=>Math.trunc(window.innerWidth / 5)
-    let defaultLavaFuzziness = 32
-    let defaultLavaSizeFactor = ()=>(window.innerHeight / 500).toFixed(1)
 
-    let bgHsl = fnstate( defaultBgHsl )
-    let lavaHue = fnstate( defaultLavaHue )
+    let defaultBgHsl = { h: 115, s: 67, l: 54 }
+    let defaultLavaHsl = { h: 290, s: 100, l: 50 }
+    let defaultSpeed = 1
+    let defaultAmountOfLava = () => Math.trunc( window.innerWidth / 10 )
+    let defaultLavaFuzziness = 32
+    let defaultLavaSizeFactor = () => ( window.innerHeight / 500 ).toFixed( 1 )
+
+    let bgHsl = fnstate( Object.assign( {}, defaultBgHsl ) )
+    let lavaHsl = fnstate( Object.assign( {}, defaultLavaHsl ) )
+
     let lavaFuzziness = fnstate( defaultLavaFuzziness )
     let speed = fnstate( defaultSpeed )
     let lavaSizeFactor = fnstate( defaultLavaSizeFactor() )
@@ -67,8 +69,8 @@
     let settingsKey = 'lavalamp.app-settings'
     if( localStorage.getItem( settingsKey ) ) {
         let stored = JSON.parse( localStorage.getItem( settingsKey ) )
-        lavaHue( stored.lavaHue || lavaHue() )
-        bgHsl( stored.bgHsl || defaultBgHsl )
+        bgHsl( stored.bgHsl || Object.assign( {}, defaultBgHsl ) )
+        lavaHsl( stored.lavaHsl || Object.assign( {}, lavaHsl( stored.lavaHsl || Object.assign( {}, defaultBgHsl ) ) ) )
         speed( stored.speed || speed() )
         amountOfLava( stored.amountOfLava || amountOfLava() )
         lavaFuzziness( stored.lavaFuzziness || lavaFuzziness() )
@@ -79,8 +81,8 @@
         localStorage.setItem(
             settingsKey,
             JSON.stringify( {
-                                lavaHue: lavaHue(),
                                 bgHsl: bgHsl(),
+                                lavaHsl: lavaHsl(),
                                 speed: speed(),
                                 amountOfLava: amountOfLava(),
                                 lavaFuzziness: lavaFuzziness(),
@@ -91,13 +93,16 @@
     }
 
     const resetDefaults = () => {
-        localStorage.removeItem( settingsKey )
-        lavaHue( defaultLavaHue )
-        bgHsl( defaultBgHsl )
-        lavaFuzziness( defaultLavaFuzziness )
-        speed( defaultSpeed )
-        lavaSizeFactor( defaultLavaSizeFactor() )
-        amountOfLava( defaultAmountOfLava() )
+        if( confirm( 'This will reset ALL defaults' ) ) {
+            localStorage.removeItem( settingsKey )
+            bgHsl( Object.assign( {}, defaultBgHsl ) )
+            lavaHsl( Object.assign( {}, defaultLavaHsl ) )
+            lavaFuzziness( defaultLavaFuzziness )
+            speed( defaultSpeed )
+            lavaSizeFactor( defaultLavaSizeFactor() )
+            amountOfLava( defaultAmountOfLava() )
+        }
+
     }
 
     const randomBetween = ( min, max ) => Math.trunc( Math.random() * ( max - min ) + min )
@@ -121,7 +126,7 @@
     }
 
 
-    const formInput = ( inputLabel, theInput ) => {
+    const formInput = ( inputLabel, theInput, setDefault ) => {
         theInput.style.cursor = 'pointer'
         return div(
             {
@@ -134,15 +139,95 @@
                 }
             },
             label( { for: theInput.getAttribute( 'id' ) }, inputLabel ),
-            theInput
+            div(
+                {
+                    style: {
+                        display: 'flex',
+                        'flex-direction': 'row'
+                    }
+                },
+                theInput,
+                setDefault ? setDefault : ''
+            )
         )
     }
+    let id = 0
+    const resetToDefaultButton = ( clickHandler, style ) => div(
+        {
+            onclick: clickHandler,
+            tooltip: 'Reset To Default',
+            style: Object.assign( {
+                                      cursor: 'pointer',
+                                      'margin-right': '-10px',
+                                      'margin-left': '20px'
+                                  }, style )
+        },
+        'x'
+    )
+
+    const hslRange = ( name, attr, state, defaultHsl, min, max ) => div(
+        {
+            style: {
+                display: 'flex',
+                'flex-direction': 'column',
+                'margin-top': '5px'
+            }
+        },
+        name,
+        div(
+            {
+                style: {
+                    display: 'flex',
+                    'flex-direction': 'row'
+                }
+            },
+            input( {
+                       id: id++,
+                       type: 'range',
+                       value: state.bindAttr( () => state()[ attr ] ),
+                       min: min,
+                       max: max,
+                       step: 1,
+                       oninput: ( e ) => state.patch( { [ attr ]: parseInt( e.target.value ) } )
+                   } ),
+            resetToDefaultButton( () => state.patch( { [ attr ]: defaultHsl[ attr ] } ), {
+                'margin-right': '10px',
+                'margin-left': '20px'
+            } )
+        )
+    )
+
+    const hslInput = ( name, state, defaultHsl ) => div(
+        {
+            style: {
+                'text-align': 'center',
+                'margin-top': '5px'
+            }
+        },
+        name,
+        hr({width:'30%'}),
+        div(
+            {
+                style: {
+                    display: 'flex',
+                    'flex-direction': 'row',
+                    'flex-wrap': 'wrap',
+                    'align-items': 'center',
+                    'justify-content': 'center'
+                }
+            },
+            hslRange( 'Hue', 'h', state, defaultHsl, 1, 358 ),
+            hslRange( 'Saturation', 's', state, defaultHsl, 1, 100 ),
+            hslRange( 'Brightness', 'l', state, defaultHsl, 20, 70 )
+        )
+    )
+
+
     const settings = div( {
                               style: {
-                                  position: 'fixed',
                                   bottom: '5px',
                                   right: '5px',
-                                  background: 'rgb(255,255,255,.75)',
+                                  background: 'rgb(150,150,150,.6)',
                                   'z-index': 20,
                                   padding: '22px 22px',
                                   display: 'flex',
@@ -152,54 +237,8 @@
                                   'align-items': 'center'
                               }
                           },
-                          formInput(
-                              'Background Hue',
-                              input( {
-                                         id: 'bgH',
-                                         type: 'range',
-                                         value: bgHsl.bindAttr( () => bgHsl().h ),
-                                         min: 1,
-                                         max: 358,
-                                         step: 2,
-                                         oninput: ( e ) => bgHsl.patch( { h: e.target.value } )
-                                     } )
-                          ),
-                          formInput(
-                              'Background Saturation',
-                              input( {
-                                         id: 'bgS',
-                                         type: 'range',
-                                         value: bgHsl.bindAttr( () => bgHsl().s ),
-                                         min: 1,
-                                         max: 100,
-                                         step: 1,
-                                         oninput: ( e ) => bgHsl.patch( { s: e.target.value } )
-                                     } )
-                          ),
-                          formInput(
-                              'Background Brightness',
-                              input( {
-                                         id: 'bgL',
-                                         type: 'range',
-                                         value: bgHsl.bindAttr( () => bgHsl().l ),
-                                         min: 20,
-                                         max: 70,
-                                         step: 1,
-                                         oninput: ( e ) => bgHsl.patch( { l: e.target.value } )
-                                     } )
-                          ),
-                          formInput(
-                              'Lava Hue',
-                              input( {
-                                         id: 'lavaHue',
-                                         type: 'range',
-                                         min: 0,
-                                         step: 1,
-                                         max: 350,
-                                         value: lavaHue.bindAttr( lavaHue ),
-                                         oninput: ( e ) => lavaHue( e.target.value )
-                                     } )
-                          ),
+                          hslInput( 'Background', bgHsl, defaultBgHsl ),
+                          hslInput( 'Lava', lavaHsl, defaultLavaHsl ),
                           formInput(
                               'Lava Fuzziness',
                               input( {
@@ -210,7 +249,8 @@
                                          max: 50,
                                          value: lavaFuzziness.bindAttr( lavaFuzziness ),
                                          oninput: ( e ) => lavaFuzziness( e.target.value )
-                                     } )
+                                     } ),
+                              resetToDefaultButton( () => lavaFuzziness( defaultLavaFuzziness ) )
                           ),
                           formInput(
                               'Lava Size',
@@ -222,7 +262,8 @@
                                          max: 2,
                                          value: lavaSizeFactor.bindAttr( lavaSizeFactor ),
                                          oninput: ( e ) => lavaSizeFactor( e.target.value )
-                                     } )
+                                     } ),
+                              resetToDefaultButton( () => lavaSizeFactor( defaultLavaSizeFactor() ) )
                           ),
                           formInput(
                               'Amount of Lava',
@@ -232,9 +273,10 @@
                                          value: amountOfLava.bindAttr( amountOfLava ),
                                          step: 1,
                                          min: 5,
-                                         max: Math.trunc(defaultAmountOfLava() * 4),
+                                         max: Math.trunc( defaultAmountOfLava() * 2 ),
                                          oninput: ( e ) => amountOfLava( e.target.value )
-                                     } )
+                                     } ),
+                              resetToDefaultButton( () => amountOfLava( defaultAmountOfLava() ) )
                           ),
                           formInput(
                               'Speed',
@@ -246,7 +288,8 @@
                                          min: 0.1,
                                          max: 8,
                                          oninput: ( e ) => speed( e.target.value )
-                                     } )
+                                     } ),
+                              resetToDefaultButton( () => speed( defaultSpeed ) )
                           ),
                           formInput(
                               'Save',
@@ -268,8 +311,8 @@
                           div( {
                                    style: {
                                        position: 'absolute',
-                                       top: '3px',
-                                       right: '18px',
+                                       top: '10px',
+                                       right: '20px',
                                        'font-style': 'sans-serif',
                                        'font-size': '26px',
                                        cursor: 'pointer'
@@ -306,15 +349,15 @@
                                     {
                                         style: {
                                             position: 'fixed',
-                                            bottom: '10px',
-                                            right: '10px',
+                                            top: '10px',
+                                            right: '20px',
                                             cursor: 'pointer',
                                             'z-index': 10
                                         }
                                     },
                                     img( {
                                              src: 'data:image/png;base64,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',
-                                             width: '44px', height: '44px', onclick: showSettings
+                                             onclick: showSettings
                                          } )
                                 )
     )
@@ -337,9 +380,10 @@
         const createLava = () => {
             let lavaMin = 60
             let lavaMax = 1200 * ( window.innerHeight / 1250 ) * lavaSizeFactor()
-
+            const minLeft = -40
+            const maxLeft = window.innerWidth + 10
             const lavaSize = randomNormalDistribution( lavaMin, lavaMax, 4 )
-            let left = randomBetween( -40, window.innerWidth + 10 )
+            let left = randomBetween( minLeft, maxLeft )
             let lavaTop = Math.trunc( -( lavaSize * .3 ) )
             let lavaBottom = Math.trunc( window.innerHeight - ( lavaSize * .75 ) )
             let lava = div(
@@ -349,28 +393,44 @@
                         'border-radius': '50%',
                         height: lavaSize + 'px',
                         width: lavaSize + 'px',
-                        background: `hsl(${lavaHue()}, 100%, 50%)`,
-                        //'box-shadow': `0 0 42px 120px ${lavaHue()}`,
+                        background: `hsl(${lavaHsl().h}, ${lavaHsl().s}%, ${lavaHsl().l}%)`,
+
                         transform: `translate(${left}px, ${lavaBottom}px)`,
                         left: left + 'px'
                     }
                 } )
-            lavaHue.subscribe( () => {
-                lava.style.background = `hsl(${lavaHue()}, 100%, 50%)`
+            lavaHsl.subscribe( () => {
+                lava.style.background = `hsl(${lavaHsl().h}, ${lavaHsl().s}%, ${lavaHsl().l}%)`
             } )
 
             lamp.appendChild( lava )
             let nextIsRise = true
             const animate = () => {
                 let animateTime = ( randomNormalDistribution( 15, 45, 1 ) * 1000 ) / speed()
+                let lateralMotion =  randomNormalDistribution( 5, 125, .75 )
+                if(randomBetween(1,100) % 2 === 0){
+                    lateralMotion *= -1
+                }
+                let oldLeft = left
+                left = left + lateralMotion
+                if(left > window.innerWidth+10){
+                    left = window.innerWidth+10
+                } else if(left<-40){
+                    left = -40
+                }
+                let frames
 
-                let frames = [
-                    { transform: `translate(${left}px, ${lavaBottom}px)`, ease: 'ease-in' },
-                    { transform: `translate(${left}px, ${lavaTop}px)`, ease: 'ease-out' }
-                ]
-
-                if( !nextIsRise )
-                    frames = frames.reverse()
+                if(nextIsRise){
+                    frames = [
+                        { transform: `translate(${oldLeft}px, ${lavaBottom}px)`, ease: 'ease-in' },
+                        { transform: `translate(${left}px, ${lavaTop}px)`, ease: 'ease-out' }
+                    ]
+                } else {
+                    frames = [
+                        { transform: `translate(${oldLeft}px, ${lavaTop}px)`, ease: 'ease-out' },
+                        { transform: `translate(${left}px, ${lavaBottom}px)`, ease: 'ease-in' }
+                    ]
+                }
 
                 nextIsRise = !nextIsRise
                 lava.animate( frames, animateTime )
