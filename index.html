@@ -26,32 +26,39 @@
     function enableNoSleep() {
         document.removeEventListener( 'click', enableNoSleep, false )
         noSleep.enable()
-        let activated = div(
+        notify( 'Wake Lock Activated' )
+    }
+
+    function notify( ...message ) {
+        let notification = div(
             {
                 style: {
                     position: 'fixed',
                     bottom: '20px',
-                    width: '100vw',
+                    left: '20px',
+                    width: '25vw',
+                    'min-width': '250px',
+                    background: 'rgb(220,220,220,.6)',
                     'text-align': 'center',
                     'line-height': '100px',
                     'font-size': '25px',
-                    'z-index': 100
+                    'z-index': 100,
+                    'border-radius': '8px'
                 }
             },
-            'Wake Lock Activated'
+            ...message
         )
-        document.body.append( activated )
-        let notifyTime = 1500
-        activated.animate(
+        document.body.append( notification )
+        let notifyTime = 2000
+        notification.animate(
             [
                 { opacity: 1 },
                 { opacity: 0 }
             ],
             notifyTime
         )
-        activated.style.opacity = 0
-        setTimeout( () => activated.remove(), notifyTime )
-
+        notification.style.opacity = 0
+        setTimeout( () => notification.remove(), notifyTime )
     }
 
     document.addEventListener( 'click', enableNoSleep, false )
@@ -65,37 +72,47 @@
 
     let bgHsl = fnstate( Object.assign( {}, defaultBgHsl ) )
     let lavaHsl = fnstate( Object.assign( {}, defaultLavaHsl ) )
-
-    let lavaFuzziness = fnstate( defaultLavaFuzziness )
     let speed = fnstate( defaultSpeed )
-    let lavaSizeFactor = fnstate( defaultLavaSizeFactor() )
     let amountOfLava = fnstate( defaultAmountOfLava() )
+    let lavaFuzziness = fnstate( defaultLavaFuzziness )
+    let lavaSizeFactor = fnstate( defaultLavaSizeFactor() )
 
-    let filter = div()
-    filter.innerHTML = ``
+    const applySettings = obj => {
+        bgHsl( obj.bgHsl || Object.assign( {}, defaultBgHsl ) )
+        lavaHsl( obj.lavaHsl || Object.assign( {}, lavaHsl( obj.lavaHsl || Object.assign( {}, defaultBgHsl ) ) ) )
+        speed( obj.speed || speed() )
+        amountOfLava( obj.amountOfLava || amountOfLava() )
+        lavaFuzziness( obj.lavaFuzziness || lavaFuzziness() )
+        lavaSizeFactor( obj.lavaSizeFactor || lavaSizeFactor() )
+    }
+
+    const getSettings = () => ( {
+        bgHsl: bgHsl(),
+        lavaHsl: lavaHsl(),
+        speed: speed(),
+        amountOfLava: amountOfLava(),
+        lavaFuzziness: lavaFuzziness(),
+        lavaSizeFactor: lavaSizeFactor()
+    } )
 
     let settingsKey = 'lavalamp.app-settings'
     if( localStorage.getItem( settingsKey ) ) {
-        let stored = JSON.parse( localStorage.getItem( settingsKey ) )
-        bgHsl( stored.bgHsl || Object.assign( {}, defaultBgHsl ) )
-        lavaHsl( stored.lavaHsl || Object.assign( {}, lavaHsl( stored.lavaHsl || Object.assign( {}, defaultBgHsl ) ) ) )
-        speed( stored.speed || speed() )
-        amountOfLava( stored.amountOfLava || amountOfLava() )
-        lavaFuzziness( stored.lavaFuzziness || lavaFuzziness() )
-        lavaSizeFactor( stored.lavaSizeFactor || lavaSizeFactor() )
+        applySettings( JSON.parse( localStorage.getItem( settingsKey ) ) )
+    }
+
+    const urlParams = new URLSearchParams( window.location.search )
+    if( urlParams.get( 'shared' ) ) {
+        try {
+            applySettings( JSON.parse( atob(urlParams.get( 'shared' ) ) ) )
+        } catch {
+            notify( 'Invalid Share URL' )
+        }
     }
 
     const saveSettings = () => {
         localStorage.setItem(
             settingsKey,
-            JSON.stringify( {
-                                bgHsl: bgHsl(),
-                                lavaHsl: lavaHsl(),
-                                speed: speed(),
-                                amountOfLava: amountOfLava(),
-                                lavaFuzziness: lavaFuzziness(),
-                                lavaSizeFactor: lavaSizeFactor()
-                            } )
+            JSON.stringify( getSettings )
         )
         settings.remove()
     }
@@ -230,14 +247,24 @@
         )
     )
 
+    const copyShareLink = () =>
+        navigator.clipboard.writeText( `${window.location.origin}${window.location.pathname}?shared=${btoa( JSON.stringify( getSettings() ) )}` )
+                 .then( function() {
+                     notify( 'Link Copied to Clipboard' )
+                 }, function( err ) {
+                     notify( 'Failed to Copy Share Link...' )
+                     console.error( err )
+                 } )
+
 
     const settings = div( {
                               style: {
-                                  float: 'right',
+                                  float: 'left',
                                   background: 'rgb(150,150,150,.6)',
                                   'z-index': 20,
                                   padding: '22px 22px',
                                   display: 'flex',
+                                  position: 'relative',
                                   'max-width': '700px',
                                   'border-radius': '10px',
                                   'flex-direction': 'column',
@@ -300,6 +327,16 @@
                               resetToDefaultButton( () => speed( defaultSpeed ) )
                           ),
                           formInput(
+                              'Share',
+                              button( {
+                                          id: 'share', onclick: copyShareLink,
+                                          style: {
+                                              'border-radius': '5px',
+                                              padding: '5px'
+                                          }
+                                      }, 'Share' )
+                          ),
+                          formInput(
                               'Save',
                               button( {
                                           id: 'save', onclick: saveSettings,
@@ -358,7 +395,7 @@
                                         style: {
                                             position: 'fixed',
                                             top: '10px',
-                                            right: '20px',
+                                            left: '20px',
                                             cursor: 'pointer',
                                             'z-index': 10
                                         }
@@ -446,7 +483,7 @@
                 lava.style.transform = frames[ 1 ].transform
 
                 //big ones are slower
-                let waitAdjust = Math.pow(lavaSize, 3) / 1500
+                let waitAdjust = Math.pow( lavaSize, 3 ) / 1500
                 setTimeout( animate, waitAdjust + animateTime + randomNormalDistribution( 500, 15000, .9 ) / speed() )
             }
             setTimeout( animate, lastTime === 0 ? 0 : lastTime + randomNormalDistribution( 500, 15000 ) / speed() )
