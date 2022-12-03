@@ -18,8 +18,8 @@
     hr,
     a,
     sub
-  } from 'https://cdn.jsdelivr.net/npm/fntags@0.4.10/src/fnelements.js'
-  import { fnstate } from 'https://cdn.jsdelivr.net/npm/fntags@0.4.10/src/fntags.js'
+  } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.7/src/fnelements.min.mjs'
+  import { fnstate } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.7/src/fntags.min.mjs'
 
   const noSleep = new NoSleep()
 
@@ -123,7 +123,7 @@
   let defaultBgHsl = { h: 20, s: 20, l: 20 }
   let defaultLavaHsl = { h: 285, s: 100, l: 65 }
   let defaultSpeed = 1
-  let defaultAmountOfLava = () => Math.min(1200, Math.max(window.innerWidth, window.innerHeight))
+  let defaultAmountOfLava = () => 1500
   let defaultLavaFuzziness = 0
   let defaultLavaSizeFactor = () => ( window.innerHeight / 850 ).toFixed(1)
 
@@ -475,19 +475,30 @@
     document.body.append(settings)
 
   const animateLava = (lamp) => {
+    const size = 400
+    const GRID_CELLS = 108
+    const INTERACTION_RADIUS = 20
     const lava = div({
-      style: 'background-color: orange; width: 3px; height: 3px; border-radius: 50%; position: fixed; left: 0; right: 0;'
+      style: {
+        backgroundColor: 'orange',
+        width: `${INTERACTION_RADIUS/2}px`,
+        height: `${INTERACTION_RADIUS/2}px`,
+        borderRadius: '50%',
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        boxShadow: 'orange 0px 2px 5px'
+      }
     })
     let last = 0, animationFrame = 0
-    const size = 400
-    const GRAVITY = [0, 0]
+    const GRAVITY = [0, 400]
     const DEVICE_FORCE = [0, 0]
     const deviceAcceleration = [0, 0]
-    const GRID_CELLS = 50
-    const INTERACTION_RADIUS = ( ( size / GRID_CELLS ) * 2.5 * 38 ) / Math.sqrt(amountOfLava())
-    const STIFFNESS = 50
-    const STIFFNESS_NEAR = 400
+    const STIFFNESS = 54
+    const STIFFNESS_NEAR = 100
     const REST_DENSITY = 6
+    const AMBIENT_TEMP = 10
+    const HEAT_SOURCE_POSITION = [size/2, size]
     const INTERACTION_RADIUS_SQ = INTERACTION_RADIUS * INTERACTION_RADIUS
     const canvasRect = {
       w: size*2,
@@ -498,12 +509,13 @@
       b: size
     }
     const particleMap = new SpatialHashMap(GRID_CELLS, GRID_CELLS)
-    const particleState = {
+    const state = {
       x: new Float32Array(amountOfLava()), // x location
       y: new Float32Array(amountOfLava()), // y location
       oldX: new Float32Array(amountOfLava()), // previous x location
       oldY: new Float32Array(amountOfLava()), // previous y location
       vx: new Float32Array(amountOfLava()), // horizontal velocity
+      temp: new Float32Array(amountOfLava()),
       vy: new Float32Array(amountOfLava()), // vertical velocity
       p: new Float32Array(amountOfLava()), // pressure
       pNear: new Float32Array(amountOfLava()), // pressure near
@@ -512,23 +524,18 @@
     }
     const applyGlobalForces = (i, dt) => {
       const force = [GRAVITY[0] + DEVICE_FORCE[0], GRAVITY[1] + DEVICE_FORCE[1]]
-      //todo add mouse force?
-      particleState.vx[i] += force[0] * dt
-      particleState.vy[i] += force[1] * dt
-      // var a = subtract([state.x[i], state.y[i]], G),
-      //   t = Math.min(350, 2700 / lengthSq(a)),
-      //   o = multiplyScalar(p(a), t)
-      // e = add(e, o)
-      //TODO add heat
-      /*
-      You can calculate the acceleration by a force with the following formula:
-       acceleration = force / mass. Assuming all of our particles have a mass of exactly 1,
-        we can simply say the velocity increase equals force / 1 * dt, or force * dt.
-       */
+      // const force = DEVICE_FORCE
+      state.vx[i] += force[0] * dt
+      state.vy[i] += force[1] * dt
+      const distanceFromHeatSource = Math.sqrt(Math.pow(state.x[i] - HEAT_SOURCE_POSITION[0], 2) + Math.pow(state.y[i] - HEAT_SOURCE_POSITION[1], 2))
+      const tempIncrease = distanceFromHeatSource === 0 ? .01 : 12/distanceFromHeatSource
+      const tempDecrease = randomNormalDistribution(1, 5, 1) / 20
+      state.temp[i] += tempIncrease - tempDecrease
+      state.vy[i] -= state.temp[i]
     }
     const gradient = (i, n) => {
-      const particle = [particleState.x[i], particleState.y[i]] // position of i
-      const neighbour = [particleState.x[n], particleState.y[n]] // position of n
+      const particle = [state.x[i], state.y[i]] // position of i
+      const neighbour = [state.x[n], state.y[n]] // position of n
 
       const lsq = lengthSq(subtract(particle, neighbour))
       if (lsq > INTERACTION_RADIUS_SQ) return 0
@@ -552,8 +559,8 @@
     }
 
     const getNeighboursWithGradients = i => {
-      const gridX = ( particleState.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS
-      const gridY = ( particleState.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
+      const gridX = ( state.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS
+      const gridY = ( state.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
       const radius = ( INTERACTION_RADIUS / canvasRect.w ) * GRID_CELLS
 
       const results = particleMap.query(gridX, gridY, radius)
@@ -567,7 +574,7 @@
         const g = gradient(i, n)
         if (g === 0) continue
 
-        particleState.g[n] = g // Store the gradient
+        state.g[n] = g // Store the gradient
         neighbours.push(n) // Push the neighbour to neighbours
 
       }
@@ -575,71 +582,70 @@
       return neighbours
     }
 
-    const updatePressure = (i, neighbours) => {
+    const updatePressure = (i, neighbours, dt) => {
       let density = 0
       let nearDensity = 0
 
       for (let k = 0; k < neighbours.length; k++) {
-        const g = particleState.g[neighbours[k]] // Get g for this neighbour
+        const g = state.g[neighbours[k]] // Get g for this neighbour
         density += g * g
         nearDensity += g * g * g
       }
 
-      particleState.p[i] = STIFFNESS * ( density - REST_DENSITY )
-      particleState.pNear[i] = STIFFNESS_NEAR * nearDensity
-
+      state.p[i] = STIFFNESS * ( density - REST_DENSITY )
+      state.pNear[i] = STIFFNESS_NEAR * nearDensity
     }
 
     const relax = (i, neighbours, dt) => {
-      const pos = [particleState.x[i], particleState.y[i]]
+      const pos = [state.x[i], state.y[i]]
 
       for (let k = 0; k < neighbours.length; k++) {
         const n = neighbours[k]
-        const g = particleState.g[n]
+        const g = state.g[n]
 
-        const nPos = [particleState.x[n], particleState.y[n]]
-        const magnitude = particleState.p[i] * g + particleState.pNear[i] * g * g
+        const nPos = [state.x[n], state.y[n]]
+        const magnitude = state.p[i] * g + state.pNear[i] * g * g
 
         const direction = unitApprox(subtract(nPos, pos))
         const force = multiplyScalar(direction, magnitude)
 
         const d = multiplyScalar(force, dt * dt)
 
-        particleState.x[i] += d[0] * -.5
-        particleState.y[i] += d[1] * -.5
+        state.x[i] += d[0] * -.5
+        state.y[i] += d[1] * -.5
 
-        particleState.x[n] += d[0] * .5
-        particleState.y[n] += d[1] * .5
+        state.x[n] += d[0] * .5
+        state.y[n] += d[1] * .5
       }
     }
 
     const contain = (i) => {
-      if (particleState.x[i] > size) {
-        particleState.x[i] = size
-        particleState.vx[i] = 0
+      if (state.x[i] > size) {
+        state.x[i] = size
+        state.vx[i] = 0
       }
-      if (particleState.x[i] < 0) {
-        particleState.x[i] = 0
-        particleState.vx[i] = 0
+      if (state.x[i] < 0) {
+        state.x[i] = 0
+        state.vx[i] = 0
       }
-      if (particleState.y[i] > size) {
-        particleState.y[i] = size
-        particleState.vy[i] = 0
+      if (state.y[i] > size) {
+        state.y[i] = size
+        state.vy[i] = 0
       }
-      if (particleState.y[i] < 0) {
-        particleState.y[i] = 0
-        particleState.vy[i] = 0
+      if (state.y[i] < 0) {
+        state.y[i] = 0
+        state.vy[i] = 0
       }
     }
 
     const calculateVelocity = (i, dt) => {
-      const pos = [particleState.x[i], particleState.y[i]]
-      const old = [particleState.oldX[i], particleState.oldY[i]]
+      const pos = [state.x[i], state.y[i]]
+      const old = [state.oldX[i], state.oldY[i]]
 
-      const v = multiplyScalar(subtract(old, pos), 1 / dt)
+      const v = multiplyScalar(subtract(old, pos), dt)
 
-      particleState.vx[i] = v[0]
-      particleState.vy[i] = v[1]
+      state.vx[i] = v[0]
+      state.vy[i] = v[1]
     }
 
     function run (dt) {
@@ -649,30 +655,30 @@
       deviceAcceleration[0] = 0
       deviceAcceleration[1] = 0
       for (let i = 0; i < amountOfLava(); i++) {
-        particleState.oldX[i] = particleState.x[i]
-        particleState.oldY[i] = particleState.y[i]
+        state.oldX[i] = state.x[i]
+        state.oldY[i] = state.y[i]
         applyGlobalForces(i, dt)
-        particleState.x[i] += particleState.vx[i] * dt
-        particleState.y[i] += particleState.vy[i] * dt
-        const gridx = ( particleState.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS,
-          gridy = ( particleState.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
+        state.x[i] += state.vx[i] * dt
+        state.y[i] += state.vy[i] * dt
+        const gridx = ( state.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS,
+          gridy = ( state.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
         particleMap.add(gridx, gridy, i)
       }
       for (let i = 0; i < amountOfLava(); i++) {
         let neighbours = getNeighboursWithGradients(i)
-        updatePressure(i, neighbours)
+        updatePressure(i, neighbours, dt)
         relax(i, neighbours, dt)
       }
       for (let i = 0; i < amountOfLava(); i++) {
         contain(i, dt)
         calculateVelocity(i, dt)
-        particleState.elements[i].style.transform = `translate(${particleState.x[i]}px, ${particleState.y[i]}px)`
+        state.elements[i].style.transform = `translate(${state.x[i]}px, ${state.y[i]}px)`
       }
     }
 
     function render () {
       const now = performance.now()
-      run((Math.min(( now - last ) / 1000, 1 / 35)))
+      run(1 / 10)
       last = now
       animationFrame = requestAnimationFrame(render)
     }
@@ -687,19 +693,19 @@
 
     for (let i = 0; i < amountOfLava(); i++) {
       //set initial positions for each particle
-      particleState.x[i] = Math.floor(Math.random() * size)
-      particleState.y[i] = Math.floor(Math.random() * size)
-      particleState.oldX[i] = particleState.x[i]
-      particleState.oldY[i] = particleState.y[i]
-      particleState.vx[i] = 0
-      particleState.vy[i] = 0
-      particleState.elements[i] = lava.cloneNode()
-      particleState.elements[i].id = `lava-${i}`
+      state.x[i] = randomBetween(0, size)
+      state.y[i] = randomBetween(size*.8, size)
+      state.oldX[i] = state.x[i]
+      state.oldY[i] = state.y[i]
+      state.vx[i] = 0
+      state.vy[i] = 0
+      state.elements[i] = lava.cloneNode()
+      state.elements[i].id = `lava-${i}`
       contain(i)
-      particleState.elements[i].style.transform = `translate(${particleState.x[i]}px, ${particleState.y[i]}px)`
-      lamp.append(particleState.elements[i])
-      let gridX = ( particleState.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS
-      let gridY = ( particleState.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
+      state.elements[i].style.transform = `translate(${state.x[i]}px, ${state.y[i]}px)`
+      lamp.append(state.elements[i])
+      let gridX = ( state.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS
+      let gridY = ( state.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
       particleMap.add(gridX, gridY, i)
     }
 
