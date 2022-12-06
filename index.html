@@ -44,7 +44,8 @@
       y = clamp(Math.round(y), 0, this.height - 1)
 
       const index = x + y * this.width
-      this.grid[index].push(data)
+      let cell = this.grid[index]
+      cell.push(data)
     }
 
     query (x, y, radius) {
@@ -120,36 +121,68 @@
 
   document.addEventListener('click', enableNoSleep, false)
 
-  let defaultBgHsl = { h: 20, s: 20, l: 20 }
-  let defaultLavaHsl = { h: 285, s: 100, l: 65 }
-  let defaultSpeed = 1
-  let defaultAmountOfLava = () => 300
-  let defaultLavaFuzziness = 0
-  let defaultLavaSizeFactor = () => ( window.innerHeight / 850 ).toFixed(1)
+  const defaultBgHsl = { h: 20, s: 20, l: 20 }
+  const defaultLavaHsl = { h: 285, s: 100, l: 65 }
+  const defaultSpeed = 1
+  const defaultParticleCount = 300
+  const defaultLavaFuzziness = 12
+  const defaultInteractionRadius = 60
+  const defaultStiffness = 1800
+  const defaultStiffnessNear = 8500
+  const defaultRestDensity = 10
+  const defaultLavaSize = 35
+  const defaultLampTemp = 5
+  const defaultAmbientTemp = 1000
+  const defaultMaxHeat = () => window.innerHeight * 0.15
+  const defaultGravityStrength = 5
 
-  let bgHsl = fnstate(Object.assign({}, defaultBgHsl))
-  let lavaHsl = fnstate(Object.assign({}, defaultLavaHsl))
-  let speed = fnstate(defaultSpeed)
-  let amountOfLava = fnstate(defaultAmountOfLava())
-  let lavaFuzziness = fnstate(defaultLavaFuzziness)
-  let lavaSizeFactor = fnstate(defaultLavaSizeFactor())
+  const size = Math.min(Math.max(window.innerWidth, window.innerHeight), 600)
+  const GRID_CELLS = 54
+  const interactionRadius = fnstate(defaultInteractionRadius)
+  const gravityStrength = fnstate(defaultGravityStrength)
+  const stiffness = fnstate(defaultStiffness)
+  const stiffnessNear = fnstate(defaultStiffnessNear)
+  const restDensity = fnstate(defaultRestDensity)
+  const maxHeat = fnstate(defaultMaxHeat())
+  const lampTemp = fnstate(defaultLampTemp)
+  const ambientTemp = fnstate(defaultAmbientTemp)
+  const gravity = [0, gravityStrength()]
+  const DEVICE_FORCE = [0, 0]
+  const deviceAcceleration = [0, 0]
+  let interactionRadiusSq = interactionRadius() * interactionRadius()
+  interactionRadius.subscribe(() => {
+    interactionRadiusSq = interactionRadius() * interactionRadius()
+  })
+
+  const bgHsl = fnstate(Object.assign({}, defaultBgHsl))
+  const lavaHsl = fnstate(Object.assign({}, defaultLavaHsl))
+  const speed = fnstate(defaultSpeed)
+  const particleCount = fnstate(defaultParticleCount)
+  const lavaFuzziness = fnstate(defaultLavaFuzziness)
+  const lavaSize = fnstate(defaultLavaSize)
 
   const applySettings = obj => {
     bgHsl(obj.bgHsl || Object.assign({}, defaultBgHsl))
     lavaHsl(obj.lavaHsl || Object.assign({}, lavaHsl(obj.lavaHsl || Object.assign({}, defaultBgHsl))))
     speed(obj.speed || speed())
-    amountOfLava(obj.amountOfLava || amountOfLava())
+    particleCount(obj.amountOfLava || particleCount())
     lavaFuzziness(obj.lavaFuzziness || lavaFuzziness())
-    lavaSizeFactor(obj.lavaSizeFactor || lavaSizeFactor())
+    lavaSize(obj.lavaSizeFactor || lavaSize())
   }
 
   const getSettings = () => ( {
     bgHsl: bgHsl(),
     lavaHsl: lavaHsl(),
     speed: speed(),
-    amountOfLava: amountOfLava(),
+    amountOfLava: particleCount(),
     lavaFuzziness: lavaFuzziness(),
-    lavaSizeFactor: lavaSizeFactor()
+    lavaSizeFactor: lavaSize(),
+    particleCount: particleCount(),
+    interactionRadius: interactionRadius(),
+    stiffness: stiffness(),
+    stiffnessNear: stiffnessNear(),
+    restDensity: restDensity(),
+    maxHeat: maxHeat()
   } )
 
   let settingsKey = 'lavalamp.app-settings'
@@ -181,8 +214,9 @@
       lavaHsl(Object.assign({}, defaultLavaHsl))
       lavaFuzziness(defaultLavaFuzziness)
       speed(defaultSpeed)
-      lavaSizeFactor(defaultLavaSizeFactor())
-      amountOfLava(defaultAmountOfLava())
+      lavaSize(defaultLavaSize)
+      particleCount(defaultParticleCount)
+      gravityStrength(defaultGravityStrength)
     }
 
   }
@@ -245,63 +279,63 @@
     },
     'x'
   )
-
-  const hslRange = (name, attr, state, defaultHsl, min, max) => div(
-    {
-      style: {
-        display: 'flex',
-        'flex-direction': 'column',
-        'margin-top': '5px'
-      }
-    },
-    name,
-    div(
-      {
-        style: {
-          display: 'flex',
-          'flex-direction': 'row'
-        }
-      },
-      input({
-        id: id++,
-        type: 'range',
-        value: state.bindAttr(() => state()[attr]),
-        min: min,
-        max: max,
-        step: 1,
-        oninput: (e) => state.patch({ [attr]: parseInt(e.target.value) })
-      }),
-      resetToDefaultButton(() => state.patch({ [attr]: defaultHsl[attr] }), {
-        'margin-right': '10px',
-        'margin-left': '20px'
-      })
-    )
-  )
-
-  const hslInput = (name, state, defaultHsl) => div(
-    {
-      style: {
-        'text-align': 'center',
-        'margin-top': '5px'
-      }
-    },
-    name,
-    hr({ width: '30%' }),
-    div(
-      {
-        style: {
-          display: 'flex',
-          'flex-direction': 'row',
-          'flex-wrap': 'wrap',
-          'align-items': 'center',
-          'justify-content': 'center'
-        }
-      },
-      hslRange('Hue', 'h', state, defaultHsl, 1, 358),
-      hslRange('Saturation', 's', state, defaultHsl, 1, 100),
-      hslRange('Brightness', 'l', state, defaultHsl, 20, 70)
-    )
-  )
+  //
+  // const hslRange = (name, attr, state, defaultHsl, min, max) => div(
+  //   {
+  //     style: {
+  //       display: 'flex',
+  //       'flex-direction': 'column',
+  //       'margin-top': '5px'
+  //     }
+  //   },
+  //   name,
+  //   div(
+  //     {
+  //       style: {
+  //         display: 'flex',
+  //         'flex-direction': 'row'
+  //       }
+  //     },
+  //     input({
+  //       id: id++,
+  //       type: 'range',
+  //       value: state.bindAttr(() => state()[attr]),
+  //       min: min,
+  //       max: max,
+  //       step: 1,
+  //       oninput: (e) => state.patch({ [attr]: parseInt(e.target.value) })
+  //     }),
+  //     resetToDefaultButton(() => state.patch({ [attr]: defaultHsl[attr] }), {
+  //       'margin-right': '10px',
+  //       'margin-left': '20px'
+  //     })
+  //   )
+  // )
+  //
+  // const hslInput = (name, state, defaultHsl) => div(
+  //   {
+  //     style: {
+  //       'text-align': 'center',
+  //       'margin-top': '5px'
+  //     }
+  //   },
+  //   name,
+  //   hr({ width: '30%' }),
+  //   div(
+  //     {
+  //       style: {
+  //         display: 'flex',
+  //         'flex-direction': 'row',
+  //         'flex-wrap': 'wrap',
+  //         'align-items': 'center',
+  //         'justify-content': 'center'
+  //       }
+  //     },
+  //     hslRange('Hue', 'h', state, defaultHsl, 1, 358),
+  //     hslRange('Saturation', 's', state, defaultHsl, 1, 100),
+  //     hslRange('Brightness', 'l', state, defaultHsl, 20, 70)
+  //   )
+  // )
 
   const copyShareLink = () =>
     navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?shared=${btoa(JSON.stringify(getSettings()))}`)
@@ -327,8 +361,8 @@
         'align-items': 'center'
       }
     },
-    hslInput('Background', bgHsl, defaultBgHsl),
-    hslInput('Lava', lavaHsl, defaultLavaHsl),
+    // hslInput('Background', bgHsl, defaultBgHsl),
+    // hslInput('Lava', lavaHsl, defaultLavaHsl),
     formInput(
       'Lava Fuzziness',
       input({
@@ -347,67 +381,180 @@
       input({
         id: 'lavaSize',
         type: 'range',
-        min: .5,
-        step: .1,
-        max: 2,
-        value: lavaSizeFactor.bindAttr(lavaSizeFactor),
-        oninput: (e) => lavaSizeFactor(e.target.value)
+        min: 2,
+        step: 1,
+        max: 50,
+        value: lavaSize.bindAttr(lavaSize),
+        oninput: (e) => lavaSize(e.target.value)
       }),
-      resetToDefaultButton(() => lavaSizeFactor(defaultLavaSizeFactor()))
+      resetToDefaultButton(() => lavaSize(defaultLavaSize))
     ),
+    // formInput(
+    //   'Speed',
+    //   input({
+    //     id: 'speed',
+    //     type: 'range',
+    //     value: speed.bindAttr(speed),
+    //     step: 0.1,
+    //     min: 0.1,
+    //     max: 8,
+    //     oninput: (e) => speed(e.target.value)
+    //   }),
+    //   resetToDefaultButton(() => speed(defaultSpeed))
+    // ),
+    // formInput(
+    //   'Share',
+    //   button({
+    //     id: 'share', onclick: copyShareLink,
+    //     style: {
+    //       'border-radius': '5px',
+    //       padding: '5px'
+    //     }
+    //   }, 'Share')
+    // ),
+    // formInput(
+    //   'Save',
+    //   button({
+    //     id: 'save', onclick: saveSettings,
+    //     style: {
+    //       'border-radius': '5px',
+    //       padding: '5px'
+    //     }
+    //   }, 'Save and Close')
+    // ),
     formInput(
       'Amount of Lava',
       input({
         id: 'lava-amount',
         type: 'range',
-        value: amountOfLava.bindAttr(amountOfLava),
+        value: particleCount.bindAttr(),
         step: 1,
         min: 5,
-        max: Math.trunc(defaultAmountOfLava() * 2),
-        oninput: (e) => amountOfLava(e.target.value)
+        max: Math.trunc(defaultParticleCount * 2),
+        oninput: (e) => particleCount(parseInt(e.target.value))
       }),
-      resetToDefaultButton(() => amountOfLava(defaultAmountOfLava()))
+      resetToDefaultButton(() => particleCount(defaultParticleCount))
     ),
     formInput(
-      'Speed',
+      'Interaction Radius',
       input({
-        id: 'speed',
+        id: 'interaction-radius',
         type: 'range',
-        value: speed.bindAttr(speed),
-        step: 0.1,
-        min: 0.1,
-        max: 8,
-        oninput: (e) => speed(e.target.value)
+        value: interactionRadius.bindAttr(),
+        step: 1,
+        min: 1,
+        max: 200,
+        oninput: (e) => interactionRadius(e.target.value)
       }),
-      resetToDefaultButton(() => speed(defaultSpeed))
+      resetToDefaultButton(() => interactionRadius(defaultInteractionRadius))
     ),
     formInput(
-      'Share',
-      button({
-        id: 'share', onclick: copyShareLink,
-        style: {
-          'border-radius': '5px',
-          padding: '5px'
-        }
-      }, 'Share')
+      'Stiffness',
+      input({
+        id: 'stiffness',
+        type: 'range',
+        value: stiffness.bindAttr(),
+        step: 1,
+        min: 1,
+        max: 20000,
+        oninput: (e) => stiffness(e.target.value)
+      }),
+      resetToDefaultButton(() => stiffness(defaultStiffness))
     ),
     formInput(
-      'Save',
-      button({
-        id: 'save', onclick: saveSettings,
-        style: {
-          'border-radius': '5px',
-          padding: '5px'
-        }
-      }, 'Save and Close')
+      'Stiffness Near',
+      input({
+        id: 'stiffness-near',
+        type: 'range',
+        value: stiffnessNear.bindAttr(),
+        step: 1,
+        min: 1,
+        max: 20000,
+        oninput: (e) => stiffnessNear(e.target.value)
+      }),
+      resetToDefaultButton(() => stiffnessNear(defaultStiffnessNear))
     ),
-    formInput('Reset Defaults', button({
-      id: 'reset', onclick: resetDefaults,
+    formInput(
+      'Rest Density',
+      input({
+        id: 'rest-density',
+        type: 'range',
+        value: restDensity.bindAttr(),
+        step: 1,
+        min: 1,
+        max: 50,
+        oninput: (e) => restDensity(e.target.value)
+      }),
+      resetToDefaultButton(() => restDensity(defaultRestDensity))
+    ),
+    formInput(
+      'Max Heat',
+      input({
+        id: 'max-heat',
+        type: 'range',
+        value: maxHeat.bindAttr(),
+        step: 1,
+        min: 1,
+        max: 2000,
+        oninput: (e) => maxHeat(e.target.value)
+      }),
+      resetToDefaultButton(() => maxHeat(defaultMaxHeat()))
+    ),
+    formInput(
+      'Lamp Temperature',
+      input({
+        id: 'lamp-temp',
+        type: 'range',
+        value: lampTemp.bindAttr(),
+        step: 1,
+        min: 1,
+        max: 100,
+        oninput: (e) => lampTemp(e.target.value)
+      }),
+      resetToDefaultButton(() => lampTemp(defaultLampTemp))
+    ),
+    formInput(
+      'Ambient Temperature',
+      input({
+        id: 'ambient-temp',
+        type: 'range',
+        value: ambientTemp.bindAttr(),
+        step: 1,
+        min: 1,
+        max: 5000,
+        oninput: (e) => ambientTemp(e.target.value)
+      }),
+      resetToDefaultButton(() => ambientTemp(defaultAmbientTemp))
+    ),
+    formInput(
+      'Gravity Strength',
+      input({
+        id: 'gravity',
+        type: 'range',
+        value: gravityStrength.bindAttr(),
+        step: .01,
+        min: 0,
+        max: 10,
+        oninput: (e) => gravityStrength(parseFloat(e.target.value))
+      }),
+      resetToDefaultButton(() => gravityStrength(defaultGravityStrength))
+    ),
+    formInput('Print Settings', button({
+      id: 'print', onclick: () => {
+        console.log(JSON.stringify(getSettings(), null, ' '))
+      },
       style: {
         'border-radius': '5px',
         padding: '5px'
       }
-    }, 'Reset Defaults')),
+    }, 'Log Settings')),
+    // formInput('Reset Defaults', button({
+    //   id: 'reset', onclick: resetDefaults,
+    //   style: {
+    //     'border-radius': '5px',
+    //     padding: '5px'
+    //   }
+    // }, 'Reset Defaults')),
     div({
         style: {
           position: 'absolute',
@@ -475,86 +622,91 @@
     document.body.append(settings)
 
   const animateLava = (lamp) => {
-    const size = 400
-    const GRID_CELLS = 108
-    const INTERACTION_RADIUS = 60
-    const lava = div({
-      style: {
-        backgroundColor: 'orange',
-        width: `${INTERACTION_RADIUS * .4}px`,
-        height: `${INTERACTION_RADIUS * .4}px`,
-        // width: `${2}px`,
-        // height: `${2}px`,
-        borderRadius: '50%',
-        position: 'fixed',
-        left: 0,
-        right: 0,
-        boxShadow: '0 0 5px 3px orange'
-      }
-    })
-    let last = 0, animationFrame = 0
-    const GRAVITY_STRENGTH = window.innerHeight * .02
-    const GRAVITY = [0, GRAVITY_STRENGTH]
-    const DEVICE_FORCE = [0, 0]
-    const deviceAcceleration = [0, 0]
-    const STIFFNESS = 800
-    const STIFFNESS_NEAR = 5000
-    const REST_DENSITY = 20
-    const MAX_HEAT = window.innerHeight * 0.15
-    const INTERACTION_RADIUS_SQ = INTERACTION_RADIUS * INTERACTION_RADIUS
+    const createLava = (i) => {
+      const lava = div({
+        style: {
+          backgroundColor: 'orange',
+          // width: `${INTERACTION_RADIUS * .4}px`,
+          // height: `${INTERACTION_RADIUS * .4}px`,
+          width: `${lavaSize()}px`,
+          height: `${lavaSize()}px`,
+          borderRadius: '50%',
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          // boxShadow: `0 0 5px ${lavaFuzziness()}px orange`
+        }
+      })
+
+      //set initial positions for each particle
+      // state.x[i] = randomBetween(0, size)
+      // state.y[i] = randomBetween(size*.8, size)
+      state.x[i] = randomBetween(0, size)
+      state.y[i] = randomBetween(0, size)
+      state.oldX[i] = state.x[i]
+      state.oldY[i] = state.y[i]
+      state.vx[i] = 0
+      state.vy[i] = 0
+      state.elements[i] = lava
+      state.elements[i].id = `lava-${i}`
+      lamp.append(state.elements[i])
+    }
+    let last = 0
     const canvasRect = {
-      w: size*2,
-      h: size*2,
+      w: size,
+      h: size,
       l: 0,
       r: size,
       t: 0,
       b: size
     }
     const particleMap = new SpatialHashMap(GRID_CELLS, GRID_CELLS)
-    const state = {
-      x: new Float32Array(amountOfLava()), // x location
-      y: new Float32Array(amountOfLava()), // y location
-      oldX: new Float32Array(amountOfLava()), // previous x location
-      oldY: new Float32Array(amountOfLava()), // previous y location
-      vx: new Float32Array(amountOfLava()), // horizontal velocity
-      temp: new Float32Array(amountOfLava()),
-      vy: new Float32Array(amountOfLava()), // vertical velocity
-      p: new Float32Array(amountOfLava()), // pressure
-      pNear: new Float32Array(amountOfLava()), // pressure near
-      g: new Float32Array(amountOfLava()), // 'nearness' to neighbour
+    const newState = () => ( {
+      x: new Float32Array(particleCount()), // x location
+      y: new Float32Array(particleCount()), // y location
+      oldX: new Float32Array(particleCount()), // previous x location
+      oldY: new Float32Array(particleCount()), // previous y location
+      vx: new Float32Array(particleCount()), // horizontal velocity
+      temp: new Float32Array(particleCount()),
+      vy: new Float32Array(particleCount()), // vertical velocity
+      p: new Float32Array(particleCount()), // pressure
+      pNear: new Float32Array(particleCount()), // pressure near
+      g: new Float32Array(particleCount()), // 'nearness' to neighbour
       elements: []
-    }
+    } )
+    const state = newState()
     const applyGlobalForces = (i, dt) => {
-      const force = [GRAVITY[0] + DEVICE_FORCE[0], GRAVITY[1] + DEVICE_FORCE[1]]
+      const force = [gravity[0] + DEVICE_FORCE[0], gravity[1] + DEVICE_FORCE[1]]
       // const force = DEVICE_FORCE
       state.vx[i] += force[0] * dt
       state.vy[i] += force[1] * dt
       let distanceFromHeatSource = canvasRect.b - state.y[i]
-      if(distanceFromHeatSource < 10){
+      if (distanceFromHeatSource < 10) {
         distanceFromHeatSource = 10
       }
-      if(state.temp[i] > 0) {
-        const tempDecrease = (canvasRect.h - state.y[i]) * .001
+      if (state.temp[i] > 0) {
+        const tempDecrease = ( canvasRect.h - state.y[i] ) / ambientTemp()
         state.temp[i] -= tempDecrease
-        if (state.temp[i] < 0) {
-          state.temp[i] = 0
-        }
       }
-      if(state.temp[i] < MAX_HEAT){
-        const tempIncrease = randomNormalDistribution(1,20)/ distanceFromHeatSource
+      if (state.temp[i] < maxHeat()) {
+        const tempIncrease = (randomNormalDistribution(1, 100) / distanceFromHeatSource) * lampTemp()/100
         state.temp[i] += tempIncrease
-        if(state.temp[i] > MAX_HEAT){
-          state.temp[i] = MAX_HEAT
-        }
-        let neighbors = particleMap.query(state.x[i], state.y[i], randomNormalDistribution(1, INTERACTION_RADIUS))
+
+        let neighbors = particleMap.query(state.x[i], state.y[i], randomNormalDistribution(1, interactionRadius()))
         const neighborTempIncrease = state.temp[i] / neighbors.length
-        for (const k of neighbors){
+        for (const k of neighbors) {
           // const distance = Math.sqrt(Math.pow(state.x[k] - x, 2) + Math.pow(state.y[k] - y, 2))
-          if(state.temp[k] < MAX_HEAT) {
+          if (state.temp[k] < maxHeat()) {
             state.temp[k] += neighborTempIncrease
             state.vy[k] -= state.temp[k] / 400
           }
         }
+      }
+      if (state.temp[i] > maxHeat()) {
+        state.temp[i] = maxHeat()
+      }
+      if (state.temp[i] < 0) {
+        state.temp[i] = 0
       }
       state.vy[i] -= state.temp[i] / 100
     }
@@ -563,10 +715,10 @@
       const neighbour = [state.x[n], state.y[n]] // position of n
 
       const lsq = lengthSq(subtract(particle, neighbour))
-      if (lsq > INTERACTION_RADIUS_SQ) return 0
+      if (lsq > interactionRadiusSq) return 0
 
       const distance = Math.sqrt(lsq)
-      return 1 - distance / INTERACTION_RADIUS
+      return 1 - distance / interactionRadius()
     }
 
     const subtract = ([x1, y1], [x2, y2]) => [x1 - x2, y1 - y2]
@@ -584,9 +736,9 @@
     }
 
     const getNeighboursWithGradients = i => {
-      const gridX = ( state.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS
-      const gridY = ( state.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
-      const radius = ( INTERACTION_RADIUS / canvasRect.w ) * GRID_CELLS
+      const gridX = Math.floor(state.x[i] / GRID_CELLS),
+        gridY = Math.floor(state.y[i] / GRID_CELLS)
+      const radius = ( interactionRadius() / canvasRect.w ) * GRID_CELLS
 
       const results = particleMap.query(gridX, gridY, radius)
       const neighbours = []
@@ -616,8 +768,8 @@
         density += g * g
         nearDensity += g * g * g
       }
-      state.p[i] = STIFFNESS * ( density - REST_DENSITY )
-      state.pNear[i] = STIFFNESS_NEAR * nearDensity
+      state.p[i] = stiffness() * ( density - restDensity() )
+      state.pNear[i] = stiffnessNear() * nearDensity
     }
 
     const relax = (i, neighbours, dt) => {
@@ -662,33 +814,23 @@
       }
     }
 
-    const calculateVelocity = (i, dt) => {
-      const pos = [state.x[i], state.y[i]]
-      const old = [state.oldX[i], state.oldY[i]]
-
-      const v = multiplyScalar(subtract(old, pos), dt)
-
-      state.vx[i] = v[0]
-      state.vy[i] = v[1]
-    }
-
     function run (dt) {
       particleMap.clear()
       DEVICE_FORCE[0] = ( deviceAcceleration[0] / dt ) * 2
       DEVICE_FORCE[1] = ( deviceAcceleration[1] / dt ) * 2
       deviceAcceleration[0] = 0
       deviceAcceleration[1] = 0
-      for (let i = 0; i < amountOfLava(); i++) {
+      for (let i = 0; i < particleCount(); i++) {
         state.oldX[i] = state.x[i]
         state.oldY[i] = state.y[i]
         applyGlobalForces(i, dt)
         state.x[i] += state.vx[i] * dt
         state.y[i] += state.vy[i] * dt
-        const gridx = ( state.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS,
-          gridy = ( state.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
-        particleMap.add(gridx, gridy, i)
+        const gridX = Math.floor(state.x[i] / GRID_CELLS),
+          gridY = Math.floor(state.y[i] / GRID_CELLS)
+        particleMap.add(gridX, gridY, i)
       }
-      for (let i = 0; i < amountOfLava(); i++) {
+      for (let i = 0; i < particleCount(); i++) {
         let neighbours = getNeighboursWithGradients(i)
         updatePressure(i, neighbours)
         relax(i, neighbours, dt)
@@ -698,37 +840,68 @@
     }
 
     function render (time) {
-      // run((time - last)/1000)
-      run(1/60)
+      run((time - last)/1000)
+      // run(1 / 60)
+      console.log((time - last) /1000, 1/60)
       last = time
-      animationFrame = requestAnimationFrame(render)
+      requestAnimationFrame(render)
     }
+
     window.addEventListener('deviceorientation', function (n) {
-      // GRAVITY[0] = ( n.gamma / 90 ) * GRAVITY_STRENGTH * 1.33
-      // GRAVITY[1] = ( -n.beta / 90 ) * GRAVITY_STRENGTH * 1.33
+      // GRAVITY[0] = ( n.gamma / 90 ) * gravityStrength * 1.33
+      // GRAVITY[1] = ( -n.beta / 90 ) * gravityStrength * 1.33
     })
     window.addEventListener('devicemotion', function (n) {
       deviceAcceleration[0] += n.acceleration.x
       deviceAcceleration[1] += n.acceleration.y
     })
+    lavaSize.subscribe(() => {
+      for (const el of state.elements) {
+        el.style.width = `${lavaSize()}px`
+        el.style.height = `${lavaSize()}px`
+      }
+    })
+    gravityStrength.subscribe((newStrength, old) => {
+      gravity[1] = newStrength
+      const diff = newStrength - old
+      for(let i = 0; i<state.vy.length; i++){
+        state.vy[i] += diff
+      }
+    })
+    particleCount.subscribe(() => {
+      console.log('start length', state.elements.length)
+      console.log('new count', particleCount())
+      if (state.elements.length > particleCount()) {
+        for (let i = particleCount(); i < state.elements.length; i++) {
+          state.elements[i].remove()
+        }
+        state.elements = state.elements.slice(0, particleCount())
+      } else if (state.elements.length < particleCount()) {
+        const updatedState = newState()
+        for (const f of Object.keys(state)) {
+          for (let i = 0; i < state[f].length; i++) {
+            updatedState[f][i] = state[f][i]
+          }
+          state[f] = updatedState[f]
+        }
+        for (let i = state.elements.length; i < particleCount(); i++) {
+          createLava(i)
+        }
+      }
+      particleMap.clear()
+      for (let i = 0; i < particleCount(); i++) {
+        const gridX = Math.floor(state.x[i] / GRID_CELLS),
+          gridY = Math.floor(state.y[i] / GRID_CELLS)
+        particleMap.add(gridX, gridY, i)
+      }
+      console.log('end length', state.elements.length)
+      console.log('new count', particleCount())
+    })
 
-    for (let i = 0; i < amountOfLava(); i++) {
-      //set initial positions for each particle
-      // state.x[i] = randomBetween(0, size)
-      // state.y[i] = randomBetween(size*.8, size)
-      state.x[i] = randomBetween(0, size)
-      state.y[i] = randomBetween(0, size)
-      state.oldX[i] = state.x[i]
-      state.oldY[i] = state.y[i]
-      state.vx[i] = 0
-      state.vy[i] = 0
-      state.elements[i] = lava.cloneNode()
-      state.elements[i].id = `lava-${i}`
-      contain(i)
-      // state.elements[i].style.transform = `translate(${state.x[i]}px, ${state.y[i]}px)`
-      lamp.append(state.elements[i])
-      let gridX = ( state.x[i] / canvasRect.w + 0.5 ) * GRID_CELLS
-      let gridY = ( state.y[i] / canvasRect.h + 0.5 ) * GRID_CELLS
+    for (let i = 0; i < particleCount(); i++) {
+      createLava(i)
+      const gridX = Math.floor(state.x[i] / GRID_CELLS),
+        gridY = Math.floor(state.y[i] / GRID_CELLS)
       particleMap.add(gridX, gridY, i)
     }
 
@@ -741,10 +914,6 @@
     document.body.append(current = bg(lamp))
     animateLava(lamp)
   }
-
-  speed.subscribe(reset)
-  amountOfLava.subscribe(reset)
-  lavaSizeFactor.subscribe(reset)
 
   document.body.append(sub(
     {
