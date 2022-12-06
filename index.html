@@ -477,14 +477,14 @@
   const animateLava = (lamp) => {
     const size = 400
     const GRID_CELLS = 108
-    const INTERACTION_RADIUS = 70
+    const INTERACTION_RADIUS = 50
     const lava = div({
       style: {
         backgroundColor: 'orange',
-        // width: `${INTERACTION_RADIUS * .7}px`,
-        // height: `${INTERACTION_RADIUS * .7}px`,
-        width: `${2}px`,
-        height: `${2}px`,
+        width: `${INTERACTION_RADIUS * .4}px`,
+        height: `${INTERACTION_RADIUS * .4}px`,
+        // width: `${2}px`,
+        // height: `${2}px`,
         borderRadius: '50%',
         position: 'fixed',
         left: 0,
@@ -493,14 +493,14 @@
       }
     })
     let last = 0, animationFrame = 0
-    const GRAVITY_STRENGTH = 8
+    const GRAVITY_STRENGTH = window.innerHeight * .02
     const GRAVITY = [0, GRAVITY_STRENGTH]
     const DEVICE_FORCE = [0, 0]
     const deviceAcceleration = [0, 0]
     const STIFFNESS = 400
     const STIFFNESS_NEAR = 2000
     const REST_DENSITY = 15
-    const MAX_HEAT = 20
+    const MAX_HEAT = window.innerHeight * 0.2
     const INTERACTION_RADIUS_SQ = INTERACTION_RADIUS * INTERACTION_RADIUS
     const canvasRect = {
       w: size*2,
@@ -529,31 +529,30 @@
       // const force = DEVICE_FORCE
       state.vx[i] += force[0] * dt
       state.vy[i] += force[1] * dt
-      // const distanceFromHeatSource = Math.sqrt(Math.pow(state.x[i] - HEAT_SOURCE_POSITION[0], 2) + Math.pow(state.y[i] - HEAT_SOURCE_POSITION[1], 2))
-      let distanceFromHeatSource = size - state.y[i]
+      let distanceFromHeatSource = canvasRect.b - state.y[i]
       if(distanceFromHeatSource < 10){
         distanceFromHeatSource = 10
       }
       if(state.temp[i] > 0) {
-        const tempDecrease = 0.3
+        const tempDecrease = (canvasRect.h - state.y[i]) * .001
         state.temp[i] -= tempDecrease
         if (state.temp[i] < 0) {
           state.temp[i] = 0
         }
       }
       if(state.temp[i] < MAX_HEAT){
-        const tempIncrease = randomNormalDistribution(1,100)/ distanceFromHeatSource
+        const tempIncrease = randomNormalDistribution(1,20)/ distanceFromHeatSource
         state.temp[i] += tempIncrease
         if(state.temp[i] > MAX_HEAT){
           state.temp[i] = MAX_HEAT
         }
-        let neighbors = particleMap.query(state.x[i], state.y[i], INTERACTION_RADIUS / 2)
+        let neighbors = particleMap.query(state.x[i], state.y[i], INTERACTION_RADIUS/2)
         const neighborTempIncrease = state.temp[i] / neighbors.length
         for (const k of neighbors){
           // const distance = Math.sqrt(Math.pow(state.x[k] - x, 2) + Math.pow(state.y[k] - y, 2))
           if(state.temp[k] < MAX_HEAT) {
             state.temp[k] += neighborTempIncrease
-            state.vy[k] -= state.temp[k] / 100
+            state.vy[k] -= state.temp[k] / 400
           }
         }
       }
