@@ -477,7 +477,7 @@
   const animateLava = (lamp) => {
     const size = 400
     const GRID_CELLS = 108
-    const INTERACTION_RADIUS = 50
+    const INTERACTION_RADIUS = 60
     const lava = div({
       style: {
         backgroundColor: 'orange',
@@ -497,10 +497,10 @@
     const GRAVITY = [0, GRAVITY_STRENGTH]
     const DEVICE_FORCE = [0, 0]
     const deviceAcceleration = [0, 0]
-    const STIFFNESS = 400
-    const STIFFNESS_NEAR = 2000
-    const REST_DENSITY = 15
-    const MAX_HEAT = window.innerHeight * 0.2
+    const STIFFNESS = 800
+    const STIFFNESS_NEAR = 5000
+    const REST_DENSITY = 20
+    const MAX_HEAT = window.innerHeight * 0.15
     const INTERACTION_RADIUS_SQ = INTERACTION_RADIUS * INTERACTION_RADIUS
     const canvasRect = {
       w: size*2,
@@ -546,7 +546,7 @@
         if(state.temp[i] > MAX_HEAT){
           state.temp[i] = MAX_HEAT
         }
-        let neighbors = particleMap.query(state.x[i], state.y[i], INTERACTION_RADIUS/2)
+        let neighbors = particleMap.query(state.x[i], state.y[i], randomNormalDistribution(1, INTERACTION_RADIUS))
         const neighborTempIncrease = state.temp[i] / neighbors.length
         for (const k of neighbors){
           // const distance = Math.sqrt(Math.pow(state.x[k] - x, 2) + Math.pow(state.y[k] - y, 2))
