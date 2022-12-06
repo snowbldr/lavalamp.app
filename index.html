@@ -123,7 +123,7 @@
   let defaultBgHsl = { h: 20, s: 20, l: 20 }
   let defaultLavaHsl = { h: 285, s: 100, l: 65 }
   let defaultSpeed = 1
-  let defaultAmountOfLava = () => 600
+  let defaultAmountOfLava = () => 300
   let defaultLavaFuzziness = 0
   let defaultLavaSizeFactor = () => ( window.innerHeight / 850 ).toFixed(1)
 
@@ -477,15 +477,14 @@
   const animateLava = (lamp) => {
     const size = 400
     const GRID_CELLS = 108
-    const INTERACTION_RADIUS = 35
-    const HEAT_RADIUS = INTERACTION_RADIUS * 5
+    const INTERACTION_RADIUS = 70
     const lava = div({
       style: {
         backgroundColor: 'orange',
-        width: `${INTERACTION_RADIUS * .4}px`,
-        height: `${INTERACTION_RADIUS * .4}px`,
-        // width: `${3}px`,
-        // height: `${3}px`,
+        // width: `${INTERACTION_RADIUS * .7}px`,
+        // height: `${INTERACTION_RADIUS * .7}px`,
+        width: `${2}px`,
+        height: `${2}px`,
         borderRadius: '50%',
         position: 'fixed',
         left: 0,
@@ -494,15 +493,14 @@
       }
     })
     let last = 0, animationFrame = 0
-    const GRAVITY = [0, 400]
+    const GRAVITY_STRENGTH = 8
+    const GRAVITY = [0, GRAVITY_STRENGTH]
     const DEVICE_FORCE = [0, 0]
     const deviceAcceleration = [0, 0]
     const STIFFNESS = 400
     const STIFFNESS_NEAR = 2000
-    const REST_DENSITY = 9
-    const MAX_HEAT = 300
-    const AMBIENT_TEMP = 10
-    const HEAT_SOURCE_POSITION = [size/2, size]
+    const REST_DENSITY = 15
+    const MAX_HEAT = 20
     const INTERACTION_RADIUS_SQ = INTERACTION_RADIUS * INTERACTION_RADIUS
     const canvasRect = {
       w: size*2,
@@ -527,34 +525,39 @@
       elements: []
     }
     const applyGlobalForces = (i, dt) => {
-      // const force = [GRAVITY[0] + DEVICE_FORCE[0], GRAVITY[1] + DEVICE_FORCE[1]]
-      // // const force = DEVICE_FORCE
-      // state.vx[i] += force[0] * dt
-      // state.vy[i] += force[1] * dt
-
-      // if(state.temp[i] < MAX_HEAT){
-      //   let x = state.x[i]
-      //   let y = state.y[i]
-      //   const tempIncrease = randomBetween(1, 10) <= 3 ? 20 / 50 : 0
-      //   state.temp[i] += tempIncrease
-      //   for (const k of particleMap.query(x, y, HEAT_RADIUS)){
-      //     // const distance = Math.sqrt(Math.pow(state.x[k] - x, 2) + Math.pow(state.y[k] - y, 2))
-      //     if(state.temp[k] < MAX_HEAT) {
-      //       state.temp[k] += tempIncrease
-      //     }
-      //   }
-      // } else {
-      //   let tempDecrease = randomNormalDistribution(1, 40, 1) / 500
-      //   state.temp[i] -=  tempDecrease
-      //   // for (const k of particleMap.query(state.x[i], state.y[i], HEAT_RADIUS)){
-      //   //   // const distance = Math.sqrt(Math.pow(state.x[k] - x, 2) + Math.pow(state.y[k] - y, 2))
-      //   //   if(state.temp[k] > 0) {
-      //   //     state.temp[k] -= tempDecrease
-      //   //   }
-      //   // }
-      // }
-      //
-      // state.vy[i] -= state.temp[i]
+      const force = [GRAVITY[0] + DEVICE_FORCE[0], GRAVITY[1] + DEVICE_FORCE[1]]
+      // const force = DEVICE_FORCE
+      state.vx[i] += force[0] * dt
+      state.vy[i] += force[1] * dt
+      // const distanceFromHeatSource = Math.sqrt(Math.pow(state.x[i] - HEAT_SOURCE_POSITION[0], 2) + Math.pow(state.y[i] - HEAT_SOURCE_POSITION[1], 2))
+      let distanceFromHeatSource = size - state.y[i]
+      if(distanceFromHeatSource < 10){
+        distanceFromHeatSource = 10
+      }
+      if(state.temp[i] > 0) {
+        const tempDecrease = 0.3
+        state.temp[i] -= tempDecrease
+        if (state.temp[i] < 0) {
+          state.temp[i] = 0
+        }
+      }
+      if(state.temp[i] < MAX_HEAT){
+        const tempIncrease = randomNormalDistribution(1,100)/ distanceFromHeatSource
+        state.temp[i] += tempIncrease
+        if(state.temp[i] > MAX_HEAT){
+          state.temp[i] = MAX_HEAT
+        }
+        let neighbors = particleMap.query(state.x[i], state.y[i], INTERACTION_RADIUS / 2)
+        const neighborTempIncrease = state.temp[i] / neighbors.length
+        for (const k of neighbors){
+          // const distance = Math.sqrt(Math.pow(state.x[k] - x, 2) + Math.pow(state.y[k] - y, 2))
+          if(state.temp[k] < MAX_HEAT) {
+            state.temp[k] += neighborTempIncrease
+            state.vy[k] -= state.temp[k] / 100
+          }
+        }
+      }
+      state.vy[i] -= state.temp[i] / 100
     }
     const gradient = (i, n) => {
       const particle = [state.x[i], state.y[i]] // position of i
@@ -690,23 +693,20 @@
         let neighbours = getNeighboursWithGradients(i)
         updatePressure(i, neighbours)
         relax(i, neighbours, dt)
-      }
-      for (let i = 0; i < amountOfLava(); i++) {
-        contain(i, dt)
-        calculateVelocity(i, dt)
+        contain(i)
         state.elements[i].style.transform = `translate(${state.x[i]}px, ${state.y[i]}px)`
       }
     }
 
     function render (time) {
       // run((time - last)/1000)
-      run(1/30)
+      run(1/60)
       last = time
       animationFrame = requestAnimationFrame(render)
     }
     window.addEventListener('deviceorientation', function (n) {
-      // GRAVITY[0] = ( n.gamma / 90 ) * S * 1.33
-      // GRAVITY[1] = ( -n.beta / 90 ) * S * 1.33
+      // GRAVITY[0] = ( n.gamma / 90 ) * GRAVITY_STRENGTH * 1.33
+      // GRAVITY[1] = ( -n.beta / 90 ) * GRAVITY_STRENGTH * 1.33
     })
     window.addEventListener('devicemotion', function (n) {
       deviceAcceleration[0] += n.acceleration.x
@@ -743,7 +743,6 @@
     animateLava(lamp)
   }
 
-  window.addEventListener('resize', reset)
   speed.subscribe(reset)
   amountOfLava.subscribe(reset)
   lavaSizeFactor.subscribe(reset)
