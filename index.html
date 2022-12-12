@@ -7,15 +7,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="font-family: Arial">
+<svg id="settings" fill="white" viewBox="0 0 24 24" width="36" height="36">
+    <path d="M10.7,2.625a3.481,3.481,0,0,0-6.3,0H0v3H4.395a3.481,3.481,0,0,0,6.3,0H24v-3Z"/>
+    <path d="M16.455,8.5a3.492,3.492,0,0,0-3.151,2H0v3H13.3a3.481,3.481,0,0,0,6.3,0H24v-3H19.605A3.492,3.492,0,0,0,16.455,8.5Z"/>
+    <path d="M7.545,16.375a3.492,3.492,0,0,0-3.15,2H0v3H4.395a3.481,3.481,0,0,0,6.3,0H24v-3H10.7A3.492,3.492,0,0,0,7.545,16.375Z"/>
+</svg>
 <script src="https://cdn.jsdelivr.net/npm/nosleep.js@0.11.0/dist/NoSleep.min.js"></script>
 <script type="module">
   import {
     button,
     div,
-    img,
     input,
     label,
-    hr,
+    canvas,
     a,
     sub
   } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.8/src/fnelements.min.mjs'
@@ -120,65 +124,65 @@
   }
 
   document.addEventListener('click', enableNoSleep, false)
-
-  const defaultBgHsl = { h: 20, s: 20, l: 20 }
-  const defaultLavaHsl = { h: 285, s: 100, l: 65 }
-  const defaultParticleCount = 400
-  const defaultLavaFuzziness = 8
-  const defaultInteractionRadius = 35
-  const defaultStiffness = 5000
-  const defaultStiffnessNear = 30000
+  const defaultBgColor = { r: 0, g: 0, b: 0 }
+  const defaultLavaColor = { r: 255, g: 0, b: 0 }
+  const defaultLavaHighlight = { r: 255, g: 200, b: 0 }
+  const defaultParticleCount = fnstate(Math.min(Math.trunc(window.innerHeight * window.innerWidth / 1000), 1000))
+  const defaultInteractionRadius = 40
+  const defaultStiffness = 3500
+  const defaultStiffnessNear = 10000
   const defaultRestDensity = 5.45
-  const defaultLavaSize = 17
-  const defaultLampTemp = 200
-  const defaultAmbientTemp = 200
-  const defaultMaxHeat = () => 1281
-  const defaultGravityStrength = 600
-
-  const size = Math.min(Math.max(window.innerWidth, window.innerHeight), 600)
+  const defaultParticleSize = 17
+  const defaultMaxTemp = 800
+  const defaultGravityStrength = 500
   const GRID_CELLS = 54
+
+  const bgColor = fnstate({ r: 0, g: 0, b: 0 })
+  const lavaColor = fnstate({ r: 255, g: 0, b: 0 })
+  const highlightColor = fnstate({ r: 255, g: 200, b: 0 })
   const interactionRadius = fnstate(defaultInteractionRadius)
   const gravityStrength = fnstate(defaultGravityStrength)
   const stiffness = fnstate(defaultStiffness)
   const stiffnessNear = fnstate(defaultStiffnessNear)
   const restDensity = fnstate(defaultRestDensity)
-  const maxTemp = fnstate(defaultMaxHeat())
-  const lampTemp = fnstate(defaultLampTemp)
-  const ambientTemp = fnstate(defaultAmbientTemp)
+  const maxTemp = fnstate(defaultMaxTemp)
+  const particleCount = fnstate(defaultParticleCount())
+  const particleSize = fnstate(defaultParticleSize)
   const gravity = [0, gravityStrength()]
   const DEVICE_FORCE = [0, 0]
   const deviceAcceleration = [0, 0]
   let interactionRadiusSq = interactionRadius() * interactionRadius()
+
   interactionRadius.subscribe(() => {
     interactionRadiusSq = interactionRadius() * interactionRadius()
   })
 
-  const bgHsl = fnstate(Object.assign({}, defaultBgHsl))
-  const lavaHsl = fnstate(Object.assign({}, defaultLavaHsl))
-  const particleCount = fnstate(defaultParticleCount)
-  const lavaFuzziness = fnstate(defaultLavaFuzziness)
-  const lavaSize = fnstate(defaultLavaSize)
-
   const applySettings = obj => {
-    bgHsl(obj.bgHsl || Object.assign({}, defaultBgHsl))
-    lavaHsl(obj.lavaHsl || Object.assign({}, lavaHsl(obj.lavaHsl || Object.assign({}, defaultBgHsl))))
-    particleCount(obj.amountOfLava || particleCount())
-    lavaFuzziness(obj.lavaFuzziness || lavaFuzziness())
-    lavaSize(obj.lavaSizeFactor || lavaSize())
+    bgColor(obj.bgColor || Object.assign({}, defaultBgColor))
+    lavaColor(obj.lavaColor || Object.assign({}, defaultLavaColor))
+    highlightColor(obj.lavaHighlight || Object.assign({}, defaultLavaHighlight))
+    interactionRadius(obj.interactionRadius || interactionRadius())
+    gravityStrength(obj.gravityStrength || gravityStrength())
+    stiffness(obj.stiffness || stiffness())
+    stiffnessNear(obj.stiffnessNear || stiffnessNear())
+    restDensity(obj.restDensity || restDensity())
+    maxTemp(obj.maxTemp || maxTemp())
+    particleCount(obj.particleCount || particleCount())
+    particleSize(obj.particleSize || particleSize())
   }
 
   const getSettings = () => ( {
-    bgHsl: bgHsl(),
-    lavaHsl: lavaHsl(),
-    amountOfLava: particleCount(),
-    lavaFuzziness: lavaFuzziness(),
-    lavaSizeFactor: lavaSize(),
-    particleCount: particleCount(),
-    interactionRadius: interactionRadius(),
-    stiffness: stiffness(),
-    stiffnessNear: stiffnessNear(),
-    restDensity: restDensity(),
-    maxHeat: maxTemp()
+      bgColor: bgColor(),
+      lavaColor: lavaColor(),
+      lavaHighlight: highlightColor(),
+      interactionRadius: interactionRadius(),
+      gravityStrength: gravityStrength(),
+      stiffness: stiffness(),
+      stiffnessNear: stiffnessNear(),
+      restDensity: restDensity(),
+      maxTemp: maxTemp(),
+      particleCount: particleCount(),
+      particleSize: particleSize(),
   } )
 
   let settingsKey = 'lavalamp.app-settings'
@@ -204,16 +208,20 @@
   }
 
   const resetDefaults = () => {
-    if (confirm('This will reset ALL defaults')) {
+    if (confirm('This will reset ALL defaults and remove saved settings')) {
       localStorage.removeItem(settingsKey)
-      bgHsl(Object.assign({}, defaultBgHsl))
-      lavaHsl(Object.assign({}, defaultLavaHsl))
-      lavaFuzziness(defaultLavaFuzziness)
-      lavaSize(defaultLavaSize)
-      particleCount(defaultParticleCount)
+      bgColor(Object.assign({}, defaultBgColor))
+      lavaColor(Object.assign({}, defaultLavaColor))
+      highlightColor(Object.assign({}, defaultLavaHighlight))
+      interactionRadius(defaultInteractionRadius)
       gravityStrength(defaultGravityStrength)
+      stiffness(defaultStiffness)
+      stiffnessNear(defaultStiffnessNear)
+      restDensity(defaultRestDensity)
+      maxTemp(defaultMaxTemp)
+      particleCount(defaultParticleCount())
+      particleSize(defaultParticleSize)
     }
-
   }
 
   const randomBetween = (min, max) => Math.trunc(Math.random() * ( max - min ) + min)
@@ -235,6 +243,20 @@
     num += min // offset to min
     return Math.trunc(num)
   }
+
+  function hexToRgb(hex) {
+    const bigint = parseInt(hex.slice(1), 16);
+    return {
+      r: ( bigint >> 16 ) & 255,
+      g: ( bigint >> 8 ) & 255,
+      b: bigint & 255
+    }
+  }
+
+  function rgbToHex(color) {
+    return `#${( 1 << 24 | color.r << 16 | color.g << 8 | color.b ).toString(16).slice(1)}`;
+  }
+
 
   const formInput = (inputLabel, theInput, setDefault) => {
     theInput.style.cursor = 'pointer'
@@ -274,63 +296,6 @@
     },
     'x'
   )
-  //
-  // const hslRange = (name, attr, state, defaultHsl, min, max) => div(
-  //   {
-  //     style: {
-  //       display: 'flex',
-  //       'flex-direction': 'column',
-  //       'margin-top': '5px'
-  //     }
-  //   },
-  //   name,
-  //   div(
-  //     {
-  //       style: {
-  //         display: 'flex',
-  //         'flex-direction': 'row'
-  //       }
-  //     },
-  //     input({
-  //       id: id++,
-  //       type: 'range',
-  //       value: state.bindAttr(() => state()[attr]),
-  //       min: min,
-  //       max: max,
-  //       step: 1,
-  //       oninput: (e) => state.patch({ [attr]: parseInt(e.target.value) })
-  //     }),
-  //     resetToDefaultButton(() => state.patch({ [attr]: defaultHsl[attr] }), {
-  //       'margin-right': '10px',
-  //       'margin-left': '20px'
-  //     })
-  //   )
-  // )
-  //
-  // const hslInput = (name, state, defaultHsl) => div(
-  //   {
-  //     style: {
-  //       'text-align': 'center',
-  //       'margin-top': '5px'
-  //     }
-  //   },
-  //   name,
-  //   hr({ width: '30%' }),
-  //   div(
-  //     {
-  //       style: {
-  //         display: 'flex',
-  //         'flex-direction': 'row',
-  //         'flex-wrap': 'wrap',
-  //         'align-items': 'center',
-  //         'justify-content': 'center'
-  //       }
-  //     },
-  //     hslRange('Hue', 'h', state, defaultHsl, 1, 358),
-  //     hslRange('Saturation', 's', state, defaultHsl, 1, 100),
-  //     hslRange('Brightness', 'l', state, defaultHsl, 20, 70)
-  //   )
-  // )
 
   const copyShareLink = () =>
     navigator.clipboard.writeText(`${window.location.origin}${window.location.pathname}?shared=${btoa(JSON.stringify(getSettings()))}`)
@@ -356,63 +321,55 @@
         'align-items': 'center'
       }
     },
-    // hslInput('Background', bgHsl, defaultBgHsl),
-    // hslInput('Lava', lavaHsl, defaultLavaHsl),
     formInput(
-      'Lava Fuzziness',
+      'Background Color',
       input({
-        id: 'lavaFuzziness',
-        type: 'range',
-        min: 2,
-        step: 1,
-        max: 50,
-        value: lavaFuzziness.bindAttr(lavaFuzziness),
-        oninput: (e) => lavaFuzziness(e.target.value)
-      }),
-      resetToDefaultButton(() => lavaFuzziness(defaultLavaFuzziness))
+        id: 'bgColor',
+        type: 'color',
+        value: bgColor.bindAttr(()=>rgbToHex(bgColor())),
+        oninput: e => bgColor(hexToRgb(e.target.value))
+      })
     ),
     formInput(
-      'Lava Size',
+      'Lava Color',
       input({
-        id: 'lavaSize',
+        id: 'lavaColor',
+        type: 'color',
+        value: lavaColor.bindAttr(()=>rgbToHex(lavaColor())),
+        oninput: e => lavaColor(hexToRgb(e.target.value))
+      })
+    ),
+    formInput(
+      'Highlight Color',
+      input({
+        id: 'highlightColor',
+        type: 'color',
+        value: highlightColor.bindAttr(()=>rgbToHex(highlightColor())),
+        oninput: e => highlightColor(hexToRgb(e.target.value))
+      })
+    ),
+    formInput(
+      'Particle Size',
+      input({
+        id: 'particleSize',
         type: 'range',
-        min: 2,
+        min: 5,
         step: 1,
         max: 50,
-        value: lavaSize.bindAttr(lavaSize),
-        oninput: (e) => lavaSize(e.target.value)
+        value: particleSize.bindAttr(particleSize),
+        oninput: (e) => particleSize(e.target.value)
       }),
-      resetToDefaultButton(() => lavaSize(defaultLavaSize))
+      resetToDefaultButton(() => particleSize(defaultParticleSize))
     ),
-    // formInput(
-    //   'Share',
-    //   button({
-    //     id: 'share', onclick: copyShareLink,
-    //     style: {
-    //       'border-radius': '5px',
-    //       padding: '5px'
-    //     }
-    //   }, 'Share')
-    // ),
-    // formInput(
-    //   'Save',
-    //   button({
-    //     id: 'save', onclick: saveSettings,
-    //     style: {
-    //       'border-radius': '5px',
-    //       padding: '5px'
-    //     }
-    //   }, 'Save and Close')
-    // ),
     formInput(
-      'Amount of Lava',
+      'Particle Count',
       input({
-        id: 'lava-amount',
+        id: 'particle-count',
         type: 'range',
         value: particleCount.bindAttr(),
         step: 1,
         min: 5,
-        max: Math.trunc(defaultParticleCount * 2),
+        max: defaultParticleCount.bindAttr( () => Math.trunc(defaultParticleCount()) * 2),
         oninput: (e) => particleCount(parseInt(e.target.value))
       }),
       resetToDefaultButton(() => particleCount(defaultParticleCount))
@@ -424,8 +381,8 @@
         type: 'range',
         value: interactionRadius.bindAttr(),
         step: 1,
-        min: 1,
-        max: 200,
+        min: 30,
+        max: 100,
         oninput: (e) => interactionRadius(e.target.value)
       }),
       resetToDefaultButton(() => interactionRadius(defaultInteractionRadius))
@@ -438,7 +395,7 @@
         value: stiffness.bindAttr(),
         step: 1,
         min: 1,
-        max: 20000,
+        max: 6500,
         oninput: (e) => stiffness(e.target.value)
       }),
       resetToDefaultButton(() => stiffness(defaultStiffness))
@@ -451,7 +408,7 @@
         value: stiffnessNear.bindAttr(),
         step: 10,
         min: 1,
-        max: 100000,
+        max: 40000,
         oninput: (e) => stiffnessNear(e.target.value)
       }),
       resetToDefaultButton(() => stiffnessNear(defaultStiffnessNear))
@@ -464,7 +421,7 @@
         value: restDensity.bindAttr(),
         step: .01,
         min: .01,
-        max: 50,
+        max: 7,
         oninput: (e) => restDensity(e.target.value)
       }),
       resetToDefaultButton(() => restDensity(defaultRestDensity))
@@ -476,37 +433,11 @@
         type: 'range',
         value: maxTemp.bindAttr(),
         step: 1,
-        min: 1,
-        max: 2000,
+        min: 420,
+        max: 1600,
         oninput: (e) => maxTemp(e.target.value)
       }),
-      resetToDefaultButton(() => maxTemp(defaultMaxHeat()))
-    ),
-    formInput(
-      'Lamp Temperature',
-      input({
-        id: 'lamp-temp',
-        type: 'range',
-        value: lampTemp.bindAttr(),
-        step: 1,
-        min: 1,
-        max: 100,
-        oninput: (e) => lampTemp(e.target.value)
-      }),
-      resetToDefaultButton(() => lampTemp(defaultLampTemp))
-    ),
-    formInput(
-      'Ambient Temperature',
-      input({
-        id: 'ambient-temp',
-        type: 'range',
-        value: ambientTemp.bindAttr(),
-        step: 1,
-        min: 1,
-        max: 500,
-        oninput: (e) => ambientTemp(e.target.value)
-      }),
-      resetToDefaultButton(() => ambientTemp(defaultAmbientTemp))
+      resetToDefaultButton(() => maxTemp(defaultMaxTemp))
     ),
     formInput(
       'Gravity Strength',
@@ -515,28 +446,39 @@
         type: 'range',
         value: gravityStrength.bindAttr(),
         step: 1,
-        min: 0,
-        max: 1000,
+        min: 220,
+        max: 750,
         oninput: (e) => gravityStrength(parseFloat(e.target.value))
       }),
       resetToDefaultButton(() => gravityStrength(defaultGravityStrength))
     ),
-    formInput('Print Settings', button({
-      id: 'print', onclick: () => {
-        console.log(JSON.stringify(getSettings(), null, ' '))
-      },
+    formInput(
+      'Share',
+      button({
+        id: 'share', onclick: copyShareLink,
+        style: {
+          'border-radius': '5px',
+          padding: '5px'
+        }
+      }, 'Share')
+    ),
+    formInput(
+      'Save',
+      button({
+        id: 'save', onclick: saveSettings,
+        style: {
+          'border-radius': '5px',
+          padding: '5px'
+        }
+      }, 'Save and Close')
+    ),
+    formInput('Reset Defaults', button({
+      id: 'reset', onclick: resetDefaults,
       style: {
         'border-radius': '5px',
         padding: '5px'
       }
-    }, 'Log Settings')),
-    // formInput('Reset Defaults', button({
-    //   id: 'reset', onclick: resetDefaults,
-    //   style: {
-    //     'border-radius': '5px',
-    //     padding: '5px'
-    //   }
-    // }, 'Reset Defaults')),
+    }, 'Reset Defaults')),
     div({
         style: {
           position: 'absolute',
@@ -552,25 +494,31 @@
     )
   )
 
-  let lavalamp = () => div(
+  let lavalamp = () => canvas(
     {
       id: 'lavalamp',
+      width: 600,
+      height: 600,
       style: {
-        // filter: 'url("#lava")',
-        filter: `blur(${lavaFuzziness()}px)`
-
+        filter: `blur(1px)`
       }
     })
+
+  const settingsSVG = document.getElementById('settings')
+  const showSettings = () =>
+    document.body.append(settings)
+  settingsSVG.addEventListener('click', showSettings)
   const bg = (lamp) => div({
       style: {
         position: 'fixed',
+        textAlign: 'center',
         filter: 'brightness(.9) contrast(10)',
         'z-index': -100,
         top: 0,
         left: 0,
         bottom: 0,
         right: 0,
-        background: `hsl(${bgHsl().h}, ${bgHsl().s}%, ${bgHsl().l}%)`
+        background: bgColor.bindStyle( () => `rgb(${bgColor().r}, ${bgColor().g}, ${bgColor().b})`)
       }
     },
     lamp,
@@ -584,57 +532,39 @@
           'z-index': 10
         }
       },
-      img({
-        src: 'data:image/png;base64,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',
-        onclick: showSettings
-      })
+      settingsSVG
     )
   )
-  let current
-  bgHsl.subscribe(() => {
-    if (current)
-      current.style.background = `hsl(${bgHsl().h}, ${bgHsl().s}%, ${bgHsl().l}%)`
-  })
-
-  lavaFuzziness.subscribe(() => {
-    if (current)
-      current.firstChild.style.filter = `blur(${lavaFuzziness()}px)`
-  })
-  const showSettings = () =>
-    document.body.append(settings)
 
   const animateLava = (lamp) => {
-    const createLava = (i) => {
-      const lava = div({
-        style: {
-          backgroundColor: 'orange',
-          width: `${lavaSize()}px`,
-          height: `${lavaSize()}px`,
-          borderRadius: '50%',
-          position: 'fixed',
-          left: 0,
-          right: 0
-        }
-      })
+    lamp.addEventListener('click', ()=>{
+      if(settings.parentNode){
+        settings.remove()
+      }
+    })
+    const context = lamp.getContext('2d')
+    const tmpCanvas = canvas()
+    let height = lamp.height = tmpCanvas.height = window.innerHeight
+    let width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1200)
+    window.addEventListener('resize', ()=>{
+      height = lamp.height = tmpCanvas.height = window.innerHeight
+      width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1200)
+      const currentDefault = defaultParticleCount()
+      defaultParticleCount(Math.min(Math.trunc(window.innerHeight * window.innerWidth / 1000), 1000))
+      if(particleCount() === currentDefault){
+        particleCount(defaultParticleCount())
+      }
+    })
+    const tmpContext = tmpCanvas.getContext('2d', { willReadFrequently: true })
 
+    const highlightHeight = 15
+    const initLava = (i) => {
       //set initial positions for each particle
-      state.x[i] = randomBetween(0, size)
-      state.y[i] = randomBetween(0, size)
+      state.x[i] = randomBetween(0, width)
+      state.y[i] = randomBetween(0, height)
       state.vx[i] = 0
       state.vy[i] = 0
-      state.temp[i] = randomNormalDistribution(0, maxTemp()/3)
-      state.elements[i] = lava
-      state.elements[i].id = `lava-${i}`
-      lamp.append(state.elements[i])
-    }
-    let last = 0
-    const canvasRect = {
-      w: size,
-      h: size,
-      l: 0,
-      r: size,
-      t: 0,
-      b: size
+      state.temp[i] = gravityStrength()*.8 + randomNormalDistribution(0, maxTemp() / 10)
     }
     const particleMap = new SpatialHashMap(GRID_CELLS, GRID_CELLS)
     const newState = () => ( {
@@ -646,7 +576,6 @@
       p: new Float32Array(particleCount()), // pressure
       pNear: new Float32Array(particleCount()), // pressure near
       g: new Float32Array(particleCount()), // 'nearness' to neighbour
-      elements: []
     } )
     const state = newState()
     const applyGlobalForces = (i) => {
@@ -654,26 +583,39 @@
       // const force = DEVICE_FORCE
       state.vx[i] += force[0]
       state.vy[i] += force[1]
-      let distanceFromHeatSource = canvasRect.b - state.y[i]
+      let distanceFromHeatSource = height - state.y[i]
       if (distanceFromHeatSource < 5) {
         distanceFromHeatSource = 5
       }
       if (state.temp[i] > 0) {
-        const tempDecrease = randomNormalDistribution(1, 15) * ( canvasRect.h - state.y[i] ) / (ambientTemp()*100)
+        const tempDecrease = randomNormalDistribution(1, 15) * ( height - state.y[i] ) / 9000
         state.temp[i] -= tempDecrease
       }
-      if (distanceFromHeatSource < 100 && state.temp[i] < maxTemp()) {
-        const tempIncrease = (randomNormalDistribution(1, 100) / distanceFromHeatSource)/2 * lampTemp()/100
+      if (distanceFromHeatSource < height * .2 && state.temp[i] < maxTemp()) {
+        const tempIncrease = randomNormalDistribution(1, 100) / distanceFromHeatSource * distanceFromHeatSource / 100
         state.temp[i] += tempIncrease
-        const radius = ( interactionRadius() / canvasRect.w ) * GRID_CELLS
-        let neighbors = particleMap.query(state.x[i], state.y[i], radius*2)
-        const neighborTempIncrease = state.temp[i] * 2 / neighbors.length
+      }
+      //don't share heat when at the top of the lamp, just to reduce the amount of time it takes to sink back down
+      if(state.y[i] > height *.1) {
+        //share heat with neighbors to increase blob size
+        const radius = ( interactionRadius() / width ) * GRID_CELLS
+        let neighbors = particleMap.query(state.x[i], state.y[i], radius * 10)
+        const neighborTempIncrease = state.temp[i]
         for (const k of neighbors) {
           if (state.temp[k] < maxTemp()) {
             state.temp[k] += neighborTempIncrease
             state.vy[k] -= state.temp[k]
           }
         }
+      }
+      //make the top and bottom a bit sticky, with the corners being extra sticky
+      //this helps lava flow from the center which looks nicer
+      let edgeStickiness = 10 - 9 * Math.abs(width/2 - state.x[i]) / width/2
+      if(state.y[i] < height * .05) {
+        state.vy[i] -= 15 * edgeStickiness
+      }
+      if(state.y[i] > height * .95) {
+        state.vy[i] += 10 * edgeStickiness
       }
       if (state.temp[i] > maxTemp()) {
         state.temp[i] = maxTemp()
@@ -711,7 +653,7 @@
     const getNeighboursWithGradients = i => {
       const gridX = Math.floor(state.x[i] / GRID_CELLS),
         gridY = Math.floor(state.y[i] / GRID_CELLS)
-      const radius = ( interactionRadius() / canvasRect.w ) * GRID_CELLS
+      const radius = ( interactionRadius() / width ) * GRID_CELLS
 
       const results = particleMap.query(gridX, gridY, radius)
       const neighbours = []
@@ -769,22 +711,82 @@
     }
 
     const contain = (i) => {
-      if (state.x[i] > size) {
-        state.x[i] = size
+      if (state.x[i] > width) {
+        state.x[i] = width
         state.vx[i] = 0
       }
       if (state.x[i] < 0) {
         state.x[i] = 0
         state.vx[i] = 0
       }
-      if (state.y[i] > size) {
-        state.y[i] = size
+      if (state.y[i] > height) {
+        state.y[i] = height
         state.vy[i] = 0
       }
       if (state.y[i] < 0) {
         state.y[i] = 0
         state.vy[i] = 0
       }
+    }
+
+    function drawLava (i) {
+      const gradient = tmpContext.createRadialGradient(state.x[i], state.y[i], 0, state.x[i], state.y[i], particleSize())
+      gradient.addColorStop(0, `rgba(${lavaColor().r},${lavaColor().g},${lavaColor().b},1)`)
+      gradient.addColorStop(1, `rgba(${lavaColor().r},${lavaColor().g},${lavaColor().b},0)`)
+      tmpContext.beginPath()
+      tmpContext.fillStyle = gradient
+      tmpContext.arc(state.x[i], state.y[i], particleSize(), 0, Math.PI * 2)
+      tmpContext.fill()
+    }
+
+    function isBottom (pix, row, col) {
+      return (row + 1 < height && pix[pixIndex(row + 1, col) + 3] === 0) || row === height - 2
+    }
+
+    const pixIndex = (row, col) => row * width * 4 + col * 4
+
+    const addGradient = (pix, i, percent, r = 0, g = 0, b = 0) => {
+      const x = 1 - percent
+      pix[i] = percent * pix[i] + x * r
+      pix[i + 1] = percent * pix[i + 1] + x * g
+      pix[i + 2] = percent * pix[i + 2] + x * b
+    }
+
+    function drawHighlights (pix) {
+      for (let row = 0; row < height; row++) {
+        for (let col = 0; col < width; col++) {
+          const i = pixIndex(row, col)
+          if (pix[i + 3] === 255 && isBottom(pix, row, col, i)) {
+            for (let j = 0; j < highlightHeight; j++) {
+              let up = pixIndex(row - j, col)
+              if (row + j < height && pix[up + 3] === 255) {
+                addGradient(pix, up, j / highlightHeight, highlightColor().r, highlightColor().g, highlightColor().b)
+              }
+              //TODO figure out how to draw gradient border around entire blob
+            }
+          }
+        }
+      }
+    }
+
+    function updateCanvas () {
+      let imageData = tmpContext.getImageData(0, 0, width, height),
+        pix = imageData.data
+      //set transparency based on cutoff to make metaball effect
+      //close enough balls will increase the transparency over the threshold to create the blobbing effect
+      for (let row = 0; row < height; row++) {
+        for (let col = 0; col < width; col++) {
+          const i = row * width * 4 + col * 4
+          if (pix[i + 3] > 85) {
+            pix[i + 3] = 255
+          } else {
+            pix[i + 3] = 0
+          }
+        }
+      }
+      drawHighlights(pix)
+      context.putImageData(imageData, 0, 0)
+      tmpContext.clearRect(0, 0, width, height)
     }
 
     function run (dt) {
@@ -806,16 +808,15 @@
         updatePressure(i, neighbours)
         relax(i, neighbours, dt)
         contain(i)
-        state.elements[i].style.transform = `translate(${state.x[i]}px, ${state.y[i]}px)`
+        drawLava(i)
         state.vx[i] = 0
         state.vy[i] = 0
       }
+      updateCanvas()
     }
 
-    function render (time) {
-      // run((time - last)/1000)
-      run(1/60)
-      last = time
+    function render () {
+      run(1 / 60)
       requestAnimationFrame(render)
     }
 
@@ -827,37 +828,25 @@
       deviceAcceleration[0] += n.acceleration.x
       deviceAcceleration[1] += n.acceleration.y
     })
-    lavaSize.subscribe(() => {
-      for (const el of state.elements) {
-        el.style.width = `${lavaSize()}px`
-        el.style.height = `${lavaSize()}px`
-      }
-    })
     gravityStrength.subscribe((newStrength, old) => {
       gravity[1] = newStrength
       const diff = newStrength - old
-      for(let i = 0; i<state.vy.length; i++){
+      for (let i = 0; i < state.vy.length; i++) {
         state.vy[i] += diff
       }
     })
     particleCount.subscribe(() => {
-      console.log('start length', state.elements.length)
-      console.log('new count', particleCount())
-      if (state.elements.length > particleCount()) {
-        for (let i = particleCount(); i < state.elements.length; i++) {
-          state.elements[i].remove()
-        }
-        state.elements = state.elements.slice(0, particleCount())
-      } else if (state.elements.length < particleCount()) {
+      if (state.x.length < particleCount()) {
         const updatedState = newState()
+        const originalLength = state.x.length
         for (const f of Object.keys(state)) {
           for (let i = 0; i < state[f].length; i++) {
             updatedState[f][i] = state[f][i]
           }
           state[f] = updatedState[f]
         }
-        for (let i = state.elements.length; i < particleCount(); i++) {
-          createLava(i)
+        for (let i = originalLength; i < particleCount(); i++) {
+          initLava(i)
         }
       }
       particleMap.clear()
@@ -866,25 +855,16 @@
           gridY = Math.floor(state.y[i] / GRID_CELLS)
         particleMap.add(gridX, gridY, i)
       }
-      console.log('end length', state.elements.length)
-      console.log('new count', particleCount())
     })
 
     for (let i = 0; i < particleCount(); i++) {
-      createLava(i)
+      initLava(i)
       const gridX = Math.floor(state.x[i] / GRID_CELLS),
         gridY = Math.floor(state.y[i] / GRID_CELLS)
       particleMap.add(gridX, gridY, i)
     }
 
     render(1)
-  }
-
-  const reset = () => {
-    if (current) current.remove()
-    let lamp = lavalamp()
-    document.body.append(current = bg(lamp))
-    animateLava(lamp)
   }
 
   document.body.append(sub(
@@ -904,7 +884,9 @@
     }, 'Copyright © 2020 Robert Kempton')
   ))
 
-  reset()
+  let lamp = lavalamp()
+  document.body.append(bg(lamp))
+  animateLava(lamp)
 
 </script>
 </body>
