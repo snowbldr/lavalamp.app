@@ -18,8 +18,8 @@
     hr,
     a,
     sub
-  } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.7/src/fnelements.min.mjs'
-  import { fnstate } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.7/src/fntags.min.mjs'
+  } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.8/src/fnelements.min.mjs'
+  import { fnstate } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.8/src/fntags.min.mjs'
 
   const noSleep = new NoSleep()
 
@@ -123,18 +123,17 @@
 
   const defaultBgHsl = { h: 20, s: 20, l: 20 }
   const defaultLavaHsl = { h: 285, s: 100, l: 65 }
-  const defaultSpeed = 1
-  const defaultParticleCount = 300
-  const defaultLavaFuzziness = 12
-  const defaultInteractionRadius = 60
-  const defaultStiffness = 1800
-  const defaultStiffnessNear = 8500
-  const defaultRestDensity = 10
-  const defaultLavaSize = 35
-  const defaultLampTemp = 5
-  const defaultAmbientTemp = 1000
-  const defaultMaxHeat = () => window.innerHeight * 0.15
-  const defaultGravityStrength = 5
+  const defaultParticleCount = 400
+  const defaultLavaFuzziness = 8
+  const defaultInteractionRadius = 35
+  const defaultStiffness = 5000
+  const defaultStiffnessNear = 30000
+  const defaultRestDensity = 5.45
+  const defaultLavaSize = 17
+  const defaultLampTemp = 200
+  const defaultAmbientTemp = 200
+  const defaultMaxHeat = () => 1281
+  const defaultGravityStrength = 600
 
   const size = Math.min(Math.max(window.innerWidth, window.innerHeight), 600)
   const GRID_CELLS = 54
@@ -143,7 +142,7 @@
   const stiffness = fnstate(defaultStiffness)
   const stiffnessNear = fnstate(defaultStiffnessNear)
   const restDensity = fnstate(defaultRestDensity)
-  const maxHeat = fnstate(defaultMaxHeat())
+  const maxTemp = fnstate(defaultMaxHeat())
   const lampTemp = fnstate(defaultLampTemp)
   const ambientTemp = fnstate(defaultAmbientTemp)
   const gravity = [0, gravityStrength()]
@@ -156,7 +155,6 @@
 
   const bgHsl = fnstate(Object.assign({}, defaultBgHsl))
   const lavaHsl = fnstate(Object.assign({}, defaultLavaHsl))
-  const speed = fnstate(defaultSpeed)
   const particleCount = fnstate(defaultParticleCount)
   const lavaFuzziness = fnstate(defaultLavaFuzziness)
   const lavaSize = fnstate(defaultLavaSize)
@@ -164,7 +162,6 @@
   const applySettings = obj => {
     bgHsl(obj.bgHsl || Object.assign({}, defaultBgHsl))
     lavaHsl(obj.lavaHsl || Object.assign({}, lavaHsl(obj.lavaHsl || Object.assign({}, defaultBgHsl))))
-    speed(obj.speed || speed())
     particleCount(obj.amountOfLava || particleCount())
     lavaFuzziness(obj.lavaFuzziness || lavaFuzziness())
     lavaSize(obj.lavaSizeFactor || lavaSize())
@@ -173,7 +170,6 @@
   const getSettings = () => ( {
     bgHsl: bgHsl(),
     lavaHsl: lavaHsl(),
-    speed: speed(),
     amountOfLava: particleCount(),
     lavaFuzziness: lavaFuzziness(),
     lavaSizeFactor: lavaSize(),
@@ -182,7 +178,7 @@
     stiffness: stiffness(),
     stiffnessNear: stiffnessNear(),
     restDensity: restDensity(),
-    maxHeat: maxHeat()
+    maxHeat: maxTemp()
   } )
 
   let settingsKey = 'lavalamp.app-settings'
@@ -213,7 +209,6 @@
       bgHsl(Object.assign({}, defaultBgHsl))
       lavaHsl(Object.assign({}, defaultLavaHsl))
       lavaFuzziness(defaultLavaFuzziness)
-      speed(defaultSpeed)
       lavaSize(defaultLavaSize)
       particleCount(defaultParticleCount)
       gravityStrength(defaultGravityStrength)
@@ -390,19 +385,6 @@
       resetToDefaultButton(() => lavaSize(defaultLavaSize))
     ),
     // formInput(
-    //   'Speed',
-    //   input({
-    //     id: 'speed',
-    //     type: 'range',
-    //     value: speed.bindAttr(speed),
-    //     step: 0.1,
-    //     min: 0.1,
-    //     max: 8,
-    //     oninput: (e) => speed(e.target.value)
-    //   }),
-    //   resetToDefaultButton(() => speed(defaultSpeed))
-    // ),
-    // formInput(
     //   'Share',
     //   button({
     //     id: 'share', onclick: copyShareLink,
@@ -467,9 +449,9 @@
         id: 'stiffness-near',
         type: 'range',
         value: stiffnessNear.bindAttr(),
-        step: 1,
+        step: 10,
         min: 1,
-        max: 20000,
+        max: 100000,
         oninput: (e) => stiffnessNear(e.target.value)
       }),
       resetToDefaultButton(() => stiffnessNear(defaultStiffnessNear))
@@ -480,25 +462,25 @@
         id: 'rest-density',
         type: 'range',
         value: restDensity.bindAttr(),
-        step: 1,
-        min: 1,
+        step: .01,
+        min: .01,
         max: 50,
         oninput: (e) => restDensity(e.target.value)
       }),
       resetToDefaultButton(() => restDensity(defaultRestDensity))
     ),
     formInput(
-      'Max Heat',
+      'Max Temp',
       input({
-        id: 'max-heat',
+        id: 'max-temp',
         type: 'range',
-        value: maxHeat.bindAttr(),
+        value: maxTemp.bindAttr(),
         step: 1,
         min: 1,
         max: 2000,
-        oninput: (e) => maxHeat(e.target.value)
+        oninput: (e) => maxTemp(e.target.value)
       }),
-      resetToDefaultButton(() => maxHeat(defaultMaxHeat()))
+      resetToDefaultButton(() => maxTemp(defaultMaxHeat()))
     ),
     formInput(
       'Lamp Temperature',
@@ -521,7 +503,7 @@
         value: ambientTemp.bindAttr(),
         step: 1,
         min: 1,
-        max: 5000,
+        max: 500,
         oninput: (e) => ambientTemp(e.target.value)
       }),
       resetToDefaultButton(() => ambientTemp(defaultAmbientTemp))
@@ -532,9 +514,9 @@
         id: 'gravity',
         type: 'range',
         value: gravityStrength.bindAttr(),
-        step: .01,
+        step: 1,
         min: 0,
-        max: 10,
+        max: 1000,
         oninput: (e) => gravityStrength(parseFloat(e.target.value))
       }),
       resetToDefaultButton(() => gravityStrength(defaultGravityStrength))
@@ -626,27 +608,21 @@
       const lava = div({
         style: {
           backgroundColor: 'orange',
-          // width: `${INTERACTION_RADIUS * .4}px`,
-          // height: `${INTERACTION_RADIUS * .4}px`,
           width: `${lavaSize()}px`,
           height: `${lavaSize()}px`,
           borderRadius: '50%',
           position: 'fixed',
           left: 0,
-          right: 0,
-          // boxShadow: `0 0 5px ${lavaFuzziness()}px orange`
+          right: 0
         }
       })
 
       //set initial positions for each particle
-      // state.x[i] = randomBetween(0, size)
-      // state.y[i] = randomBetween(size*.8, size)
       state.x[i] = randomBetween(0, size)
       state.y[i] = randomBetween(0, size)
-      state.oldX[i] = state.x[i]
-      state.oldY[i] = state.y[i]
       state.vx[i] = 0
       state.vy[i] = 0
+      state.temp[i] = randomNormalDistribution(0, maxTemp()/3)
       state.elements[i] = lava
       state.elements[i].id = `lava-${i}`
       lamp.append(state.elements[i])
@@ -664,8 +640,6 @@
     const newState = () => ( {
       x: new Float32Array(particleCount()), // x location
       y: new Float32Array(particleCount()), // y location
-      oldX: new Float32Array(particleCount()), // previous x location
-      oldY: new Float32Array(particleCount()), // previous y location
       vx: new Float32Array(particleCount()), // horizontal velocity
       temp: new Float32Array(particleCount()),
       vy: new Float32Array(particleCount()), // vertical velocity
@@ -675,40 +649,39 @@
       elements: []
     } )
     const state = newState()
-    const applyGlobalForces = (i, dt) => {
+    const applyGlobalForces = (i) => {
       const force = [gravity[0] + DEVICE_FORCE[0], gravity[1] + DEVICE_FORCE[1]]
       // const force = DEVICE_FORCE
-      state.vx[i] += force[0] * dt
-      state.vy[i] += force[1] * dt
+      state.vx[i] += force[0]
+      state.vy[i] += force[1]
       let distanceFromHeatSource = canvasRect.b - state.y[i]
-      if (distanceFromHeatSource < 10) {
-        distanceFromHeatSource = 10
+      if (distanceFromHeatSource < 5) {
+        distanceFromHeatSource = 5
       }
       if (state.temp[i] > 0) {
-        const tempDecrease = ( canvasRect.h - state.y[i] ) / ambientTemp()
+        const tempDecrease = randomNormalDistribution(1, 15) * ( canvasRect.h - state.y[i] ) / (ambientTemp()*100)
         state.temp[i] -= tempDecrease
       }
-      if (state.temp[i] < maxHeat()) {
-        const tempIncrease = (randomNormalDistribution(1, 100) / distanceFromHeatSource) * lampTemp()/100
+      if (distanceFromHeatSource < 100 && state.temp[i] < maxTemp()) {
+        const tempIncrease = (randomNormalDistribution(1, 100) / distanceFromHeatSource)/2 * lampTemp()/100
         state.temp[i] += tempIncrease
-
-        let neighbors = particleMap.query(state.x[i], state.y[i], randomNormalDistribution(1, interactionRadius()))
-        const neighborTempIncrease = state.temp[i] / neighbors.length
+        const radius = ( interactionRadius() / canvasRect.w ) * GRID_CELLS
+        let neighbors = particleMap.query(state.x[i], state.y[i], radius*2)
+        const neighborTempIncrease = state.temp[i] * 2 / neighbors.length
         for (const k of neighbors) {
-          // const distance = Math.sqrt(Math.pow(state.x[k] - x, 2) + Math.pow(state.y[k] - y, 2))
-          if (state.temp[k] < maxHeat()) {
+          if (state.temp[k] < maxTemp()) {
             state.temp[k] += neighborTempIncrease
-            state.vy[k] -= state.temp[k] / 400
+            state.vy[k] -= state.temp[k]
           }
         }
       }
-      if (state.temp[i] > maxHeat()) {
-        state.temp[i] = maxHeat()
+      if (state.temp[i] > maxTemp()) {
+        state.temp[i] = maxTemp()
       }
       if (state.temp[i] < 0) {
         state.temp[i] = 0
       }
-      state.vy[i] -= state.temp[i] / 100
+      state.vy[i] -= state.temp[i]
     }
     const gradient = (i, n) => {
       const particle = [state.x[i], state.y[i]] // position of i
@@ -821,9 +794,7 @@
       deviceAcceleration[0] = 0
       deviceAcceleration[1] = 0
       for (let i = 0; i < particleCount(); i++) {
-        state.oldX[i] = state.x[i]
-        state.oldY[i] = state.y[i]
-        applyGlobalForces(i, dt)
+        applyGlobalForces(i)
         state.x[i] += state.vx[i] * dt
         state.y[i] += state.vy[i] * dt
         const gridX = Math.floor(state.x[i] / GRID_CELLS),
@@ -836,13 +807,14 @@
         relax(i, neighbours, dt)
         contain(i)
         state.elements[i].style.transform = `translate(${state.x[i]}px, ${state.y[i]}px)`
+        state.vx[i] = 0
+        state.vy[i] = 0
       }
     }
 
     function render (time) {
-      run((time - last)/1000)
-      // run(1 / 60)
-      console.log((time - last) /1000, 1/60)
+      // run((time - last)/1000)
+      run(1/60)
       last = time
       requestAnimationFrame(render)
     }
