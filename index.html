@@ -127,25 +127,25 @@
   const defaultBgColor = { r: 0, g: 0, b: 0 }
   const defaultLavaColor = { r: 255, g: 0, b: 0 }
   const defaultLavaHighlight = { r: 255, g: 200, b: 0 }
-  const defaultParticleCount = fnstate(Math.min(Math.trunc(window.innerHeight * window.innerWidth / 1000), 1000))
-  const defaultInteractionRadius = 40
-  const defaultStiffness = 3500
-  const defaultStiffnessNear = 10000
+  const defaultParticleCount = fnstate(Math.min(Math.trunc(window.innerHeight * window.innerWidth / 3000), 600))
+  const defaultInteractionRadius = 50
+  const defaultStiffness = 3000
+  const defaultStiffnessNear = 8000
   const defaultRestDensity = 5.45
-  const defaultParticleSize = 17
-  const defaultMaxTemp = 800
-  const defaultGravityStrength = 500
+  const defaultParticleSize = 30
+  const defaultMaxTemp = fnstate(Math.min(window.innerHeight, 1200))
+  const defaultGravityStrength = fnstate(Math.min(window.innerHeight/2, 600))
   const GRID_CELLS = 54
 
   const bgColor = fnstate({ r: 0, g: 0, b: 0 })
   const lavaColor = fnstate({ r: 255, g: 0, b: 0 })
   const highlightColor = fnstate({ r: 255, g: 200, b: 0 })
   const interactionRadius = fnstate(defaultInteractionRadius)
-  const gravityStrength = fnstate(defaultGravityStrength)
+  const gravityStrength = fnstate(defaultGravityStrength())
   const stiffness = fnstate(defaultStiffness)
   const stiffnessNear = fnstate(defaultStiffnessNear)
   const restDensity = fnstate(defaultRestDensity)
-  const maxTemp = fnstate(defaultMaxTemp)
+  const maxTemp = fnstate(defaultMaxTemp())
   const particleCount = fnstate(defaultParticleCount())
   const particleSize = fnstate(defaultParticleSize)
   const gravity = [0, gravityStrength()]
@@ -172,17 +172,17 @@
   }
 
   const getSettings = () => ( {
-      bgColor: bgColor(),
-      lavaColor: lavaColor(),
-      lavaHighlight: highlightColor(),
-      interactionRadius: interactionRadius(),
-      gravityStrength: gravityStrength(),
-      stiffness: stiffness(),
-      stiffnessNear: stiffnessNear(),
-      restDensity: restDensity(),
-      maxTemp: maxTemp(),
-      particleCount: particleCount(),
-      particleSize: particleSize(),
+    bgColor: bgColor(),
+    lavaColor: lavaColor(),
+    lavaHighlight: highlightColor(),
+    interactionRadius: interactionRadius(),
+    gravityStrength: gravityStrength(),
+    stiffness: stiffness(),
+    stiffnessNear: stiffnessNear(),
+    restDensity: restDensity(),
+    maxTemp: maxTemp(),
+    particleCount: particleCount(),
+    particleSize: particleSize(),
   } )
 
   let settingsKey = 'lavalamp.app-settings'
@@ -202,7 +202,7 @@
   const saveSettings = () => {
     localStorage.setItem(
       settingsKey,
-      JSON.stringify(getSettings)
+      JSON.stringify(getSettings())
     )
     settings.remove()
   }
@@ -214,11 +214,11 @@
       lavaColor(Object.assign({}, defaultLavaColor))
       highlightColor(Object.assign({}, defaultLavaHighlight))
       interactionRadius(defaultInteractionRadius)
-      gravityStrength(defaultGravityStrength)
+      gravityStrength(defaultGravityStrength())
       stiffness(defaultStiffness)
       stiffnessNear(defaultStiffnessNear)
       restDensity(defaultRestDensity)
-      maxTemp(defaultMaxTemp)
+      maxTemp(defaultMaxTemp())
       particleCount(defaultParticleCount())
       particleSize(defaultParticleSize)
     }
@@ -244,8 +244,8 @@
     return Math.trunc(num)
   }
 
-  function hexToRgb(hex) {
-    const bigint = parseInt(hex.slice(1), 16);
+  function hexToRgb (hex) {
+    const bigint = parseInt(hex.slice(1), 16)
     return {
       r: ( bigint >> 16 ) & 255,
       g: ( bigint >> 8 ) & 255,
@@ -253,10 +253,9 @@
     }
   }
 
-  function rgbToHex(color) {
-    return `#${( 1 << 24 | color.r << 16 | color.g << 8 | color.b ).toString(16).slice(1)}`;
+  function rgbToHex (color) {
+    return `#${( 1 << 24 | color.r << 16 | color.g << 8 | color.b ).toString(16).slice(1)}`
   }
-
 
   const formInput = (inputLabel, theInput, setDefault) => {
     theInput.style.cursor = 'pointer'
@@ -326,7 +325,7 @@
       input({
         id: 'bgColor',
         type: 'color',
-        value: bgColor.bindAttr(()=>rgbToHex(bgColor())),
+        value: bgColor.bindAttr(() => rgbToHex(bgColor())),
         oninput: e => bgColor(hexToRgb(e.target.value))
       })
     ),
@@ -335,7 +334,7 @@
       input({
         id: 'lavaColor',
         type: 'color',
-        value: lavaColor.bindAttr(()=>rgbToHex(lavaColor())),
+        value: lavaColor.bindAttr(() => rgbToHex(lavaColor())),
         oninput: e => lavaColor(hexToRgb(e.target.value))
       })
     ),
@@ -344,7 +343,7 @@
       input({
         id: 'highlightColor',
         type: 'color',
-        value: highlightColor.bindAttr(()=>rgbToHex(highlightColor())),
+        value: highlightColor.bindAttr(() => rgbToHex(highlightColor())),
         oninput: e => highlightColor(hexToRgb(e.target.value))
       })
     ),
@@ -369,7 +368,7 @@
         value: particleCount.bindAttr(),
         step: 1,
         min: 5,
-        max: defaultParticleCount.bindAttr( () => Math.trunc(defaultParticleCount()) * 2),
+        max: defaultParticleCount.bindAttr(() => Math.trunc(defaultParticleCount()) * 2),
         oninput: (e) => particleCount(parseInt(e.target.value))
       }),
       resetToDefaultButton(() => particleCount(defaultParticleCount))
@@ -434,10 +433,10 @@
         value: maxTemp.bindAttr(),
         step: 1,
         min: 420,
-        max: 1600,
+        max: defaultMaxTemp.bindAttr(() => defaultMaxTemp() * 2),
         oninput: (e) => maxTemp(e.target.value)
       }),
-      resetToDefaultButton(() => maxTemp(defaultMaxTemp))
+      resetToDefaultButton(() => maxTemp(defaultMaxTemp()))
     ),
     formInput(
       'Gravity Strength',
@@ -447,10 +446,10 @@
         value: gravityStrength.bindAttr(),
         step: 1,
         min: 220,
-        max: 750,
+        max: defaultGravityStrength.bindAttr(() => defaultGravityStrength() * 2),
         oninput: (e) => gravityStrength(parseFloat(e.target.value))
       }),
-      resetToDefaultButton(() => gravityStrength(defaultGravityStrength))
+      resetToDefaultButton(() => gravityStrength(defaultGravityStrength()))
     ),
     formInput(
       'Share',
@@ -511,14 +510,16 @@
   const bg = (lamp) => div({
       style: {
         position: 'fixed',
-        textAlign: 'center',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         filter: 'brightness(.9) contrast(10)',
         'z-index': -100,
         top: 0,
         left: 0,
         bottom: 0,
         right: 0,
-        background: bgColor.bindStyle( () => `rgb(${bgColor().r}, ${bgColor().g}, ${bgColor().b})`)
+        background: bgColor.bindStyle(() => `rgb(${bgColor().r}, ${bgColor().g}, ${bgColor().b})`)
       }
     },
     lamp,
@@ -537,23 +538,49 @@
   )
 
   const animateLava = (lamp) => {
-    lamp.addEventListener('click', ()=>{
-      if(settings.parentNode){
+    lamp.addEventListener('click', () => {
+      if (settings.parentNode) {
         settings.remove()
       }
     })
     const context = lamp.getContext('2d')
     const tmpCanvas = canvas()
-    let height = lamp.height = tmpCanvas.height = window.innerHeight
+    let height = lamp.height = tmpCanvas.height = Math.min(window.innerHeight, 1200)
     let width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1200)
-    window.addEventListener('resize', ()=>{
-      height = lamp.height = tmpCanvas.height = window.innerHeight
+    const calcSlope = (x1, y1, x2, y2) => ( y2 - y1 ) / ( x2 - x1 )
+    const lineEq = (slope, x1, y1) => {
+      const b = y1 - slope * x1
+      return (x) => slope * x + b
+    }
+    let leftBottomEnd = width * .45
+    let rightBottomStart = width * .55
+    let bottomStart = height * .7
+    let leftBottomSlope = calcSlope(0, bottomStart, leftBottomEnd, height)
+    let leftBottomLine = lineEq(leftBottomSlope, 0, bottomStart)
+    let rightBottomSlope = calcSlope(rightBottomStart, height, width, bottomStart)
+    let rightBottomLine = lineEq(rightBottomSlope, rightBottomStart, height)
+
+    window.addEventListener('resize', () => {
+      height = lamp.height = tmpCanvas.height = Math.min(window.innerHeight, 1200)
       width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1200)
-      const currentDefault = defaultParticleCount()
-      defaultParticleCount(Math.min(Math.trunc(window.innerHeight * window.innerWidth / 1000), 1000))
-      if(particleCount() === currentDefault){
+      leftBottomEnd = width * .45
+      rightBottomStart = width * .55
+      bottomStart = height * .7
+      leftBottomSlope = calcSlope(0, bottomStart, leftBottomEnd, height)
+      leftBottomLine = lineEq(leftBottomSlope, 0, bottomStart)
+      rightBottomSlope = calcSlope(rightBottomStart, height, width, bottomStart)
+      rightBottomLine = lineEq(rightBottomSlope, rightBottomStart, height)
+      const currentDefaultParticleCount = defaultParticleCount()
+      defaultParticleCount(Math.min(Math.trunc(width * height / 1000), 1000))
+      if (particleCount() === currentDefaultParticleCount) {
         particleCount(defaultParticleCount())
       }
+      const currentDefaultGravityStrength = defaultGravityStrength()
+      defaultGravityStrength(Math.min(window.innerHeight/ 2, 600))
+      if(gravityStrength() === currentDefaultGravityStrength){
+        gravityStrength(defaultGravityStrength())
+      }
+
     })
     const tmpContext = tmpCanvas.getContext('2d', { willReadFrequently: true })
 
@@ -561,10 +588,10 @@
     const initLava = (i) => {
       //set initial positions for each particle
       state.x[i] = randomBetween(0, width)
-      state.y[i] = randomBetween(0, height)
+      state.y[i] = randomBetween(bottomStart, height)
       state.vx[i] = 0
       state.vy[i] = 0
-      state.temp[i] = gravityStrength()*.8 + randomNormalDistribution(0, maxTemp() / 10)
+      state.temp[i] =  0
     }
     const particleMap = new SpatialHashMap(GRID_CELLS, GRID_CELLS)
     const newState = () => ( {
@@ -584,37 +611,39 @@
       state.vx[i] += force[0]
       state.vy[i] += force[1]
       let distanceFromHeatSource = height - state.y[i]
-      if (distanceFromHeatSource < 5) {
-        distanceFromHeatSource = 5
+      if (distanceFromHeatSource < 1) {
+        distanceFromHeatSource = 1
       }
       if (state.temp[i] > 0) {
-        const tempDecrease = randomNormalDistribution(1, 15) * ( height - state.y[i] ) / 9000
+        const tempDecrease = randomNormalDistribution(1, 100) / 40
         state.temp[i] -= tempDecrease
       }
-      if (distanceFromHeatSource < height * .2 && state.temp[i] < maxTemp()) {
-        const tempIncrease = randomNormalDistribution(1, 100) / distanceFromHeatSource * distanceFromHeatSource / 100
+      if (state.y[i] > bottomStart && state.temp[i] < maxTemp()) {
+        const tempIncrease = randomNormalDistribution(1, 300) / 40 / distanceFromHeatSource * distanceFromHeatSource
         state.temp[i] += tempIncrease
-      }
-      //don't share heat when at the top of the lamp, just to reduce the amount of time it takes to sink back down
-      if(state.y[i] > height *.1) {
-        //share heat with neighbors to increase blob size
-        const radius = ( interactionRadius() / width ) * GRID_CELLS
-        let neighbors = particleMap.query(state.x[i], state.y[i], radius * 10)
-        const neighborTempIncrease = state.temp[i]
-        for (const k of neighbors) {
-          if (state.temp[k] < maxTemp()) {
-            state.temp[k] += neighborTempIncrease
-            state.vy[k] -= state.temp[k]
-          }
+        if(state.y[i] > height - particleSize()){
+          state.temp[i] += tempIncrease * 3
         }
       }
+      //don't share heat when at the top of the lamp, just to reduce the amount of time it takes to sink back down
+      // if(state.y[i] > height *.1) {
+      //share heat with neighbors to increase blob size
+      const radius = ( interactionRadius() / width ) * GRID_CELLS
+      let neighbors = particleMap.query(state.x[i], state.y[i], radius)
+      const neighborTempIncrease = state.temp[i] / neighbors.length
+      for (const k of neighbors) {
+        if (state.temp[k] < maxTemp()) {
+          state.temp[k] += neighborTempIncrease
+          state.vy[k] -= state.temp[k]
+        }
+      }
+      // }
       //make the top and bottom a bit sticky, with the corners being extra sticky
-      //this helps lava flow from the center which looks nicer
-      let edgeStickiness = 10 - 9 * Math.abs(width/2 - state.x[i]) / width/2
-      if(state.y[i] < height * .05) {
+      let edgeStickiness = 10 - 9 * Math.abs(width / 2 - state.x[i]) / width / 2
+      if (state.y[i] < particleSize() * 1.5) {
         state.vy[i] -= 15 * edgeStickiness
       }
-      if(state.y[i] > height * .95) {
+      if (state.y[i] > particleSize() * 2) {
         state.vy[i] += 10 * edgeStickiness
       }
       if (state.temp[i] > maxTemp()) {
@@ -713,19 +742,24 @@
     const contain = (i) => {
       if (state.x[i] > width) {
         state.x[i] = width
-        state.vx[i] = 0
       }
       if (state.x[i] < 0) {
         state.x[i] = 0
-        state.vx[i] = 0
       }
-      if (state.y[i] > height) {
+
+      if (state.x[i] < leftBottomEnd && state.y[i] > leftBottomLine(state.x[i])) {
+        state.y[i] = leftBottomLine(state.x[i])
+        state.x[i] += 4
+        state.y[i] += 4
+      } else if (state.x[i] > rightBottomStart && state.y[i] > rightBottomLine(state.x[i])) {
+        state.y[i] = rightBottomLine(state.x[i])
+        state.x[i] -= 4
+        state.y[i] += 4
+      } else if (state.y[i] > height) {
         state.y[i] = height
-        state.vy[i] = 0
       }
       if (state.y[i] < 0) {
         state.y[i] = 0
-        state.vy[i] = 0
       }
     }
 
@@ -740,7 +774,7 @@
     }
 
     function isBottom (pix, row, col) {
-      return (row + 1 < height && pix[pixIndex(row + 1, col) + 3] === 0) || row === height - 2
+      return ( row + 1 < height && pix[pixIndex(row + 1, col) + 3] === 0 ) || row === height - 2
     }
 
     const pixIndex = (row, col) => row * width * 4 + col * 4
@@ -777,7 +811,7 @@
       for (let row = 0; row < height; row++) {
         for (let col = 0; col < width; col++) {
           const i = row * width * 4 + col * 4
-          if (pix[i + 3] > 85) {
+          if (pix[i + 3] > 70) {
             pix[i + 3] = 255
           } else {
             pix[i + 3] = 0
