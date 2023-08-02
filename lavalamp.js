@@ -14,8 +14,8 @@ import {
   settings,
   stiffness,
   stiffnessNear
-} from './settings.mjs'
-import { randomBetween, randomNormalDistribution, SpatialHashMap } from './base.mjs'
+} from './settings.js'
+import { randomBetween, randomNormalDistribution, SpatialHashMap } from './base.js'
 
 const GRID_CELLS = 54
 const gravity = [0, gravityStrength()]

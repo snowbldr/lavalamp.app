@@ -1,6 +1,6 @@
 import { button, div, input } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.8/src/fnelements.min.mjs'
 import { fnstate } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.8/src/fntags.min.mjs'
-import { formInput, hexToRgb, notify, rgbToHex } from './base.mjs'
+import { formInput, hexToRgb, notify, rgbToHex } from './base.js'
 
 export const defaultBgColor = { r: 25, g: 25, b: 25 }
 export const defaultLavaColor = { r: 133, g: 0, b: 204 }
