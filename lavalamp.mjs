@@ -30,8 +30,8 @@ export const animateLava = (lamp) => {
   })
   const context = lamp.getContext('2d')
   const tmpCanvas = canvas()
-  let height = lamp.height = tmpCanvas.height = Math.min(window.innerHeight, 1200)
-  let width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1200)
+  let height = lamp.height = tmpCanvas.height = Math.min(window.innerHeight, 1000)
+  let width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1000)
   const calcSlope = (x1, y1, x2, y2) => ( y2 - y1 ) / ( x2 - x1 )
   const lineEq = (slope, x1, y1) => {
     const b = y1 - slope * x1
@@ -39,15 +39,15 @@ export const animateLava = (lamp) => {
   }
   let leftBottomEnd = width * .45
   let rightBottomStart = width * .55
-  let bottomStart = height * .7
+  let bottomStart = height * .8
   let leftBottomSlope = calcSlope(0, bottomStart, leftBottomEnd, height)
   let leftBottomLine = lineEq(leftBottomSlope, 0, bottomStart)
   let rightBottomSlope = calcSlope(rightBottomStart, height, width, bottomStart)
   let rightBottomLine = lineEq(rightBottomSlope, rightBottomStart, height)
 
   window.addEventListener('resize', () => {
-    height = lamp.height = tmpCanvas.height = Math.min(window.innerHeight, 1200)
-    width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1200)
+    height = lamp.height = tmpCanvas.height = Math.min(window.innerHeight, 1000)
+    width = lamp.width = tmpCanvas.width = Math.min(window.innerWidth, 1000)
     leftBottomEnd = width * .45
     rightBottomStart = width * .55
     bottomStart = height * .7
@@ -61,7 +61,7 @@ export const animateLava = (lamp) => {
       particleCount(defaultParticleCount())
     }
     const currentDefaultGravityStrength = defaultGravityStrength()
-    defaultGravityStrength(Math.min(window.innerHeight/ 2, 600))
+    defaultGravityStrength(Math.min(window.innerHeight/ 2, 500))
     if(gravityStrength() === currentDefaultGravityStrength){
       gravityStrength(defaultGravityStrength())
     }
@@ -73,7 +73,7 @@ export const animateLava = (lamp) => {
   const initLava = (i) => {
     //set initial positions for each particle
     state.x[i] = randomBetween(0, width)
-    state.y[i] = randomBetween(bottomStart, height)
+    state.y[i] = randomBetween(0, height)
     state.vx[i] = 0
     state.vy[i] = 0
     state.temp[i] =  0
@@ -100,36 +100,27 @@ export const animateLava = (lamp) => {
       distanceFromHeatSource = 1
     }
     if (state.temp[i] > 0) {
-      const tempDecrease = randomNormalDistribution(1, 100) / 40
+      const tempDecrease = randomNormalDistribution(0.25, 2.75, 1.8) * (1000 / Math.min(window.innerHeight, 1000))
       state.temp[i] -= tempDecrease
     }
+    //hard cut off is faster than applying a gradient
     if (state.y[i] > bottomStart && state.temp[i] < maxTemp()) {
-      const tempIncrease = randomNormalDistribution(1, 300) / 40 / distanceFromHeatSource * distanceFromHeatSource
+      const tempIncrease = randomNormalDistribution(0.00000001, 5) / distanceFromHeatSource
       state.temp[i] += tempIncrease
       if(state.y[i] > height - particleSize()){
-        state.temp[i] += tempIncrease * 3
+        state.temp[i] += tempIncrease * tempIncrease
       }
     }
-    //don't share heat when at the top of the lamp, just to reduce the amount of time it takes to sink back down
-    // if(state.y[i] > height *.1) {
-    //share heat with neighbors to increase blob size
+    // share heat with neighbors to increase blob size
     const radius = ( interactionRadius() / width ) * GRID_CELLS
     let neighbors = particleMap.query(state.x[i], state.y[i], radius)
+    //faster than calculating distance and applying a gradient
     const neighborTempIncrease = state.temp[i] / neighbors.length
     for (const k of neighbors) {
       if (state.temp[k] < maxTemp()) {
         state.temp[k] += neighborTempIncrease
         state.vy[k] -= state.temp[k]
       }
-    }
-    // }
-    //make the top and bottom a bit sticky, with the corners being extra sticky
-    let edgeStickiness = 10 - 9 * Math.abs(width / 2 - state.x[i]) / width / 2
-    if (state.y[i] < particleSize() * 1.5) {
-      state.vy[i] -= 15 * edgeStickiness
-    }
-    if (state.y[i] > particleSize() * 2) {
-      state.vy[i] += 10 * edgeStickiness
     }
     if (state.temp[i] > maxTemp()) {
       state.temp[i] = maxTemp()
@@ -215,7 +206,6 @@ export const animateLava = (lamp) => {
       const force = multiplyScalar(direction, magnitude)
 
       const d = multiplyScalar(force, dt * dt)
-
       state.x[i] += d[0] * -1
       state.y[i] += d[1] * -1
 
@@ -232,14 +222,10 @@ export const animateLava = (lamp) => {
       state.x[i] = 0
     }
 
-    if (state.x[i] < leftBottomEnd && state.y[i] > leftBottomLine(state.x[i])) {
-      state.y[i] = leftBottomLine(state.x[i])
-      state.x[i] += 4
-      state.y[i] += 4
-    } else if (state.x[i] > rightBottomStart && state.y[i] > rightBottomLine(state.x[i])) {
-      state.y[i] = rightBottomLine(state.x[i])
-      state.x[i] -= 4
-      state.y[i] += 4
+    if (state.x[i] < 0) {
+      state.x[i] = 0
+    } else if (state.x[i] > width) {
+      state.x[i] = width
     } else if (state.y[i] > height) {
       state.y[i] = height
     }
@@ -272,6 +258,7 @@ export const animateLava = (lamp) => {
   }
 
   function drawHighlights (pix) {
+    const color = highlightColor()
     for (let row = 0; row < height; row++) {
       for (let col = 0; col < width; col++) {
         const i = pixIndex(row, col)
@@ -279,7 +266,7 @@ export const animateLava = (lamp) => {
           for (let j = 0; j < highlightHeight; j++) {
             let up = pixIndex(row - j, col)
             if (row + j < height && pix[up + 3] === 255) {
-              addGradient(pix, up, j / highlightHeight, highlightColor().r, highlightColor().g, highlightColor().b)
+              addGradient(pix, up, j / highlightHeight, color.r, color.g, color.b)
             }
             //TODO figure out how to draw gradient border around entire blob
           }
@@ -390,10 +377,7 @@ export function lavalamp(){
   return canvas(
     {
       id: 'lavalamp',
-      width: 600,
-      height: 600,
-      style: {
-        filter: `blur(1px)`
-      }
+      width: 500,
+      height: 500,
     })
 }

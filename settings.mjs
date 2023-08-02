@@ -2,17 +2,17 @@ import { button, div, input } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fnta
 import { fnstate } from 'https://cdn.jsdelivr.net/npm/@srfnstack/fntags@0.3.8/src/fntags.min.mjs'
 import { formInput, hexToRgb, notify, rgbToHex } from './base.mjs'
 
-export const defaultBgColor = { r: 0, g: 0, b: 0 }
-export const defaultLavaColor = { r: 140, g: 0, b: 255 }
-export const defaultLavaHighlight = { r: 165, g: 95, b: 100 }
-export const defaultParticleCount = fnstate(Math.min(Math.trunc(window.innerHeight * window.innerWidth / 3000), 600))
-export const defaultInteractionRadius = 50
-export const defaultStiffness = 3000
-export const defaultStiffnessNear = 8000
-export const defaultRestDensity = 5.45
+export const defaultBgColor = { r: 25, g: 25, b: 25 }
+export const defaultLavaColor = { r: 133, g: 0, b: 204 }
+export const defaultLavaHighlight = { r: 182, g: 124, b: 254 }
+export const defaultParticleCount = fnstate(Math.min(Math.trunc(window.innerHeight * window.innerWidth / 4000), 300))
+export const defaultInteractionRadius = 60
+export const defaultStiffness = 4000
+export const defaultStiffnessNear = 25000
+export const defaultRestDensity = 4.25
 export const defaultParticleSize = 30
-export const defaultMaxTemp = fnstate(Math.min(window.innerHeight, 1200))
-export const defaultGravityStrength = fnstate(Math.min(window.innerHeight/2, 600))
+export const defaultMaxTemp = fnstate(Math.min(window.innerHeight, 1000))
+export const defaultGravityStrength = fnstate(Math.min(window.innerHeight/2, 700))
 
 export const bgColor = fnstate({ r: 0, g: 0, b: 0 })
 export const lavaColor = fnstate({...defaultLavaColor})
