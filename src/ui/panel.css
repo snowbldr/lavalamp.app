@@ -127,6 +127,20 @@
 .toggle.on { background: var(--accent); }
 .toggle.on::after { transform: translateX(18px); }
 
+/* The seed field and its New button */
+.seed-row { display: flex; gap: 6px; width: 100%; }
+.seed-row input.seed {
+  flex: 1; min-width: 0; border: 0; border-radius: 6px; padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.08); color: inherit; font: inherit; font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.seed-row input.seed:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.seed-row button.small {
+  border: 0; border-radius: 6px; padding: 5px 10px; background: rgba(255, 255, 255, 0.1);
+  color: inherit; font: inherit; font-size: 12px; cursor: pointer;
+}
+.seed-row button.small:hover { background: rgba(255, 255, 255, 0.18); }
+
 /* Actions */
 .actions { display: flex; gap: 8px; margin-top: 10px; }
 .actions button {

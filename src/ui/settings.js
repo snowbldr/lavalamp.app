@@ -1,5 +1,6 @@
 import { fnstate } from '@srfnstack/fntags'
 import { notify } from './components.js'
+import { seedRandom } from '../sim/random.js'
 
 // Defaults that depend on the window. They take the raw window size, not the capped lamp size,
 // because that is what the lamp was tuned against.
@@ -88,6 +89,12 @@ export const turbulence = fnstate(defaultTurbulence)
 export const drifters = fnstate(defaultDrifters)
 export const heatSpots = fnstate(defaultHeatSpots)
 export const cupDepth = fnstate(defaultCupDepth)
+// The random seed: every random number in the lamp comes from it, so the same seed on the same
+// window gives the same lamp. Drawn fresh on each load unless saved, shared or given as ?seed=.
+// Shown in the panel so a lamp worth keeping can be saved. Changing it reloads the page, since
+// the layout and the first lightings are already drawn by then.
+export const randomSeed = () => Math.floor(Math.random() * 1e9)
+export const seed = fnstate(randomSeed())
 // Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
 export const showFlow = fnstate(false)
 export const showHeat = fnstate(true)
@@ -102,7 +109,7 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth'])
 
@@ -131,7 +138,8 @@ const defaults = () => ({
   turbulence: defaultTurbulence,
   drifters: defaultDrifters,
   heatSpots: defaultHeatSpots,
-  cupDepth: defaultCupDepth
+  cupDepth: defaultCupDepth,
+  seed: randomSeed()
 })
 
 export const getSettings = () => {
@@ -166,7 +174,8 @@ export const loadSavedSettings = () => {
       localStorage.removeItem(STORAGE_KEY)
     }
   }
-  const shared = new URLSearchParams(window.location.search).get('shared')
+  const query = new URLSearchParams(window.location.search)
+  const shared = query.get('shared')
   if (shared) {
     try {
       applySettings(JSON.parse(atob(shared)))
@@ -174,6 +183,25 @@ export const loadSavedSettings = () => {
       notify('Invalid Share URL')
     }
   }
+  // ?seed= wins over everything: it is how a seed change reloads into effect.
+  const asked = Number(query.get('seed'))
+  if (Number.isFinite(asked) && query.has('seed')) seed(Math.floor(asked) >>> 0)
+  seedRandom(seed())
+}
+
+// Reload the page with this seed in the URL (keeping a share link if there is one), so the
+// whole lamp is drawn from it.
+export const reloadWithSeed = value => {
+  const query = new URLSearchParams(window.location.search)
+  query.set('seed', String(Math.floor(Number(value)) >>> 0))
+  query.delete('profile')
+  window.location.search = `?${query.toString()}`
+}
+
+// Forget the saved settings and start over with a fresh seed and a clean URL.
+export const resetAndReload = () => {
+  clearSavedSettings()
+  window.location.href = window.location.pathname
 }
 
 export const saveSettings = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettings()))

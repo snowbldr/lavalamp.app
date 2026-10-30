@@ -83,6 +83,9 @@ swatches follow the view: the heat map's five stop gradient while it is on, the 
 while it is off, and the flow field's slow to fast pair while the arrows are up. The
 numbers are knobs: drag sideways or up, scroll, or use the arrow keys; click the number to reset one.
 Save keeps the settings in local storage, Share copies a link that carries them, and the ? button
-puts one sentence under every control saying what it changes.
+puts one sentence under every control saying what it changes. Every random number in the lamp comes
+from one seeded generator; the Seed field shows the seed in play, and typing one (or pressing New)
+reloads the lamp from it, so a seed and a window size reproduce the cups, the elements and every
+eddy. Saved and shared with the rest.
 
 <sub>Copyright © 2020-2026 Robert Kempton</sub>

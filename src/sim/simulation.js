@@ -1,7 +1,7 @@
 import { SpatialHash } from './spatialHash.js'
 import { findNeighbours, relax, updatePressure } from './fluid.js'
 import { nextTemperature } from './heat.js'
-import { randomBetween, randomNormal, randomRange } from './random.js'
+import { random, randomBetween, randomNormal, randomRange } from './random.js'
 
 const CELL_SIZE = 50
 // How the lava arrives on load: all at once, as a warm slab already lying on the floor.
@@ -233,7 +233,7 @@ export function createSimulation ({ width, height, params }) {
         core,
         radius,
         gain: DRIFT_GAIN * randomRange(...DRIFT_VARIETY),
-        spin: Math.random() < 0.5 ? -1 : 1,
+        spin: random() < 0.5 ? -1 : 1,
         start: time,
         life: randomRange(...DRIFT_LIFE)
       })
@@ -259,7 +259,7 @@ export function createSimulation ({ width, height, params }) {
         x: randomRange(radius / 2, width - radius / 2),
         y: randomRange(radius / 2, height - radius / 2),
         radius,
-        spin: Math.random() < 0.5 ? -1 : 1,
+        spin: random() < 0.5 ? -1 : 1,
         start: time,
         life: randomRange(...EDDY_LIFE)
       })
@@ -571,7 +571,7 @@ export function createSimulation ({ width, height, params }) {
     const count = Math.max(2, Math.round(width / ELEMENT_GAP))
     for (let k = 0; k < count; k++) {
       const fx = (k + 0.5 + randomRange(-0.4, 0.4)) / count
-      const fr = ELEMENT_RADIUS[0] + (ELEMENT_RADIUS[1] - ELEMENT_RADIUS[0]) * Math.pow(Math.random(), ELEMENT_SIZE_SKEW)
+      const fr = ELEMENT_RADIUS[0] + (ELEMENT_RADIUS[1] - ELEMENT_RADIUS[0]) * Math.pow(random(), ELEMENT_SIZE_SKEW)
       // How often it lights, relative to the others: small rings more than big ones, and ones near
       // the middle more than ones by the walls (the same lean as the old heat spots).
       const d = (fx - 0.5) / SPOT_SPREAD

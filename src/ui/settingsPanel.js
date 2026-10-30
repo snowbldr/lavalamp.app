@@ -1,8 +1,7 @@
-import { button, div, fnstate } from '@srfnstack/fntags'
+import { button, div, fnstate, input } from '@srfnstack/fntags'
 import { hint, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle } from './components.js'
 import {
   bgColor,
-  clearSavedSettings,
   conduction,
   cupDepth,
   defaultConduction,
@@ -37,7 +36,10 @@ import {
   particleCount,
   pace,
   particleSize,
-  resetSettings,
+  randomSeed,
+  reloadWithSeed,
+  resetAndReload,
+  seed,
   restDensity,
   saveSettings,
   shareLink,
@@ -80,11 +82,25 @@ export function createSettingsPanel () {
     )
 
   const resetDefaults = () => {
-    if (confirm('This will reset ALL defaults and remove saved settings')) {
-      clearSavedSettings()
-      resetSettings()
-    }
+    if (confirm('This will reset ALL defaults and remove saved settings')) resetAndReload()
   }
+
+  // The seed: typed in and applied on Enter or when the field loses focus, or drawn afresh with
+  // New; either way the page reloads so everything random comes from it.
+  const applySeed = e => {
+    const value = Math.floor(Number(e.target.value))
+    if (Number.isFinite(value) && value >= 0 && value !== seed()) reloadWithSeed(value)
+    else e.target.value = String(seed())
+  }
+  const seedField = input({
+    id: 'seed',
+    class: 'seed',
+    type: 'text',
+    inputmode: 'numeric',
+    value: seed.bindAttr(() => String(seed())),
+    onchange: applySeed,
+    onkeydown: e => { if (e.key === 'Enter') e.target.blur() }
+  })
 
   panel = div(
     { class: 'panel', onclick: e => e.stopPropagation() },
@@ -139,7 +155,9 @@ export function createSettingsPanel () {
       hint(help, [
         ['Heater', 'Show the heater strip and its elements along the floor.'],
         ['Cups', 'Pull the whole lamp into frame, hidden cups and all, so you can watch the lava in them.']
-      ])
+      ]),
+      row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
+      hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.')
     ),
     section(
       'Physics', physicsOpen,
