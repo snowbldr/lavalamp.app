@@ -94,7 +94,9 @@
 .knob-value:hover { color: var(--accent); }
 
 /* Colour swatches: the native input sits invisibly over a round swatch */
-.swatches { display: flex; gap: 14px; }
+.swatch-row { padding: 4px 0 8px; }
+.swatch-caption { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(241, 236, 250, 0.6); margin-bottom: 6px; }
+.swatches { display: flex; gap: 10px; flex-wrap: wrap; }
 .swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: rgba(241, 236, 250, 0.7); }
 .swatch-well {
   position: relative; width: 34px; height: 34px; border-radius: 50%;

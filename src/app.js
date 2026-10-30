@@ -18,6 +18,13 @@ import {
   defaultParticleCount,
   gravityStrength,
   heatSpots,
+  heatCold,
+  heatCool,
+  heatHot,
+  heatPeak,
+  heatWarm,
+  flowFast,
+  flowSlow,
   highlightColor,
   interactionRadius,
   lavaColor,
@@ -84,6 +91,13 @@ export function start () {
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
   mirror(highlightColor, look, 'highlightColor')
+  mirror(heatCold, look, 'heatCold')
+  mirror(heatCool, look, 'heatCool')
+  mirror(heatWarm, look, 'heatWarm')
+  mirror(heatHot, look, 'heatHot')
+  mirror(heatPeak, look, 'heatPeak')
+  mirror(flowSlow, look, 'flowSlow')
+  mirror(flowFast, look, 'flowFast')
   mirror(particleSize, look, 'particleSize')
   mirror(showFlow, look, 'showFlow')
   mirror(showHeat, look, 'showHeat')

@@ -16,6 +16,20 @@ export const computeDefaultGravity = height => Math.min(height / 2, 700)
 export const defaultBgColor = { r: 0, g: 0, b: 0 }
 export const defaultLavaColor = { r: 133, g: 0, b: 204 }
 export const defaultLavaHighlight = { r: 182, g: 124, b: 254 }
+// The heat map's gradient, cold (sinking) to peak (hottest), and the flow field's, slow to fast.
+// Robert: "the colors are now confusing with heat map as the default... Maybe we should show two
+// different versions of color. One for heatmap to pick the gradient and one for no heat map to
+// pick the static colors. the color would auto switch based on the heat map setting. could we
+// also color the flow field with a gradient as well?"
+export const defaultHeatColors = {
+  heatCold: { r: 20, g: 0, b: 60 },
+  heatCool: { r: 110, g: 0, b: 170 },
+  heatWarm: { r: 220, g: 40, b: 40 },
+  heatHot: { r: 255, g: 170, b: 0 },
+  heatPeak: { r: 255, g: 255, b: 230 }
+}
+export const defaultFlowSlow = { r: 70, g: 110, b: 255 }
+export const defaultFlowFast = { r: 255, g: 255, b: 255 }
 export const defaultInteractionRadius = 60
 export const defaultStiffness = 4000
 export const defaultStiffnessNear = 25000
@@ -39,6 +53,13 @@ export const defaultGravityStrength = fnstate(computeDefaultGravity(window.inner
 export const bgColor = fnstate({ ...defaultBgColor })
 export const lavaColor = fnstate({ ...defaultLavaColor })
 export const highlightColor = fnstate({ ...defaultLavaHighlight })
+export const heatCold = fnstate({ ...defaultHeatColors.heatCold })
+export const heatCool = fnstate({ ...defaultHeatColors.heatCool })
+export const heatWarm = fnstate({ ...defaultHeatColors.heatWarm })
+export const heatHot = fnstate({ ...defaultHeatColors.heatHot })
+export const heatPeak = fnstate({ ...defaultHeatColors.heatPeak })
+export const flowSlow = fnstate({ ...defaultFlowSlow })
+export const flowFast = fnstate({ ...defaultFlowFast })
 export const interactionRadius = fnstate(defaultInteractionRadius)
 export const gravityStrength = fnstate(defaultGravityStrength())
 export const stiffness = fnstate(defaultStiffness)
@@ -61,7 +82,7 @@ export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
-const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor }
+const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots'])
@@ -70,6 +91,13 @@ const defaults = () => ({
   bgColor: { ...defaultBgColor },
   lavaColor: { ...defaultLavaColor },
   lavaHighlight: { ...defaultLavaHighlight },
+  heatCold: { ...defaultHeatColors.heatCold },
+  heatCool: { ...defaultHeatColors.heatCool },
+  heatWarm: { ...defaultHeatColors.heatWarm },
+  heatHot: { ...defaultHeatColors.heatHot },
+  heatPeak: { ...defaultHeatColors.heatPeak },
+  flowSlow: { ...defaultFlowSlow },
+  flowFast: { ...defaultFlowFast },
   interactionRadius: defaultInteractionRadius,
   gravityStrength: defaultGravityStrength(),
   stiffness: defaultStiffness,

@@ -10,16 +10,20 @@ const PIXEL_BUDGET = 1_000_000
 // typical (median) speed on screen draws at half the cell, and the fastest tends toward most of
 // it, so a tornado reads as the strongest thing without shrinking the roll around it to dots.
 const FLOW_SPACING = 40
-// The heat map: lava coloured by temperature on an infrared palette, neutral buoyancy in the
-// middle, so purple is sinking and yellow is rising, with a strip along the floor for the heater.
+// The heat map: lava coloured by temperature on a five stop gradient from `look` (heatCold,
+// heatCool, heatWarm, heatHot, heatPeak), neutral buoyancy in the middle, so with the default
+// infrared palette purple is sinking and yellow is rising, with a strip along the floor for the
+// heater. The flow field's arrows run from look.flowSlow to look.flowFast with speed.
 const HEAT_STEPS = 48
 const HEAT_STRIP = 10 // window px
-const HEAT_PALETTE = [[20, 0, 60], [110, 0, 170], [220, 40, 40], [255, 170, 0], [255, 255, 230]]
+const HEAT_STOPS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
+const FLOW_ALPHA = 0.75
 
 // Draws the particles as soft discs, thresholds the alpha channel so that overlapping discs fuse
 // into one blob (the classic metaball trick), then lights the underside of every blob with a short
 // gradient, as if lit by the bulb below.
-// `look` is a plain object the caller keeps up to date: { lavaColor, highlightColor, particleSize, showFlow, showHeat }
+// `look` is a plain object the caller keeps up to date: { lavaColor, highlightColor, particleSize,
+// showFlow, showHeat, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 export function createCanvasRenderer (canvas, look) {
   const context = canvas.getContext('2d', { willReadFrequently: true })
   // One soft disc, drawn once and blitted per particle. Shading a radial gradient per particle
@@ -80,18 +84,19 @@ export function createCanvasRenderer (canvas, look) {
     if (look.showFlow && overlays.flowAt) drawFlow(overlays.flowAt)
   }
 
-  // The infrared colour for t in [0, 1], interpolated along HEAT_PALETTE.
+  const paletteKey = () => HEAT_STOPS.map(stop => rgbKey(look[stop])).join('/')
+  const rgbKey = c => c ? `${c.r},${c.g},${c.b}` : ''
+  const mix = (a, b, f) => [a.r + (b.r - a.r) * f, a.g + (b.g - a.g) * f, a.b + (b.b - a.b) * f].map(Math.round)
+
+  // The heat colour for t in [0, 1], interpolated along the five stops in `look`.
   function heatColor (t) {
-    const pos = Math.max(0, Math.min(1, t)) * (HEAT_PALETTE.length - 1)
-    const k = Math.min(HEAT_PALETTE.length - 2, Math.floor(pos))
-    const f = pos - k
-    const a = HEAT_PALETTE[k]
-    const b = HEAT_PALETTE[k + 1]
-    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f].map(Math.round)
+    const pos = Math.max(0, Math.min(1, t)) * (HEAT_STOPS.length - 1)
+    const k = Math.min(HEAT_STOPS.length - 2, Math.floor(pos))
+    return mix(look[HEAT_STOPS[k]], look[HEAT_STOPS[k + 1]], pos - k)
   }
 
   function prepareHeatDiscs (size) {
-    const key = `${size}`
+    const key = `${size}/${paletteKey()}`
     if (key === heatKey) return
     heatKey = key
     const span = Math.max(2, Math.ceil(size * 2))
@@ -145,8 +150,8 @@ export function createCanvasRenderer (canvas, look) {
     const typical = speeds[speeds.length >> 1]
     const fastest = speeds[speeds.length - 1]
     if (fastest < 0.5) return
-    context.strokeStyle = 'rgba(255, 255, 255, 0.6)'
-    context.fillStyle = 'rgba(255, 255, 255, 0.6)'
+    const slow = look.flowSlow || { r: 255, g: 255, b: 255 }
+    const fast = look.flowFast || slow
     context.lineWidth = 1
     for (let k = 0; k < samples.length; k += 5) {
       const x = samples[k]
@@ -156,7 +161,10 @@ export function createCanvasRenderer (canvas, look) {
       const speed = samples[k + 4]
       {
         if (speed < fastest * 0.02) continue
-        const length = reach * speed / (speed + typical)
+        const share = speed / (speed + typical) // 0 to 1, half at the typical speed
+        const length = reach * share
+        const [r, g, b] = mix(slow, fast, share)
+        context.strokeStyle = context.fillStyle = `rgba(${r},${g},${b},${FLOW_ALPHA})`
         const ux = vx / speed
         const uy = vy / speed
         const tipX = x + ux * length / 2

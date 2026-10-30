@@ -1,5 +1,5 @@
 import { button, div, fnstate, span } from '@srfnstack/fntags'
-import { knob, knobs, notify, row, section, segmented, swatch, toggle } from './components.js'
+import { knob, knobs, notify, row, section, segmented, swatch, swatchRow, toggle } from './components.js'
 import {
   bgColor,
   clearSavedSettings,
@@ -19,8 +19,15 @@ import {
   defaultStir,
   defaultTurbulence,
   drifters,
+  flowFast,
+  flowSlow,
   gravityStrength,
+  heatCold,
+  heatCool,
+  heatHot,
+  heatPeak,
   heatSpots,
+  heatWarm,
   highlightColor,
   interactionRadius,
   lavaColor,
@@ -84,12 +91,25 @@ export function createSettingsPanel () {
     ),
     section(
       'Lamp', lampOpen,
-      row('Colours', div(
-        { class: 'swatches' },
+      // The colour rows follow the views: the heat gradient while the heat map is on, the lava
+      // colours while it is off, and the flow gradient while the arrows are on.
+      swatchRow('Heat colours', showHeat, true,
+        swatch('Cold', 'heatCold', heatCold),
+        swatch('Cool', 'heatCool', heatCool),
+        swatch('Warm', 'heatWarm', heatWarm),
+        swatch('Hot', 'heatHot', heatHot),
+        swatch('Peak', 'heatPeak', heatPeak),
+        swatch('Back', 'bgColor', bgColor)
+      ),
+      swatchRow('Lava colours', showHeat, false,
         swatch('Lava', 'lavaColor', lavaColor),
         swatch('Glow', 'highlightColor', highlightColor),
-        swatch('Background', 'bgColor', bgColor)
-      )),
+        swatch('Back', 'bgColor2', bgColor)
+      ),
+      swatchRow('Flow colours', showFlow, true,
+        swatch('Slow', 'flowSlow', flowSlow),
+        swatch('Fast', 'flowFast', flowFast)
+      ),
       knobs(
         knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
         knob('Gloop', 'conduction', conduction, { min: 0, max: 0.04, step: 0.0005 }, () => defaultConduction, fixed(4)),

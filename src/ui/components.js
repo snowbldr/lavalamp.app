@@ -117,6 +117,13 @@ export const swatch = (title, id, state) => div(
   label({ for: id }, title)
 )
 
+// A captioned row of swatches, shown while the boolean fnstate `view` is on (or off, if `when` is false).
+export const swatchRow = (title, view, when, ...swatches) => div(
+  { class: 'swatch-row', style: { display: view.bindStyle(() => !!view() === when ? 'block' : 'none') } },
+  div({ class: 'swatch-caption' }, title),
+  div({ class: 'swatches' }, ...swatches)
+)
+
 // A segmented control for a state that takes one of a few words.
 export const segmented = (idPrefix, state, options) => div(
   { class: 'segmented' },
