@@ -106,6 +106,12 @@ const CUP_LIP = 0.04
 // for it. The hidden lava is a cold reserve the pool draws on as it lifts: heating it as well
 // put about twice the lava in reach of the heater and the whole pool hovered as one mass.
 const FLOOR_CUP_SHARE = 0.35 // was 0.25; Robert: "make the reserves underneath a little bigger"
+// Robert: "the heater... should it like, be the cup? Like should there just be one heater that
+// heats the whole cup?" With this on, the heating elements are the floor cups themselves: one
+// per cup, centred on it, as wide as the cup and reaching as far above the bottom edge as the
+// cup goes below it, lit on the same clocks, and heating the lava hidden in the cup as well as
+// the lava above it, so a whole cup's worth warms together.
+const ELEMENTS_ARE_CUPS = true
 // The ceiling and floor are sampled into tables every CUP_STEP px and smoothed over CUP_ROUND px
 // either side, which rounds off the cusp where two cups meet (Robert: "there's a jiggle on the
 // top at the point where the cups meet. when two cups next to each other get full, a bit of
@@ -445,7 +451,7 @@ export function createSimulation ({ width, height, params }) {
     for (const el of elements) {
       el.x = el.fx * width
       el.radius = el.fr * shorter
-      el.halfWidth = el.radius * ELEMENT_ASPECT
+      el.halfWidth = ELEMENTS_ARE_CUPS ? el.cupHalf * width : el.radius * ELEMENT_ASPECT
       el.glow = el.heat > 0 ? Math.sin(Math.PI * (heaterTime - el.start) / el.life) : 0
       if (el.glow > 0 && el.radius * 2 > maxReach) maxReach = el.radius * 2
     }
@@ -455,7 +461,7 @@ export function createSimulation ({ width, height, params }) {
         let power = SPOT_BASE
         for (const el of elements) {
           if (el.glow <= 0) continue
-          const d = (x - el.x) / (el.radius * ELEMENT_ASPECT)
+          const d = (x - el.x) / el.halfWidth
           power += 2 * el.glow * Math.exp(-d * d)
         }
         return power > SPOT_CAP ? SPOT_CAP : power
@@ -471,7 +477,7 @@ export function createSimulation ({ width, height, params }) {
       const dy = height - py
       for (const el of elements) {
         if (el.glow <= 0) continue
-        const dx = (px - el.x) / ELEMENT_ASPECT
+        const dx = (px - el.x) * el.radius / el.halfWidth
         const d2 = (dx * dx + dy * dy) / (el.radius * el.radius)
         if (d2 < 4) heat += el.heat * el.glow * Math.exp(-d2)
       }
@@ -499,7 +505,7 @@ export function createSimulation ({ width, height, params }) {
     hash.clear()
     for (let i = 0; i < alive; i++) {
       temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]), HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
-      if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || y[i] <= height)) {
+      if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || ELEMENTS_ARE_CUPS || y[i] <= height)) {
         const heat = elementHeat(x[i], y[i])
         if (heat > 0) temp[i] = Math.min(maxTemp, temp[i] + heat)
       }
@@ -549,6 +555,19 @@ export function createSimulation ({ width, height, params }) {
   // Lay the elements along the floor once: about ELEMENT_GAP px apart, jittered by up to 40% of
   // the gap, each with its own radius. Positions are fractions so a resize keeps the same lamp.
   function layoutElements () {
+    if (ELEMENTS_ARE_CUPS) {
+      if (floorCups.length === 0) layoutCups(floorCups, true)
+      const shorter = Math.min(width, height)
+      for (const cup of floorCups) {
+        const fx = Math.max(0.02, Math.min(0.98, cup.fx))
+        // Vertical reach as a fraction of the shorter side: the cup's depth.
+        const fr = Math.max(0.03, FLOOR_CUP_SHARE * cup.fw * width / shorter)
+        const d = (fx - 0.5) / SPOT_SPREAD
+        const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / Math.max(ELEMENT_RADIUS[0], fr)
+        elements.push({ fx, fr, weight, cupHalf: cup.fw / 2, heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
+      }
+      return
+    }
     const count = Math.max(2, Math.round(width / ELEMENT_GAP))
     for (let k = 0; k < count; k++) {
       const fx = (k + 0.5 + randomRange(-0.4, 0.4)) / count
