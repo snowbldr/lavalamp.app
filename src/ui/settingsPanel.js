@@ -41,6 +41,7 @@ import {
   shareLink,
   showFlow,
   showHeat,
+  showHeater,
   touchMode,
   touchModes,
   stiffness,
@@ -118,7 +119,8 @@ export function createSettingsPanel () {
       ),
       row('Touch', segmented('touch', touchMode, touchModes)),
       row('Heat Map', toggle('heat', showHeat)),
-      row('Flow Field', toggle('flow', showFlow))
+      row('Flow Field', toggle('flow', showFlow)),
+      row('Heater', toggle('heater', showHeater))
     ),
     section(
       'Physics', physicsOpen,

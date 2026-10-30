@@ -23,7 +23,7 @@ const FLOW_ALPHA = 0.75
 // into one blob (the classic metaball trick), then lights the underside of every blob with a short
 // gradient, as if lit by the bulb below.
 // `look` is a plain object the caller keeps up to date: { lavaColor, highlightColor, particleSize,
-// showFlow, showHeat, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
+// showFlow, showHeat, showHeater, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 export function createCanvasRenderer (canvas, look) {
   const context = canvas.getContext('2d', { willReadFrequently: true })
   // One soft disc, drawn once and blitted per particle. Shading a radial gradient per particle
@@ -80,7 +80,9 @@ export function createCanvasRenderer (canvas, look) {
     threshold(pix)
     if (!heat) highlight(pix, look.highlightColor)
     context.putImageData(imageData, 0, 0)
-    if (heat && overlays.heaterAt) drawHeater(overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+    // The heater is its own view (Robert: "hide the heating elements by default, but add a switch to
+    // show the heating element. should work independently of heat map").
+    if (look.showHeater && overlays.heaterAt) drawHeater(overlays.heaterAt, overlays.elements ? overlays.elements() : [])
     if (look.showFlow && overlays.flowAt) drawFlow(overlays.flowAt)
   }
 

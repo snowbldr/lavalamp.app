@@ -36,6 +36,7 @@ import {
   restDensity,
   showFlow,
   showHeat,
+  showHeater,
   stiffness,
   stiffnessNear,
   stir,
@@ -101,6 +102,7 @@ export function start () {
   mirror(particleSize, look, 'particleSize')
   mirror(showFlow, look, 'showFlow')
   mirror(showHeat, look, 'showHeat')
+  mirror(showHeater, look, 'showHeater')
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
   let edge = 'bottom' // the page edge the lamp's floor sits on

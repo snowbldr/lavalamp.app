@@ -31,7 +31,7 @@ own size; every so often one lights at its own heat for a few seconds and warms 
 disc around it, the way a finger on Heat does, so a lump of the pool warms at once and lifts as one
 (Heat Spots is the seconds between lightings, 0 for a steady floor heater). Pace runs the whole lamp in slow motion, and two buttons in the menu are ways of looking: Flow Field draws the stirring as arrows, like
 wind on a weather map, and Heat Map colours the lava by temperature like an infrared camera, with a
-strip along the floor for the heater.
+a Heater switch shows the heater strip and its elements along the floor in either view.
 
 Rendering is the 2D canvas metaball trick: soft discs, an alpha threshold so nearby discs fuse, then a
 highlight along the underside of each blob.

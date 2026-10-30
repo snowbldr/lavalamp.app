@@ -77,6 +77,8 @@ export const heatSpots = fnstate(defaultHeatSpots)
 // Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
 export const showFlow = fnstate(false)
 export const showHeat = fnstate(true)
+// Draw the heater strip and the heating elements along the floor, in either view. Not saved.
+export const showHeater = fnstate(false)
 // What a finger on the lamp does. Not saved.
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
