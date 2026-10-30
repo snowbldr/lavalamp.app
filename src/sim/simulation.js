@@ -300,7 +300,7 @@ export function createSimulation ({ width, height, params }) {
   function fill (target) {
     if (alive > target) alive = target
     if (alive === target) return
-    if (floorCups.length === 0) layoutCups(floorCups)
+    if (floorCups.length === 0) layoutCups(floorCups, true)
     const depth = Math.max(0, (SPAWN_AREA * target - floorCupArea()) / width)
     while (alive < target) spawn(alive++, depth)
   }
@@ -389,7 +389,7 @@ export function createSimulation ({ width, height, params }) {
     const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0 } = params
     cupDepthNow = cupDepth
     if (cups.length === 0) layoutCups()
-    if (floorCups.length === 0) layoutCups(floorCups)
+    if (floorCups.length === 0) layoutCups(floorCups, true)
     ensureCapacity(particleCount)
     fill(particleCount)
     stirEddies(dt, turbulence, drifters)
@@ -597,15 +597,34 @@ export function createSimulation ({ width, height, params }) {
 
   // Lay the cups across the ceiling once (see CUP_WIDTH): bell curve widths, then all scaled so
   // they tile the width exactly. Fractions, so a resize keeps the same lamp.
-  function layoutCups (into = cups) {
+  // With `onWalls` the end cups are centred on the walls, so the corners are the deepest points:
+  // the floor's cups are laid out that way, because with rims at the walls the corner was the
+  // highest point of the floor, the convection roll brings lava down the walls to exactly there,
+  // and it piled up ("we got significant wall climbing back").
+  function layoutCups (into = cups, onWalls = false) {
     const shorter = Math.min(width, height)
     const widths = []
     let total = 0
-    while (total < width) {
+    while (total < width + (onWalls ? CUP_WIDTH_RANGE[1] * shorter : 0)) {
       let w = (CUP_WIDTH[0] + randomNormal() * CUP_WIDTH[1]) * shorter
       w = Math.max(CUP_WIDTH_RANGE[0] * shorter, Math.min(CUP_WIDTH_RANGE[1] * shorter, w))
       widths.push(w)
       total += w
+    }
+    if (onWalls) {
+      // Centres at 0 and the width: the span from the first centre to the last is half the first
+      // and last widths plus all the middle ones, scaled to the width.
+      if (widths.length < 2) widths.push(widths[0])
+      let span = widths[0] / 2 + widths[widths.length - 1] / 2
+      for (let k = 1; k < widths.length - 1; k++) span += widths[k]
+      const k = width / span
+      let centre = 0
+      for (let i = 0; i < widths.length; i++) {
+        const w = widths[i] * k
+        if (i > 0) centre += widths[i - 1] * k / 2 + w / 2
+        into.push({ fx: centre / width, fw: w / width })
+      }
+      return
     }
     let at = 0
     for (const w of widths) {
@@ -679,7 +698,8 @@ export function createSimulation ({ width, height, params }) {
     for (const cup of floorCups) {
       const a = cup.fw * width / 2
       const depth = FLOOR_CUP_SHARE * cupDepthNow * cup.fw * width
-      area += Math.PI * a * depth / 2
+      const inside = cup.fx <= 0 || cup.fx >= 1 ? 0.5 : 1 // the end cups straddle the walls
+      area += inside * Math.PI * a * depth / 2
     }
     return area
   }
