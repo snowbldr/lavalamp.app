@@ -34,6 +34,11 @@
   cursor: pointer;
 }
 .panel-close:hover { background: rgba(255, 255, 255, 0.16); }
+.panel-help { right: 46px; font-size: 15px; font-weight: 600; }
+.panel-help.on { background: var(--accent); color: #1c1c1e; }
+.hint { font-size: 11px; line-height: 1.35; color: rgba(236, 236, 236, 0.6); padding: 2px 0 8px; }
+.hint div + div { margin-top: 2px; }
+.hint-name { color: rgba(236, 236, 236, 0.85); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; }
 .panel-section { padding: 6px 0; }
 .panel-section + .panel-section { border-top: 1px solid rgba(255, 255, 255, 0.1); }
 .panel-section-title {

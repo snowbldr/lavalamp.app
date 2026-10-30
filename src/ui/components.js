@@ -101,6 +101,16 @@ export const knob = (title, id, state, { min, max, step }, resetTo, format = v =
 // A row of knobs.
 export const knobs = (...cells) => div({ class: 'knobs' }, ...cells)
 
+// One sentence about a control, shown while help is on (`help` is a boolean fnstate). Robert:
+// "we should have a ? icon to click that opens a brief one sentence explanation of each control
+// and what it changes". `lines` is text, or pairs of [name, text] for a row of knobs.
+export const hint = (help, lines) => div(
+  { class: 'hint', style: { display: help.bindStyle(() => help() ? 'block' : 'none') } },
+  ...(typeof lines === 'string'
+    ? [lines]
+    : lines.map(([name, text]) => div(span({ class: 'hint-name' }, name), ' ', text)))
+)
+
 // A round swatch with the colour input hidden over it.
 export const swatch = (title, id, state) => div(
   { class: 'swatch' },

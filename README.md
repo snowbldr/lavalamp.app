@@ -79,6 +79,7 @@ what a finger does and how to look at it, and Physics, folded away, for the part
 swatches follow the view: the heat map's five stop gradient while it is on, the lava and glow colours
 while it is off, and the flow field's slow to fast pair while the arrows are up. The
 numbers are knobs: drag sideways or up, scroll, or use the arrow keys; click the number to reset one.
-Save keeps the settings in local storage, Share copies a link that carries them.
+Save keeps the settings in local storage, Share copies a link that carries them, and the ? button
+puts one sentence under every control saying what it changes.
 
 <sub>Copyright © 2020 Robert Kempton</sub>
