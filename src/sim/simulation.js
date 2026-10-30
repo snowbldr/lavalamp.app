@@ -104,7 +104,10 @@ const SPOT_CAP = 3
 const CUP_WIDTH = [0.22, 0.12] // mean, deviation, of the shorter side
 const CUP_WIDTH_RANGE = [0.06, 0.6]
 const CUP_GAP = 0.04 // mean gap, of the shorter side
-const CUP_LIP = 0.04
+// The lip was 4% of the shorter side below the top edge, which left a black bar above the lava
+// (Robert: "The bottles at the top should be exactly at the top of the screen instead of
+// protruding so they don't cause this black bar"); the mouths are in the top edge itself now.
+const CUP_LIP = 0
 // The ceiling cups are bottles (Robert, on lava still spreading thin over the cups and coming
 // down as wavy sheets: "What if we did like globular cups. So it'd be like an upside down
 // spherical bottle with a spout. we'd want a widish spout so it doesn't stream out and globs
