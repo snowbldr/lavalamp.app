@@ -35,6 +35,8 @@ import {
   shareLink,
   showFlow,
   showHeat,
+  touchMode,
+  touchModes,
   stiffness,
   stiffnessNear,
   stir,
@@ -64,6 +66,28 @@ const slider = (title, id, state, { min, max, step }, resetTo) => formInput(
     oninput: e => state(parseFloat(e.target.value))
   }),
   resetTo && resetToDefaultButton(() => state(resetTo()))
+)
+
+// A row of buttons, one lit, for a state that takes one of a few words.
+const choice = (title, state, options) => formInput(
+  title,
+  div(
+    { style: { display: 'flex', gap: '4px', 'flex-wrap': 'wrap', 'justify-content': 'center' } },
+    ...options.map(option => button(
+      {
+        id: `touch-${option}`,
+        onclick: () => state(option),
+        style: {
+          'border-radius': '5px',
+          padding: '5px 8px',
+          'text-transform': 'capitalize',
+          'font-weight': state.bindStyle(() => state() === option ? 'bold' : 'normal'),
+          outline: state.bindStyle(() => state() === option ? '2px solid #b67cfe' : 'none')
+        }
+      },
+      option
+    ))
+  )
 )
 
 const actionButton = (title, id, text, onclick) => formInput(
@@ -138,6 +162,7 @@ export function createSettingsPanel () {
     slider('Heat Spots', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots),
     slider('Conduction', 'conduction', conduction, { min: 0, max: 0.02, step: 0.0005 }, () => defaultConduction),
     slider('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace),
+    choice('Touch', touchMode, touchModes),
     actionButton('Flow Field', 'flow', showFlow.bindAs(() => showFlow() ? 'Hide Arrows' : 'Show Arrows'), () => showFlow(!showFlow())),
     actionButton('Heat Map', 'heat', showHeat.bindAs(() => showHeat() ? 'Hide Heat' : 'Show Heat'), () => showHeat(!showHeat())),
     actionButton('Share', 'share', 'Share', copyShareLink),

@@ -35,6 +35,14 @@ strip along the floor for the heater.
 Rendering is the 2D canvas metaball trick: soft discs, an alpha threshold so nearby discs fuse, then a
 highlight along the underside of each blob.
 
+### Touch and tilt
+
+A finger or the mouse acts on the lava in a soft circle; the Touch row in the menu picks what it does:
+Push shoves lava away and carries it along as you drag, Pull gathers it, Spin is a little tornado
+under your finger, Heat and Cool change its temperature. Several fingers work at once. On a phone,
+gravity decides which edge of the screen is the floor and the lamp turns to match, and a shake shoves
+the lava, so it behaves like the liquid in a real lamp.
+
 ### Layout
 
     index.html                 page shell and import map
@@ -46,7 +54,9 @@ highlight along the underside of each blob.
       spatialHash.js           neighbour lookup grid
       random.js
     src/render/canvasRenderer.js
-    src/input/motion.js        device motion
+    src/input/motion.js        device motion: shakes, and which edge is down
+    src/input/pointer.js       fingers and the mouse
+    src/input/frame.js         the lamp's quarter turns inside the page
     src/ui/                    settings state, persistence, the settings panel
     experiments/               scratch pages
 

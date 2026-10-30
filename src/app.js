@@ -2,6 +2,8 @@ import { a, canvas, div, sub } from '@srfnstack/fntags'
 import { createSimulation } from './sim/simulation.js'
 import { createCanvasRenderer } from './render/canvasRenderer.js'
 import { createMotionInput } from './input/motion.js'
+import { createPointerInput } from './input/pointer.js'
+import { TURNS, lampSizeFor, lampToPage, pageToLamp, pageVectorToLamp } from './input/frame.js'
 import { notify } from './ui/components.js'
 import { createSettingsPanel } from './ui/settingsPanel.js'
 import {
@@ -30,6 +32,7 @@ import {
   stiffness,
   stiffnessNear,
   stir,
+  touchMode,
   turbulence
 } from './ui/settings.js'
 
@@ -37,10 +40,13 @@ import {
 const FRAME = 1 / 60
 // How hard a bump to the device shoves the lava.
 const MOTION_GAIN = 2
+// How long gravity has to point at a new edge before the lamp turns to it, in seconds.
+const TURN_DELAY = 0.6
 
-// The lamp is the whole window. It used to stop at 1000 px each way to keep the per pixel metaball
-// pass affordable; the performance work since made that unnecessary.
-const lampSize = () => [window.innerWidth, window.innerHeight]
+// The lamp is the whole window (it used to stop at 1000 px each way to keep the per pixel metaball
+// pass affordable; the performance work since made that unnecessary), turned in quarter turns so
+// its floor is on whichever edge gravity points at.
+const pageSize = () => [window.innerWidth, window.innerHeight]
 
 // Copy a setting into a plain object now and whenever it changes. The sim and renderer read the
 // plain objects, so neither of them knows about fntags.
@@ -82,22 +88,46 @@ export function start () {
   mirror(showFlow, look, 'showFlow')
   mirror(showHeat, look, 'showHeat')
 
-  let [width, height] = lampSize()
-  const lamp = canvas({ id: 'lavalamp' })
+  let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
+  let edge = 'bottom' // the page edge the lamp's floor sits on
+  let turns = TURNS[edge]
+  let [pageWidth, pageHeight] = pageSize()
+  let [width, height] = lampSizeFor(turns, pageWidth, pageHeight)
+  const lamp = canvas({ id: 'lavalamp', style: { transition: 'transform 0.4s' } })
   const sim = createSimulation({ width, height, params })
   const renderer = createCanvasRenderer(lamp, look)
-  renderer.resize(width, height)
   const motion = createMotionInput()
+  const toLamp = (px, py) => pageToLamp(turns, pageWidth, pageHeight, width, height, px, py)
+  const pointer = createPointerInput(lamp, toLamp)
   const settingsPanel = createSettingsPanel()
 
-  window.addEventListener('resize', () => {
-    [width, height] = lampSize()
+  // Size the lamp to the page for the current turn, and keep the window-following defaults honest.
+  function fit () {
+    [pageWidth, pageHeight] = pageSize();
+    [width, height] = lampSizeFor(turns, pageWidth, pageHeight)
     sim.resize(width, height)
     renderer.resize(width, height)
-    followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(window.innerWidth, window.innerHeight))
-    followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(window.innerHeight))
-    followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(window.innerHeight))
-  })
+    lamp.style.transform = `rotate(${turns * 90}deg)`
+    followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(width, height))
+    followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
+    followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
+  }
+  fit()
+  window.addEventListener('resize', fit)
+
+  // Turn the lamp so its floor is on `newEdge`, carrying every particle to where it was on the
+  // page, so the lava stays put and gravity simply starts pulling it toward the new floor.
+  function turnTo (newEdge) {
+    const before = { turns, pageWidth, pageHeight, width, height }
+    edge = newEdge
+    turns = TURNS[edge]
+    fit()
+    sim.transform((x, y) => {
+      const [px, py] = lampToPage(before.turns, before.pageWidth, before.pageHeight, before.width, before.height, x, y)
+      return toLamp(px, py)
+    })
+    previous = { x: sim.state.x.slice(0, sim.count), y: sim.state.y.slice(0, sim.count) }
+  }
 
   // Browsers only allow the wake lock and the motion sensors from inside a user gesture.
   const onFirstClick = () => {
@@ -162,11 +192,22 @@ export function start () {
   // number assumes, but only on `pace` of the frames, and the drawing interpolates between the
   // last two sim states so it stays smooth. At pace 1 it steps and draws every frame as before.
   const shown = { x: new Float32Array(0), y: new Float32Array(0), temp: null }
-  let previous = { x: new Float32Array(0), y: new Float32Array(0) }
   let due = 1
+  let leaning = 0 // seconds gravity has pointed at an edge other than the current one
   function frame () {
-    const [ax, ay] = motion.consume()
+    // A shake is a shove, in the lamp's frame.
+    const [ax, ay] = pageVectorToLamp(turns, ...motion.consume())
     sim.push(ax / FRAME * MOTION_GAIN, ay / FRAME * MOTION_GAIN)
+    // Gravity picks the floor.
+    const wanted = motion.downEdge(edge)
+    leaning = wanted === edge ? 0 : leaning + FRAME
+    if (leaning >= TURN_DELAY) {
+      leaning = 0
+      turnTo(wanted)
+    }
+    // Fingers.
+    const mode = touchMode()
+    sim.setTouches(pointer.consume(FRAME).map(p => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, mode })))
     due += pace()
     while (due >= 1) {
       due -= 1

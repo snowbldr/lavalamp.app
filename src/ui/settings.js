@@ -49,6 +49,9 @@ export const heatSpots = fnstate(defaultHeatSpots)
 // Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
 export const showFlow = fnstate(false)
 export const showHeat = fnstate(false)
+// What a finger on the lamp does. Not saved.
+export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
+export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor }

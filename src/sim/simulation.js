@@ -55,6 +55,14 @@ const SPOT_PEAK = [1.2, 2.5] // times normal power, above the base
 const SPOT_LIFE = [10, 40] // seconds
 const SPOT_BASE = 0.2
 const SPOT_CAP = 3
+// Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
+// across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
+// gathers it, spin is a tornado under the finger, heat and cool change temperature.
+const TOUCH_RADIUS = 0.12
+const TOUCH_MIN = 80
+const TOUCH_PUSH = 250 // px/s at the centre
+const TOUCH_SPIN = 300 // px/s at the edge of the core
+const TOUCH_HEAT = 12 // px/s of temperature per step
 // Turbulence: now and then an eddy appears at a random spot, a slow vortex that fades in and out
 // over a few seconds, spinning either way. Each is a Gaussian vortex, so it is divergence free
 // and moves the lava around without squashing it. The gap between eddies, their size and their
@@ -94,6 +102,7 @@ export function createSimulation ({ width, height, params }) {
   let heaterTime = 0
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
+  let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
   const spots = []
   let nextSpot = 0
   const eddies = []
@@ -240,6 +249,74 @@ export function createSimulation ({ width, height, params }) {
     impulse[1] += fy
   }
 
+  // The fingers on the lamp for the next step: [{ x, y, vx, vy, mode }], mode one of
+  // 'push', 'pull', 'spin', 'heat', 'cool'.
+  function setTouches (list) {
+    touches = list
+  }
+
+  // Velocity (into `out`) and temperature change (returned) from the fingers at a point.
+  function touchAt (px, py, dt, maxTemp, out) {
+    out[0] = 0
+    out[1] = 0
+    let heat = 0
+    const radius = Math.max(TOUCH_MIN, TOUCH_RADIUS * Math.min(width, height))
+    for (let k = 0; k < touches.length; k++) {
+      const t = touches[k]
+      const dx = px - t.x
+      const dy = py - t.y
+      const r = Math.hypot(dx, dy)
+      const q = r / radius
+      if (q > 2.5) continue
+      const w = Math.exp(-q * q)
+      switch (t.mode) {
+        case 'push': {
+          const ux = r > 0 ? dx / r : 0
+          const uy = r > 0 ? dy / r : 0
+          out[0] += (TOUCH_PUSH * ux + t.vx) * w
+          out[1] += (TOUCH_PUSH * uy + t.vy) * w
+          break
+        }
+        case 'pull': {
+          // Toward the finger, never past it.
+          const speed = Math.min(TOUCH_PUSH * w, r / dt)
+          if (r > 0) {
+            out[0] += -dx / r * speed + t.vx * w
+            out[1] += -dy / r * speed + t.vy * w
+          }
+          break
+        }
+        case 'spin': {
+          const core = radius * 0.5
+          const c = r / core
+          const speed = TOUCH_SPIN * 2 * c / (1 + c * c) * Math.exp(-(q * q) / 4)
+          if (r > 0) {
+            out[0] += -dy / r * speed + t.vx * w
+            out[1] += dx / r * speed + t.vy * w
+          }
+          break
+        }
+        case 'heat':
+          heat += TOUCH_HEAT * w
+          break
+        case 'cool':
+          heat -= TOUCH_HEAT * w
+          break
+      }
+    }
+    return heat
+  }
+
+  // Move every particle by a function of its position. Used when the lamp turns to follow gravity.
+  function transform (fn) {
+    const { x, y } = state
+    for (let i = 0; i < alive; i++) {
+      const [nx, ny] = fn(x[i], y[i])
+      x[i] = nx
+      y[i] = ny
+    }
+  }
+
   function step (dt) {
     const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0 } = params
     ensureCapacity(particleCount)
@@ -297,16 +374,25 @@ export function createSimulation ({ width, height, params }) {
     const ky = Math.PI / height
     const vertical = 2 * stir * height / width
     const eddy = [0, 0]
+    const finger = [0, 0]
+    const touching = touches.length > 0
 
     hash.clear()
     for (let i = 0; i < alive; i++) {
       temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]))
+      if (touching) {
+        const heat = touchAt(x[i], y[i], dt, maxTemp, finger)
+        if (heat !== 0) temp[i] = Math.max(0, Math.min(maxTemp, temp[i] + heat))
+      } else {
+        finger[0] = 0
+        finger[1] = 0
+      }
       // Velocity is rebuilt from scratch every frame instead of carried over, which makes the fluid
       // fully overdamped. The paper recomputes velocity from the previous position (Algorithm 1,
       // line 20); dropping that is what turns splashing water into wax.
       eddyVelocity(x[i], y[i], turbulence, eddy)
-      vx[i] = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0]
-      vy[i] = gravity + fy - temp[i] + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1]
+      vx[i] = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
+      vy[i] = gravity + fy - temp[i] + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
       x[i] += vx[i] * dt
       y[i] += vy[i] * dt
       hash.add(x[i], y[i], i)
@@ -337,13 +423,20 @@ export function createSimulation ({ width, height, params }) {
     return heaterPower(px)
   }
 
-  // The stirring velocity (convection roll plus eddies) at a point, for drawing the flow field.
+  // The stirring velocity (convection roll, eddies and fingers) at a point, for drawing the flow
+  // field.
   function flowAt (px, py) {
-    const { stir = 0, turbulence = 0 } = params
+    const { stir = 0, turbulence = 0, maxTemp = 1000 } = params
     const kx = 2 * Math.PI / width
     const ky = Math.PI / height
     const out = [0, 0]
     eddyVelocity(px, py, turbulence, out)
+    if (touches.length) {
+      const finger = [0, 0]
+      touchAt(px, py, 1 / 60, maxTemp, finger)
+      out[0] += finger[0]
+      out[1] += finger[1]
+    }
     out[0] -= stir * Math.sin(kx * px) * Math.cos(ky * py)
     out[1] += 2 * stir * height / width * Math.cos(kx * px) * Math.sin(ky * py)
     return out
@@ -361,6 +454,8 @@ export function createSimulation ({ width, height, params }) {
     step,
     resize,
     push,
+    setTouches,
+    transform,
     flowAt,
     heaterAt,
     get state () { return state },
