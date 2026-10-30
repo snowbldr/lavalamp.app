@@ -146,16 +146,23 @@ export const toggle = (id, state) => button({
   onclick: () => state(!state())
 })
 
-// A section with a title bar that folds it away. `open` is a fnstate holding whether it is open.
-export const section = (title, open, ...rows) => div(
-  { class: open.bindAttr(() => open() ? 'panel-section' : 'panel-section closed') },
-  button(
-    { class: 'panel-section-title', onclick: () => open(!open()) },
-    span(title),
-    span({ class: 'chevron' }, '▾')
-  ),
-  div({ class: 'panel-rows' }, ...rows)
-)
+// A section. With `open` (a fnstate holding whether it is open) the title bar folds it away;
+// without, it is a plain heading and always open.
+export const section = (title, open, ...rows) => open
+  ? div(
+    { class: open.bindAttr(() => open() ? 'panel-section' : 'panel-section closed') },
+    button(
+      { class: 'panel-section-title', onclick: () => open(!open()) },
+      span(title),
+      span({ class: 'chevron' }, '▾')
+    ),
+    div({ class: 'panel-rows' }, ...rows)
+  )
+  : div(
+    { class: 'panel-section' },
+    div({ class: 'panel-section-title plain' }, span(title)),
+    div({ class: 'panel-rows' }, ...rows)
+  )
 
 export function notify (...message) {
   const notification = div(

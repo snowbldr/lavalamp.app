@@ -43,6 +43,7 @@
   letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; text-align: left;
 }
 .panel-section-title .chevron { transition: transform 0.2s; margin-right: 34px; }
+.panel-section-title.plain { cursor: default; }
 .panel-section.closed .chevron { transform: rotate(-90deg); }
 .panel-section.closed .panel-rows { display: none; }
 

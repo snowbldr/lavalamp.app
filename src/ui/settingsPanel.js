@@ -64,7 +64,6 @@ const times = v => `${Number(v).toFixed(2)}x`
 export function createSettingsPanel () {
   let panel
   const physicsOpen = fnstate(false)
-  const lampOpen = fnstate(true)
 
   const open = () => document.body.append(panel)
   const close = () => panel.remove()
@@ -88,10 +87,11 @@ export function createSettingsPanel () {
   panel = div(
     { class: 'panel', onclick: e => e.stopPropagation() },
     // No title bar (Robert: "remove the lavalamp.app from the panel tons of wasted space"); the
-    // close button sits in the corner over the first section's title.
+    // close button sits in the corner over the Lamp heading. Lamp does not fold ("lamp controls
+    // do not need to be collapsible, just physics is good"); Physics does, closed by default.
     button({ class: 'panel-close', onclick: close, title: 'Close' }, '×'),
     section(
-      'Lamp', lampOpen,
+      'Lamp', null,
       // The colour rows follow the views: the heat gradient while the heat map is on, the lava
       // colours while it is off, and the flow gradient while the arrows are on.
       swatchRow('Heat colours', showHeat, true,
