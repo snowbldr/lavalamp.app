@@ -13,7 +13,7 @@
   max-height: calc(100vh - 20px);
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 8px 18px 18px;
+  padding: 10px 18px 18px;
   border-radius: 14px;
   background: rgba(20, 20, 22, 0.86);
   backdrop-filter: blur(12px);
@@ -48,7 +48,10 @@
   letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; text-align: left;
 }
 .panel-section-title .chevron { transition: transform 0.2s; margin-right: 34px; }
-.panel-section-title.plain { cursor: default; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 34px; align-items: center; }
+.pair-cell { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panel-rows > .swatch-row:first-child { padding-top: 0; }
+.panel-rows > .swatch-row:first-child .swatch-caption { line-height: 30px; margin-bottom: 2px; padding-right: 80px; }
 .panel-section.closed .chevron { transform: rotate(-90deg); }
 .panel-section.closed .panel-rows { display: none; }
 

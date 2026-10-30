@@ -156,8 +156,15 @@ export const toggle = (id, state) => button({
   onclick: () => state(!state())
 })
 
+// Two labelled controls side by side, for switches (Robert: "let's put two toggles in each row").
+export const pair = (titleA, controlA, titleB, controlB) => div(
+  { class: 'pair' },
+  div({ class: 'pair-cell' }, label({ class: 'row-label' }, titleA), controlA),
+  titleB ? div({ class: 'pair-cell' }, label({ class: 'row-label' }, titleB), controlB) : div({ class: 'pair-cell' })
+)
+
 // A section. With `open` (a fnstate holding whether it is open) the title bar folds it away;
-// without, it is a plain heading and always open.
+// without, it is untitled and always open (Robert: "Remove the word lamp").
 export const section = (title, open, ...rows) => open
   ? div(
     { class: open.bindAttr(() => open() ? 'panel-section' : 'panel-section closed') },
@@ -170,7 +177,6 @@ export const section = (title, open, ...rows) => open
   )
   : div(
     { class: 'panel-section' },
-    div({ class: 'panel-section-title plain' }, span(title)),
     div({ class: 'panel-rows' }, ...rows)
   )
 

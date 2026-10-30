@@ -1,5 +1,5 @@
 import { button, div, fnstate } from '@srfnstack/fntags'
-import { hint, knob, knobs, notify, row, section, segmented, swatch, swatchRow, toggle } from './components.js'
+import { hint, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle } from './components.js'
 import {
   bgColor,
   clearSavedSettings,
@@ -88,12 +88,13 @@ export function createSettingsPanel () {
   panel = div(
     { class: 'panel', onclick: e => e.stopPropagation() },
     // No title bar (Robert: "remove the lavalamp.app from the panel tons of wasted space"); the
-    // close button sits in the corner over the Lamp heading. Lamp does not fold ("lamp controls
-    // do not need to be collapsible, just physics is good"); Physics does, closed by default.
+    // buttons sit in the corner beside the first colour row's caption. The lamp controls have no
+    // heading and do not fold ("Remove the word lamp"; "lamp controls do not need to be
+    // collapsible, just physics is good"); Physics does, closed by default.
     button({ class: 'panel-close', onclick: close, title: 'Close' }, '×'),
     button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the controls do' }, '?'),
     section(
-      'Lamp', null,
+      null, null,
       // The colour rows follow the views: the heat gradient while the heat map is on, the lava
       // colours while it is off, and the flow gradient while the arrows are on.
       swatchRow('Heat colours', showHeat, true,
@@ -128,11 +129,12 @@ export function createSettingsPanel () {
       ]),
       row('Touch', segmented('touch', touchMode, touchModes)),
       hint(help, 'What a finger or the mouse does to the lava under it: shove it away, gather it in, spin it, heat it or cool it.'),
-      row('Heat Map', toggle('heat', showHeat)),
-      hint(help, 'Colour the lava by its temperature instead of the lava colour.'),
-      row('Flow Field', toggle('flow', showFlow)),
-      hint(help, 'Draw the stirring as arrows, like wind on a weather map.'),
-      row('Heater', toggle('heater', showHeater)),
+      pair('Heat Map', toggle('heat', showHeat), 'Flow Field', toggle('flow', showFlow)),
+      hint(help, [
+        ['Heat Map', 'Colour the lava by its temperature instead of the lava colour.'],
+        ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.']
+      ]),
+      pair('Heater', toggle('heater', showHeater)),
       hint(help, 'Show the heater strip and its elements along the floor.')
     ),
     section(
