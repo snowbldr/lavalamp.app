@@ -166,7 +166,7 @@ export function createSettingsPanel () {
     slider('Heat Spots', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots),
     slider('Rod Height', 'rod-height', rodHeight, { min: 0, max: 150, step: 5 }, () => defaultRodHeight),
     slider('Rod Spacing', 'rod-spacing', rodSpacing, { min: 20, max: 150, step: 5 }, () => defaultRodSpacing),
-    slider('Conduction', 'conduction', conduction, { min: 0, max: 0.02, step: 0.0005 }, () => defaultConduction),
+    slider('Conduction', 'conduction', conduction, { min: 0, max: 0.04, step: 0.0005 }, () => defaultConduction),
     slider('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace),
     choice('Touch', touchMode, touchModes),
     actionButton('Flow Field', 'flow', showFlow.bindAs(() => showFlow() ? 'Hide Arrows' : 'Show Arrows'), () => showFlow(!showFlow())),

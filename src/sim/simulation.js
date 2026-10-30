@@ -34,8 +34,10 @@ const IDLE_HEAT = 0.6
 // neighbours drift apart in temperature and the hot ones tear out of a blob as droplets. It is
 // a setting because it has a cliff: at 1000 px with 250 particles, 0 gives globs of 58 particles
 // and 587 midline crossings a minute, 0.005 gives 67 and 399, 0.01 gives 112 and 36, and from
-// 0.02 up the lamp is one hovering mass. Where to sit on that slope is a matter of taste.
-const CONDUCTION = 0.005
+// 0.02 up the lamp was one hovering mass. That was with a flat floor; with the heating rods the
+// pool can take in more heat than it sheds, and 0.02 is where Robert set the default ("maximum
+// lava gloopiness").
+const CONDUCTION = 0.02
 // Heat spots (params.heatSpots is the mean seconds between one and the next, 0 for a steady
 // heater). Robert: "it'd be cool if sometimes like 1/2 of the stuff formed one big glob" and
 // "what if we did waves of heating to heat bigger groups of particles at the same time?" A
@@ -63,13 +65,23 @@ const SPOT_CAP = 3
 // it, at ROD_CHARGE of the gap per second, and lava touching it exchanges heat with it at
 // ROD_TRANSFER of the difference a step, scaled by how close it is. The rod holds ROD_MASS
 // particles' worth of heat, so when cold lava settles on a hot run of rods it gets a fast dump
-// that lifts a lump at once, and the rods then take a few seconds to recharge. Contact heating
+// that lifts a lump at once, and the rods then take a few seconds to recharge. A rod is hottest
+// where it meets the floor and ROD_TIP of that at its tip (Robert: "maybe the rods need a
+// vertical gradient? i.e. cooler as it gets further away from the bottom? would mimic like
+// metal pins embedded in the glass"); with a uniform rod the pool floated on a cushion of lava
+// made buoyant at the tips, with a gap of 31 to 36 px under it ("it floats right above the
+// heating rods"), and a tip at a quarter of twice gravity is well below neutral, so the lava
+// has to sink down among the rods to warm up. Heat only flows out of a rod, never into it:
+// with two way flow the cool tips drew heat out of hot lava leaving the pool and the lamp went
+// quiet (115 to 268 midline crossings a minute against 886 for the flat floor; one way, 846).
+// Contact heating
 // at the floor alone adds less heat than the pool sheds, so at high conduction, where the pool
 // is one thermal body, nothing ever lifted (1 to 6 midline crossings a minute at 0.02).
 const ROD_HEAT = 2
 const ROD_CHARGE = 0.3
 const ROD_TRANSFER = 0.1
 const ROD_MASS = 10
+const ROD_TIP = 0.25
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
 // across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
 // gathers it, spin is a tornado under the finger, heat and cool change temperature.
@@ -416,7 +428,9 @@ export function createSimulation ({ width, height, params }) {
         const dx = Math.abs(x[i] - rod.x)
         const distance = y[i] >= rodTop ? dx : Math.hypot(dx, rodTop - y[i])
         if (distance < particleSize) {
-          let flow = ROD_TRANSFER * (1 - distance / particleSize) * (rod.temp - temp[i])
+          const down = Math.max(0, Math.min(1, (y[i] - rodTop) / rodHeight)) // 1 at the base, 0 at the tip
+          const local = rod.temp * (ROD_TIP + (1 - ROD_TIP) * down)
+          let flow = Math.max(0, ROD_TRANSFER * (1 - distance / particleSize) * (local - temp[i]))
           if (temp[i] + flow > maxTemp) flow = maxTemp - temp[i]
           temp[i] += flow
           rod.temp -= flow / ROD_MASS

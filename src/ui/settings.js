@@ -19,7 +19,10 @@ export const defaultRestDensity = 4.25
 export const defaultParticleSize = 30
 // Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
 export const defaultStir = 20
-export const defaultConduction = 0.005
+// Conduction was 0.005 with a flat floor, where 0.02 was the top of the slider and a lamp that never
+// lifted. With the heating rods the top became the lamp Robert wanted ("max needs to be the new mid
+// and default. This is the mechanism we were missing for maximum lava gloopiness").
+export const defaultConduction = 0.02
 export const defaultPace = 0.7
 export const defaultTurbulence = 45
 export const defaultDrifters = 2
