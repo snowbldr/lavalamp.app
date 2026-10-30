@@ -37,8 +37,9 @@ export const defaultHeatColors = {
   heatHot: { r: 255, g: 0, b: 0 },
   heatPeak: { r: 255, g: 255, b: 230 }
 }
-export const defaultFlowSlow = { r: 70, g: 110, b: 255 }
-export const defaultFlowFast = { r: 255, g: 255, b: 255 }
+// Robert's picks for the arrows: blue for the slowest flow through red for the fastest.
+export const defaultFlowSlow = { r: 0, g: 55, b: 255 }
+export const defaultFlowFast = { r: 255, g: 0, b: 0 }
 export const defaultInteractionRadius = 60
 export const defaultStiffness = 4000
 export const defaultStiffnessNear = 25000
