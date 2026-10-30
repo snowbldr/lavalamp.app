@@ -280,7 +280,7 @@ export function start () {
         maxY = Math.max(maxY, sim.floorAt(px))
       }
       const k = Math.min(1, height / (maxY - minY))
-      view = { k, ox: (width - width * k) / 2, oy: -minY * k, ceilingAt: sim.ceilingAt, floorAt: sim.floorAt }
+      view = { k, ox: (width - width * k) / 2, oy: -minY * k, ceilingAt: sim.ceilingAt, floorAt: sim.floorAt, bottles: sim.bottles() }
     }
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view })
     if (profiling) {

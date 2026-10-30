@@ -100,13 +100,42 @@ export function drawFlow (context, width, height, scale, look, flowAt) {
 export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
   context.lineWidth = lineWidth
   context.strokeStyle = 'rgba(236, 236, 236, 0.55)'
-  for (const surface of [view.ceilingAt, view.floorAt]) {
+  // The floor.
+  context.beginPath()
+  for (let px = 0; px <= lampWidth; px += 4) {
+    const py = view.floorAt(px)
+    if (px === 0) context.moveTo(px, py)
+    else context.lineTo(px, py)
+  }
+  context.stroke()
+  // The ceiling: the lip line with a mouth per bottle, and each bottle's neck and bulb.
+  const bottles = view.bottles || []
+  if (bottles.length) {
+    const lipY = bottles[0].lipY
+    const sorted = [...bottles].sort((p, q) => p.cx - q.cx)
     context.beginPath()
-    for (let px = 0; px <= lampWidth; px += 4) {
-      const py = surface(px)
-      if (px === 0) context.moveTo(px, py)
-      else context.lineTo(px, py)
+    let at = 0
+    for (const b of sorted) {
+      context.moveTo(at, lipY)
+      context.lineTo(b.cx - b.w, lipY)
+      at = b.cx + b.w
     }
+    context.moveTo(at, lipY)
+    context.lineTo(lampWidth, lipY)
+    context.stroke()
+    for (const b of sorted) {
+      const angle = Math.asin(Math.min(1, b.w / b.R)) // from straight down to the neck junction
+      context.beginPath()
+      context.moveTo(b.cx - b.w, lipY)
+      context.lineTo(b.cx - b.w, b.neckTop)
+      context.arc(b.cx, b.cy, b.R, Math.PI / 2 + angle, Math.PI / 2 - angle, false)
+      context.lineTo(b.cx + b.w, lipY)
+      context.stroke()
+    }
+  } else {
+    context.beginPath()
+    context.moveTo(0, view.ceilingAt(0))
+    context.lineTo(lampWidth, view.ceilingAt(lampWidth))
     context.stroke()
   }
   context.setLineDash([6 * lineWidth, 6 * lineWidth])

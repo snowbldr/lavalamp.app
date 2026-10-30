@@ -33,12 +33,13 @@ disc around it, the way a finger on Heat does, so a lump of the pool warms at on
 wind on a weather map, and Heat Map colours the lava by temperature like a weather map, with a
 a Heater switch shows the heater strip and its elements along the floor in either view.
 
-The ceiling is a row of tall oval cups, laid out once in random sizes and sitting above the screen with
-only their bottom lips showing, like the cap on a real lamp, so a glob that reaches the top rises into
-a cup and keeps its shape while it cools instead of spreading into a sheet and falling as a strip
-(Cups, in Physics, is their depth as a fraction of their width; 0 is a flat ceiling). The floor has
-shallower hidden cups too, holding a cold reserve of lava under the visible pool. Where two cups meet
-the surface is rounded off, so nothing catches on the point. The Cups switch in the menu pulls the
+The ceiling is a row of bottles hanging above the screen, like the cap on a real lamp: each cup is a
+mouth in a flat lip line just below the top edge, a neck of its own random length, and a round bulb
+above, so a glob that reaches the top rises through the mouth, gathers in the bulb while it is hot,
+cools as a glob and falls back out whole instead of spreading into a sheet and falling as a strip
+(Cups, in Physics, scales the bulbs; 0 is a flat ceiling). The floor has shallow hidden cups too,
+holding a cold reserve of lava under the visible pool, and each one is a heating element.
+The Cups switch in the menu pulls the
 whole lamp into frame, hidden parts and all, with the cup outlines and the screen edge drawn over it.
 
 Rendering is the metaball trick, on the GPU: soft discs composited into a texture, then one WebGL pass

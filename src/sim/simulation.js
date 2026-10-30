@@ -97,6 +97,18 @@ const SPOT_CAP = 3
 const CUP_WIDTH = [0.3, 0.08] // mean, deviation
 const CUP_WIDTH_RANGE = [0.2, 0.45]
 const CUP_LIP = 0.04
+// The ceiling cups are bottles (Robert, on lava still spreading thin over the cups and coming
+// down as wavy sheets: "What if we did like globular cups. So it'd be like an upside down
+// spherical bottle with a spout. we'd want a widish spout so it doesn't stream out and globs
+// out", and "we could also make the spouts varying length, so then we could actually overlap
+// big bottles with small bottles"). Each cup is a mouth in the flat lip line, BOTTLE_MOUTH of
+// the cup's half width either side, a neck BOTTLE_NECK of the shorter side long (drawn per
+// bottle), and a round bulb above it as wide as the cup (radius = half width x cupDepth). A
+// glob rises through the mouth, gathers in the bulb while it is hot, cools as a glob and falls
+// back out through the mouth. Containment is "inside some bottle, or below the lip", so bulbs
+// at different heights may overlap.
+const BOTTLE_MOUTH = 0.6
+const BOTTLE_NECK = [0.05, 0.4]
 // Cups in the floor too, hidden below the screen like the base of the lamp (Robert: "what if,
 // we have hidden cups on the bottom too? that would fix the sheets shooting up. we would want
 // enough lava to fill all the cups and still leave a visible layer on the bottom that's
@@ -187,7 +199,7 @@ export function createSimulation ({ width, height, params }) {
   // plus their lit state { heat, start, life } while lit.
   const elements = []
   // The ceiling cups, laid out once: { fx, fw } centre and width as fractions of the width.
-  const cups = []
+  const cups = [] // the ceiling: { fx, fw, fn } centre and width as fractions of the width, neck as a fraction of the shorter side
   const floorCups = [] // same shape, for the floor
   let kicked = false // whether the kick-off lighting has happened
   let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
@@ -634,10 +646,10 @@ export function createSimulation ({ width, height, params }) {
     const { x, y } = state
     if (x[i] < 0) x[i] = 0
     else if (x[i] > width) x[i] = width
-    const top = cupDepthNow > 0 ? ceilingAt(x[i]) : 0
     const bottom = cupDepthNow > 0 ? floorAt(x[i]) : height
-    if (y[i] < top) y[i] = top
-    else if (y[i] > bottom) y[i] = bottom
+    if (y[i] > bottom) y[i] = bottom
+    else if (cupDepthNow > 0) containCeiling(i)
+    else if (y[i] < 0) y[i] = 0
   }
 
   // Lay the cups across the ceiling once (see CUP_WIDTH): bell curve widths, then all scaled so
@@ -674,13 +686,69 @@ export function createSimulation ({ width, height, params }) {
     let at = 0
     for (const w of widths) {
       const fw = w / total
-      into.push({ fx: at + fw / 2, fw })
+      into.push({ fx: at + fw / 2, fw, fn: randomRange(...BOTTLE_NECK) })
       at += fw
     }
   }
 
+  // The ceiling bottles in px for this lamp: mouth half width w at the lip line, neck up to
+  // neckTop, bulb of radius R centred at cy. The bulb meets the neck where its width is the mouth's.
+  function bottles () {
+    const shorter = Math.min(width, height)
+    const lipY = CUP_LIP * shorter
+    const out = []
+    if (cupDepthNow <= 0) return out
+    for (const cup of cups) {
+      const a = cup.fw * width / 2
+      const R = a * cupDepthNow
+      const w = Math.min(BOTTLE_MOUTH * a, R * 0.95)
+      const neckTop = lipY - cup.fn * shorter
+      const cy = neckTop - Math.sqrt(Math.max(0, R * R - w * w))
+      out.push({ cx: cup.fx * width, lipY, w, neckTop, cy, R })
+    }
+    return out
+  }
+  let bottleCache = null
+  let bottleKey = ''
+  function currentBottles () {
+    const key = `${width}/${height}/${cupDepthNow}/${cups.length}`
+    if (key !== bottleKey) { bottleKey = key; bottleCache = bottles() }
+    return bottleCache
+  }
+
+  // Keep a particle above the lip line inside some bottle: if it is in none, move it the shortest
+  // way into one (sideways into a neck, in to a bulb's rim) or down to the lip, whichever is nearer.
+  function containCeiling (i) {
+    const { x, y } = state
+    const list = currentBottles()
+    const lipY = list.length ? list[0].lipY : 0
+    if (y[i] >= lipY) return
+    let bestD = lipY - y[i]
+    let bestX = x[i]
+    let bestY = lipY
+    for (const b of list) {
+      const dx = x[i] - b.cx
+      if (Math.abs(dx) > b.R + 1) continue
+      // Inside the neck or the bulb: nothing to do.
+      if (y[i] >= b.neckTop && Math.abs(dx) <= b.w) return
+      const dy = y[i] - b.cy
+      const dist = Math.sqrt(dx * dx + dy * dy)
+      if (dist <= b.R) return
+      // Candidate: sideways into the neck.
+      if (y[i] >= b.neckTop) {
+        const nx = b.cx + Math.sign(dx) * b.w
+        const d = Math.abs(nx - x[i])
+        if (d < bestD) { bestD = d; bestX = nx; bestY = y[i] }
+      }
+      // Candidate: in to the bulb's rim.
+      const d = dist - b.R
+      if (d < bestD) { bestD = d; bestX = b.cx + dx / dist * b.R; bestY = b.cy + dy / dist * b.R }
+    }
+    x[i] = bestX
+    y[i] = bestY
+  }
+
   // Smoothed height tables for the ceiling and floor, rebuilt when the lamp or the depth changes.
-  let ceilingTable = null
   let floorTable = null
   let tableKey = ''
   function buildTables () {
@@ -700,7 +768,6 @@ export function createSimulation ({ width, height, params }) {
       }
       return out
     }
-    ceilingTable = smooth(raw(rawCeilingAt))
     floorTable = smooth(raw(rawFloorAt))
   }
   const lookup = (table, px) => {
@@ -726,17 +793,36 @@ export function createSimulation ({ width, height, params }) {
     return height + depth * Math.sqrt(Math.max(0, 1 - u * u))
   }
 
-  // The smoothed surfaces (see CUP_ROUND). Positive is down.
+  // The ceiling's height above a point for the Cups view: the top of the highest bottle whose
+  // bulb spans it, else the lip. Positive is down.
   function ceilingAt (px) {
-    buildTables()
-    return lookup(ceilingTable, px)
+    const list = currentBottles()
+    let top = list.length ? list[0].lipY : 0
+    for (const b of list) if (Math.abs(px - b.cx) <= b.R) top = Math.min(top, b.cy - b.R)
+    return top
   }
 
+  // The smoothed floor (see CUP_ROUND). Positive is down.
   function floorAt (px) {
     buildTables()
     return lookup(floorTable, px)
   }
 
+  // The area of all the floor cups together, in square px: half ellipses.
+  function floorCupArea () {
+    let area = 0
+    for (const cup of floorCups) {
+      const a = cup.fw * width / 2
+      const depth = FLOOR_CUP_SHARE * cupDepthNow * cup.fw * width
+      const inside = cup.fx <= 0 || cup.fx >= 1 ? 0.5 : 1 // the end cups straddle the walls
+      area += inside * Math.PI * a * depth / 2
+    }
+    return area
+  }
+
+  // The ceiling's height at a point: the cup lips at CUP_LIP of the shorter side below the top
+  // edge, rising (to negative y, above the screen) on a half ellipse to cupDepth of the cup's
+  // width above the lip at the centre. Positive is down.
   // The area of all the floor cups together, in square px: half ellipses.
   function floorCupArea () {
     let area = 0
@@ -771,6 +857,7 @@ export function createSimulation ({ width, height, params }) {
     heaterElements,
     ceilingAt,
     floorAt,
+    bottles: currentBottles,
     get state () { return state },
     get count () { return alive },
     get width () { return width },
