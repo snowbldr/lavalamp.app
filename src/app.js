@@ -17,6 +17,8 @@ import {
   defaultMaxTemp,
   defaultParticleCount,
   gravityStrength,
+  rodHeight,
+  rodSpacing,
   heatSpots,
   highlightColor,
   interactionRadius,
@@ -80,6 +82,8 @@ export function start () {
   mirror(turbulence, params, 'turbulence')
   mirror(drifters, params, 'drifters')
   mirror(heatSpots, params, 'heatSpots')
+  mirror(rodHeight, params, 'rodHeight')
+  mirror(rodSpacing, params, 'rodSpacing')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
@@ -222,7 +226,7 @@ export function start () {
       shown.y[i] = previous.y[i] + (y[i] - previous.y[i]) * due
     }
     shown.temp = sim.state.temp
-    renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, neutral: params.gravity })
+    renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, rods: sim.heaterRods, neutral: params.gravity })
     requestAnimationFrame(frame)
   }
 

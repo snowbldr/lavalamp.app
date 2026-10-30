@@ -28,7 +28,10 @@ little goes a long way. On load the lava appears warm and settled on the floor a
 the centre of the base outward, so the first thing to lift is one big glob from the middle. Once warm, the heater is a few hot spots at random
 places along the floor, mostly near the middle, each with its own size, power and life (Heat Spots is the
 seconds between them, 0 for a steady heater), so a big stretch of the pool heats together and lifts as
-one glob. Pace runs the whole lamp in slow motion, and two buttons in the menu are ways of looking: Flow Field draws the stirring as arrows, like
+one glob. The heater itself is a row of heating rods standing up from the floor, like the coil in a real
+lamp: each rod stores heat, charging slowly from the heater under it and dumping it fast into lava that
+touches it, so a lit run of rods warms a lump of the pool at once instead of a line along its bottom
+(Rod Height and Rod Spacing, in pixels; height 0 is a flat floor). Pace runs the whole lamp in slow motion, and two buttons in the menu are ways of looking: Flow Field draws the stirring as arrows, like
 wind on a weather map, and Heat Map colours the lava by temperature like an infrared camera, with a
 strip along the floor for the heater.
 

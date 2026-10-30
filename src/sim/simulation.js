@@ -55,6 +55,21 @@ const SPOT_PEAK = [1.2, 2.5] // times normal power, above the base
 const SPOT_LIFE = [10, 40] // seconds
 const SPOT_BASE = 0.2
 const SPOT_CAP = 3
+// Heating rods: the coil in a real lamp, as a row of elements standing up from the floor
+// (Robert: "heating element rods that stuck up from the bottom and heated the globs around it
+// ... spaced every 1/4 to half inch, then multiple contiguous elements could be lit up at a time
+// to heat larger areas", and on the coil: "It's a heat battery to heat bigger globs at a time").
+// Each rod stores heat: it charges toward ROD_HEAT times gravity times the heater power under
+// it, at ROD_CHARGE of the gap per second, and lava touching it exchanges heat with it at
+// ROD_TRANSFER of the difference a step, scaled by how close it is. The rod holds ROD_MASS
+// particles' worth of heat, so when cold lava settles on a hot run of rods it gets a fast dump
+// that lifts a lump at once, and the rods then take a few seconds to recharge. Contact heating
+// at the floor alone adds less heat than the pool sheds, so at high conduction, where the pool
+// is one thermal body, nothing ever lifted (1 to 6 midline crossings a minute at 0.02).
+const ROD_HEAT = 2
+const ROD_CHARGE = 0.3
+const ROD_TRANSFER = 0.1
+const ROD_MASS = 10
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
 // across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
 // gathers it, spin is a tornado under the finger, heat and cool change temperature.
@@ -92,7 +107,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, rodHeight, rodSpacing
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -105,6 +120,7 @@ export function createSimulation ({ width, height, params }) {
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
   const spots = []
   let nextSpot = 0
+  const rods = [] // heating elements: { x, temp, height }
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -318,7 +334,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, rodHeight = 0, rodSpacing = 40 } = params
     ensureCapacity(particleCount)
     fill(particleCount)
     stirEddies(dt, turbulence, drifters)
@@ -359,6 +375,21 @@ export function createSimulation ({ width, height, params }) {
       return p < IDLE_HEAT ? IDLE_HEAT : p > 1 ? 1 : p
     }
     heaterPower = powerAt
+    // Heating elements (see ROD_HEAT): rods rodHeight px tall standing up from the floor every
+    // rodSpacing px, each charging toward the heater power under it. rodHeight 0 is a flat floor.
+    const rodCount = rodHeight > 0 ? Math.max(1, Math.round(width / rodSpacing)) : 0
+    if (rods.length !== rodCount) {
+      rods.length = 0
+      const gap = width / rodCount
+      for (let k = 0; k < rodCount; k++) rods.push({ x: gap * (k + 0.5), temp: SPAWN_HEAT * gravity, height: rodHeight })
+    }
+    const charge = Math.min(1, ROD_CHARGE * dt)
+    for (let k = 0; k < rodCount; k++) {
+      const rod = rods[k]
+      rod.height = rodHeight
+      rod.temp += (ROD_HEAT * gravity * powerAt(rod.x) - rod.temp) * charge
+    }
+    const rodTop = height - rodHeight
     const { x, y, vx, vy, temp } = state
     const fx = impulse[0]
     const fy = impulse[1]
@@ -380,6 +411,17 @@ export function createSimulation ({ width, height, params }) {
     hash.clear()
     for (let i = 0; i < alive; i++) {
       temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]))
+      if (rodCount > 0 && y[i] > rodTop - particleSize) {
+        const rod = rods[Math.max(0, Math.min(rodCount - 1, Math.floor(x[i] / width * rodCount)))]
+        const dx = Math.abs(x[i] - rod.x)
+        const distance = y[i] >= rodTop ? dx : Math.hypot(dx, rodTop - y[i])
+        if (distance < particleSize) {
+          let flow = ROD_TRANSFER * (1 - distance / particleSize) * (rod.temp - temp[i])
+          if (temp[i] + flow > maxTemp) flow = maxTemp - temp[i]
+          temp[i] += flow
+          rod.temp -= flow / ROD_MASS
+        }
+      }
       if (touching) {
         const heat = touchAt(x[i], y[i], dt, maxTemp, finger)
         if (heat !== 0) temp[i] = Math.max(0, Math.min(maxTemp, temp[i] + heat))
@@ -423,6 +465,11 @@ export function createSimulation ({ width, height, params }) {
     return heaterPower(px)
   }
 
+  // The heating rods, { x, temp, height }, for drawing the heat map.
+  function heaterRods () {
+    return rods
+  }
+
   // The stirring velocity (convection roll, eddies and fingers) at a point, for drawing the flow
   // field.
   function flowAt (px, py) {
@@ -458,6 +505,7 @@ export function createSimulation ({ width, height, params }) {
     transform,
     flowAt,
     heaterAt,
+    heaterRods,
     get state () { return state },
     get count () { return alive },
     get width () { return width },

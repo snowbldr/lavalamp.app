@@ -8,13 +8,16 @@ export const REFERENCE_HEIGHT = 1000
 // Particles below this fraction of the height are over the heater.
 export const HEAT_ZONE = 0.8
 
+
 // Temperature is in the same units as vertical velocity, pixels per second. A particle rises exactly
 // as fast as it is hot and gravity pulls it down at a fixed rate, so neutral buoyancy is temp == gravity.
 // That is the overdamped (Stokes) regime, which is the right one for wax in oil.
 //
-// Heating is effectively contact heating. The 1/distance term is swamped by cooling everywhere except
-// within a few pixels of the floor, where the squared bonus for touching takes over.
-// `power` scales the heater, 0 to 1; on load it is a front spreading from the centre of the floor.
+// `power` scales the heater at the floor, 0 to 1 normally, up to 3 under a heat spot; on load it
+// is a front spreading from the centre of the floor. Heating is contact heating: a 1/distance
+// term that cooling swamps everywhere except within a few pixels of the floor, where the squared
+// bonus for touching takes over. That only ever warms the bottom row; the heating rods in the
+// simulation are what reach up into the pool.
 export function nextTemperature (temp, y, height, maxTemp, particleSize, power = 1) {
   if (temp > 0) {
     temp -= randomNormalDistribution(0.25, 2.75, 1.8) * (height / REFERENCE_HEIGHT)

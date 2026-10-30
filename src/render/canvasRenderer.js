@@ -45,8 +45,8 @@ export function createCanvasRenderer (canvas, look) {
     highlightHeight = Math.max(1, Math.round(HIGHLIGHT_HEIGHT * scale))
   }
 
-  // `overlays` is { flowAt, heaterAt, neutral }: the stirring velocity at a window point, the heater
-  // power under a floor point, and the temperature of neutral buoyancy, for the flow field and heat
+  // `overlays` is { flowAt, heaterAt, rods, neutral }: the stirring velocity at a window point, the
+  // heater power under a floor point, the heating rods, and the temperature of neutral buoyancy, for the flow field and heat
   // map when look.showFlow or look.showHeat is set. `state.temp` is needed for the heat map.
   function render (state, count, overlays = {}) {
     const { r, g, b } = look.lavaColor
@@ -76,7 +76,7 @@ export function createCanvasRenderer (canvas, look) {
     threshold(pix)
     if (!heat) highlight(pix, look.highlightColor)
     context.putImageData(imageData, 0, 0)
-    if (heat && overlays.heaterAt) drawHeater(overlays.heaterAt)
+    if (heat && overlays.heaterAt) drawHeater(overlays.heaterAt, overlays.rods ? overlays.rods() : [], overlays.neutral)
     if (look.showFlow && overlays.flowAt) drawFlow(overlays.flowAt)
   }
 
@@ -107,7 +107,8 @@ export function createCanvasRenderer (canvas, look) {
 
   // A strip along the floor coloured by the heater power under each column: dark where the
   // heater is off, white hot at the peak of the wave. Normal power sits at the middle of the palette.
-  function drawHeater (heaterAt) {
+  // The heating rods stand on the strip, coloured by their stored temperature on the lava's scale.
+  function drawHeater (heaterAt, rods, neutral) {
     const strip = Math.max(2, Math.round(HEAT_STRIP * scale))
     const cell = Math.max(1, Math.round(4 * scale))
     for (let x = 0; x < width; x += cell) {
@@ -115,6 +116,12 @@ export function createCanvasRenderer (canvas, look) {
       const [r, g, b] = heatColor(power / 2)
       context.fillStyle = `rgb(${r},${g},${b})`
       context.fillRect(x, height - strip, cell, strip)
+    }
+    const rodWidth = Math.max(1, Math.round(3 * scale))
+    for (const rod of rods) {
+      const [r, g, b] = heatColor(rod.temp / (2 * neutral))
+      context.fillStyle = `rgb(${r},${g},${b})`
+      context.fillRect(Math.round(rod.x * scale - rodWidth / 2), Math.round(height - rod.height * scale), rodWidth, Math.round(rod.height * scale))
     }
   }
 
