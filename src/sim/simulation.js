@@ -41,7 +41,7 @@ const CONDUCTION = 0.005
 // and moves the lava around without squashing it. The gap between eddies, their size and their
 // life are drawn from these ranges; `turbulence` in params is the peak speed in px/s.
 const EDDY_GAP = [6, 18] // seconds between one eddy starting and the next, at low turbulence
-const EDDY_MAX = 60 // the slider's top; the gap shrinks to a quarter there ("more frequent at the highest setting")
+const EDDY_MAX = 150 // the slider's top; the gap shrinks to a quarter there ("more frequent at the highest setting")
 const EDDY_RADIUS = [0.15, 0.3] // of the shorter side of the lamp
 const EDDY_LIFE = [4, 10] // seconds
 const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated speed
@@ -51,6 +51,13 @@ const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated
 const DRIFT_SPEED = [30, 90] // px/s
 const DRIFT_LIFE = [12, 30] // seconds
 const DRIFT_GAP = [2, 6] // seconds between one dying and the next being born
+// A drifter is shaped like a little tornado rather than a soft eddy: solid rotation inside a
+// core of DRIFT_CORE px, then falling off as one over distance so the arrows wrap around it from
+// far away, cut off smoothly at DRIFT_REACH of the lamp's shorter side. Its peak speed at the
+// edge of the core is DRIFT_GAIN times the turbulence setting.
+const DRIFT_CORE = [40, 80]
+const DRIFT_REACH = 0.4
+const DRIFT_GAIN = 2.5
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
@@ -106,14 +113,16 @@ export function createSimulation ({ width, height, params }) {
     // Stronger turbulence is also more frequent: the gap scales from 1 at zero to 1/4 at the top.
     const pace = 1 - 0.75 * Math.min(1, Math.abs(turbulence) / EDDY_MAX)
     if (drifting.length < drifters && time >= nextDrifter) {
-      const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
+      const core = randomRange(...DRIFT_CORE)
+      const radius = DRIFT_REACH * Math.min(width, height)
       const speed = randomRange(...DRIFT_SPEED)
       const heading = randomRange(0, 2 * Math.PI)
       drifting.push({
-        x: randomRange(radius / 2, width - radius / 2),
-        y: randomRange(radius / 2, height - radius / 2),
+        x: randomRange(core, width - core),
+        y: randomRange(core, height - core),
         vx: speed * Math.cos(heading),
         vy: speed * Math.sin(heading),
+        core,
         radius,
         spin: Math.random() < 0.5 ? -1 : 1,
         start: time,
@@ -130,7 +139,7 @@ export function createSimulation ({ width, height, params }) {
       }
       e.x += e.vx * dt
       e.y += e.vy * dt
-      const half = e.radius / 2
+      const half = e.core
       if (e.x < half) { e.x = half; e.vx = Math.abs(e.vx) } else if (e.x > width - half) { e.x = width - half; e.vx = -Math.abs(e.vx) }
       if (e.y < half) { e.y = half; e.vy = Math.abs(e.vy) } else if (e.y > height - half) { e.y = height - half; e.vy = -Math.abs(e.vy) }
     }
@@ -168,14 +177,19 @@ export function createSimulation ({ width, height, params }) {
     }
     for (let k = 0; k < drifting.length; k++) {
       const e = drifting[k]
-      const dx = (px - e.x) / e.radius
-      const dy = (py - e.y) / e.radius
+      const dx = px - e.x
+      const dy = py - e.y
+      const r = Math.hypot(dx, dy)
+      if (r === 0) continue
       const age = time - e.start
       // A second to spin up, then dying away to nothing.
       const envelope = Math.min(1, age) * (1 - age / e.life)
-      const f = e.spin * strength / EDDY_PEAK * envelope * Math.exp(-(dx * dx + dy * dy))
-      out[0] += -dy * f
-      out[1] += dx * f
+      // Speed: rising linearly to the peak at the core's edge, then 2 r rc / (r^2 + rc^2),
+      // which is one over distance in the tail, inside a Gaussian cutoff at the reach.
+      const q = r / e.core
+      const speed = DRIFT_GAIN * strength * envelope * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
+      out[0] += -dy / r * speed * e.spin
+      out[1] += dx / r * speed * e.spin
     }
   }
 

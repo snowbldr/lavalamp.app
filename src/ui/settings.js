@@ -21,7 +21,7 @@ export const defaultParticleSize = 30
 export const defaultStir = 20
 export const defaultConduction = 0.005
 export const defaultPace = 0.7
-export const defaultTurbulence = 15
+export const defaultTurbulence = 45
 export const defaultDrifters = 2
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))

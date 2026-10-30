@@ -6,9 +6,10 @@ const ALPHA_THRESHOLD = 70
 // resolution took 108 ms a frame. The stretch softens the blob edges by a pixel or two, which
 // lava can afford.
 const PIXEL_BUDGET = 1_000_000
-// The flow overlay: arrows on a grid this many window pixels apart, the fastest flow on screen
-// drawn as an arrow reaching most of the way to the next.
-const FLOW_SPACING = 80
+// The flow overlay: arrows on a grid this many window pixels apart. Length saturates: the
+// typical (median) speed on screen draws at half the cell, and the fastest tends toward most of
+// it, so a tornado reads as the strongest thing without shrinking the roll around it to dots.
+const FLOW_SPACING = 40
 
 // Draws the particles as soft discs, thresholds the alpha channel so that overlapping discs fuse
 // into one blob (the classic metaball trick), then lights the underside of every blob with a short
@@ -60,19 +61,22 @@ export function createCanvasRenderer (canvas, look) {
     const step = FLOW_SPACING * scale
     const reach = step * 0.8
     const samples = []
-    let fastest = 0
+    const speeds = []
     for (let y = step / 2; y < height; y += step) {
       for (let x = step / 2; x < width; x += step) {
         const [vx, vy] = flowAt(x / scale, y / scale)
         const speed = Math.hypot(vx, vy)
-        if (speed > fastest) fastest = speed
         samples.push(x, y, vx, vy, speed)
+        speeds.push(speed)
       }
     }
+    speeds.sort((a, b) => a - b)
+    const typical = speeds[speeds.length >> 1]
+    const fastest = speeds[speeds.length - 1]
     if (fastest < 0.5) return
     context.strokeStyle = 'rgba(255, 255, 255, 0.6)'
     context.fillStyle = 'rgba(255, 255, 255, 0.6)'
-    context.lineWidth = Math.max(1, 1.5 * scale)
+    context.lineWidth = 1
     for (let k = 0; k < samples.length; k += 5) {
       const x = samples[k]
       const y = samples[k + 1]
@@ -81,7 +85,7 @@ export function createCanvasRenderer (canvas, look) {
       const speed = samples[k + 4]
       {
         if (speed < fastest * 0.02) continue
-        const length = reach * speed / fastest
+        const length = reach * speed / (speed + typical)
         const ux = vx / speed
         const uy = vy / speed
         const tipX = x + ux * length / 2
@@ -90,7 +94,7 @@ export function createCanvasRenderer (canvas, look) {
         context.moveTo(x - ux * length / 2, y - uy * length / 2)
         context.lineTo(tipX, tipY)
         context.stroke()
-        const head = Math.min(6 * scale, length / 2)
+        const head = Math.min(5 * scale, length / 2)
         context.beginPath()
         context.moveTo(tipX, tipY)
         context.lineTo(tipX - ux * head - uy * head / 2, tipY - uy * head + ux * head / 2)
