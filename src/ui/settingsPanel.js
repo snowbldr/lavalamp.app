@@ -7,6 +7,10 @@ import {
   defaultConduction,
   defaultCupDepth,
   defaultWobble,
+  defaultSmooth,
+  smooth,
+  defaultSettle,
+  settle,
   defaultDrifters,
   defaultHeatSpots,
   defaultPace,
@@ -175,7 +179,11 @@ export function createSettingsPanel () {
         knob('Turb', 'turbulence', turbulence, { min: 0, max: 150, step: 1 }, () => defaultTurbulence),
         knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters),
         knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
-        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02 }, () => defaultWobble, seconds)
+        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02 }, () => defaultWobble, seconds),
+        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth)
+      ),
+      knobs(
+        knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle)
       ),
       hint(help, [
         ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
@@ -189,7 +197,9 @@ export function createSettingsPanel () {
         ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
         ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
         ['Bottles', 'How big the bottles above and the pots below are, as a fraction of their width; 0 is a flat ceiling and floor.'],
-        ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.']
+        ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.'],
+        ['Smooth', 'Rounds off the bumps along every edge by blurring the lava field before it is cut, by this many pixels. 0 is the raw metaballs.'],
+        ['Settle', 'Pressure passes per frame. 2 spaces the particles more evenly so the surface is less bumpy, for most of a step\'s time again.']
       ])
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),

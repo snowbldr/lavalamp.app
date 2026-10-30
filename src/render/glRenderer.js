@@ -15,6 +15,11 @@ const ALPHA_THRESHOLD = 70 // of 255, as in the canvas renderer
 const PIXEL_BUDGET = 1_000_000
 const HEAT_STEPS = 48
 const MAX_HIGHLIGHT = 32 // shader loop bound, in bitmap pixels
+// The smoothing pass: a separable Gaussian blur of the density field before the threshold, so
+// the bumps of the individual discs round off before the edge is cut (Robert: "mainly just that
+// rough edge... could we do like an edge smoothing pass like we did with the highlight?").
+// look.smooth is its radius in lamp px, 0 for none. MAX_BLUR bounds the shader loop, in bitmap px.
+const MAX_BLUR = 24
 
 const PARTICLE_VERTEX = `
 attribute vec2 aCentre;
@@ -40,6 +45,24 @@ void main () {
   float a = max(0.0, 1.0 - length(vCorner));
   gl_FragColor = vec4(vColor * a, a);
 }`
+const BLUR_FRAGMENT = `
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uSource;
+uniform vec2 uStep;
+uniform float uRadius;
+void main () {
+  float sigma = max(0.5, uRadius * 0.5);
+  vec4 sum = texture2D(uSource, vUv);
+  float total = 1.0;
+  for (int j = 1; j <= ${MAX_BLUR}; j++) {
+    if (float(j) > uRadius) break;
+    float w = exp(-float(j) * float(j) / (2.0 * sigma * sigma));
+    sum += (texture2D(uSource, vUv + uStep * float(j)) + texture2D(uSource, vUv - uStep * float(j))) * w;
+    total += 2.0 * w;
+  }
+  gl_FragColor = sum / total;
+}`
 const QUAD_VERTEX = `
 attribute vec2 aPosition;
 varying vec2 vUv;
@@ -49,13 +72,16 @@ void main () {
 }`
 // Threshold, then highlight: a pixel j below this one that is solid with a transparent pixel (or
 // the floor row) under it is a bottom edge, and this pixel takes 1 - j / steps of the highlight
-// colour from the lowest such edge within reach, which is what the canvas pass painted.
+// colour from the lowest such edge within reach, which is what the canvas pass painted. The cut
+// is a smoothstep uSoft wide in alpha, about a pixel at the edge, so the outline is antialiased
+// rather than a staircase.
 const COMPOSITE_FRAGMENT = `
 precision mediump float;
 varying vec2 vUv;
 uniform sampler2D uAccum;
 uniform vec2 uTexel;
 uniform float uThreshold;
+uniform float uSoft;
 uniform vec3 uLava;
 uniform vec3 uHighlight;
 uniform float uSteps;
@@ -63,7 +89,8 @@ uniform float uHeat;
 uniform float uRows;
 void main () {
   vec4 c = texture2D(uAccum, vUv);
-  if (c.a <= uThreshold) { gl_FragColor = vec4(0.0); return; }
+  float coverage = smoothstep(uThreshold - uSoft, uThreshold + uSoft, c.a);
+  if (coverage <= 0.0) { gl_FragColor = vec4(0.0); return; }
   vec3 rgb = uHeat > 0.5 ? c.rgb / c.a : uLava;
   if (uHeat < 0.5) {
     float amount = 0.0;
@@ -79,7 +106,7 @@ void main () {
     }
     rgb = mix(rgb, uHighlight, amount);
   }
-  gl_FragColor = vec4(rgb, 1.0);
+  gl_FragColor = vec4(rgb * coverage, coverage);
 }`
 
 export function createGlRenderer (canvas, look) {
@@ -103,13 +130,15 @@ export function createGlRenderer (canvas, look) {
   }
   const particles = link(PARTICLE_VERTEX, PARTICLE_FRAGMENT)
   const composite = link(QUAD_VERTEX, COMPOSITE_FRAGMENT)
+  const blur = link(QUAD_VERTEX, BLUR_FRAGMENT)
   const loc = (program, names) => {
     const out = {}
     for (const n of names) out[n] = n[0] === 'a' ? gl.getAttribLocation(program, n) : gl.getUniformLocation(program, n)
     return out
   }
   const pLoc = loc(particles, ['aCentre', 'aCorner', 'aColor', 'uResolution', 'uSize'])
-  const cLoc = loc(composite, ['aPosition', 'uAccum', 'uTexel', 'uThreshold', 'uLava', 'uHighlight', 'uSteps', 'uHeat', 'uRows'])
+  const cLoc = loc(composite, ['aPosition', 'uAccum', 'uTexel', 'uThreshold', 'uSoft', 'uLava', 'uHighlight', 'uSteps', 'uHeat', 'uRows'])
+  const bLoc = loc(blur, ['aPosition', 'uSource', 'uStep', 'uRadius'])
 
   // Particle vertices: six per particle, each centre x, y, corner x, y, colour r, g, b.
   const STRIDE = 7
@@ -119,14 +148,21 @@ export function createGlRenderer (canvas, look) {
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
 
-  // The accumulation texture and its framebuffer, resized with the canvas.
-  const accum = gl.createTexture()
-  const framebuffer = gl.createFramebuffer()
-  gl.bindTexture(gl.TEXTURE_2D, accum)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  // The accumulation texture and its framebuffer, resized with the canvas, and a second pair
+  // the blur ping-pongs through.
+  const makeTarget = () => {
+    const texture = gl.createTexture()
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    return { texture, framebuffer: gl.createFramebuffer() }
+  }
+  const accumTarget = makeTarget()
+  const scratchTarget = makeTarget()
+  const accum = accumTarget.texture
+  const framebuffer = accumTarget.framebuffer
 
   // The overlay: a transparent 2D canvas over this one for the arrows and the heater, following
   // the lamp's size and turn.
@@ -144,7 +180,7 @@ export function createGlRenderer (canvas, look) {
   let lampWidth = 0 // in lamp (window) px
   let lampHeight = 0
   let scale = 1
-  const profile = { discs: 0, composite: 0, overlays: 0 }
+  const profile = { discs: 0, smooth: 0, composite: 0, overlays: 0 }
   const now = () => (look.profile ? performance.now() : 0)
 
   function resize (newWidth, newHeight) {
@@ -159,10 +195,12 @@ export function createGlRenderer (canvas, look) {
     overlay.height = height
     overlay.style.width = canvas.style.width
     overlay.style.height = canvas.style.height
-    gl.bindTexture(gl.TEXTURE_2D, accum)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, accum, 0)
+    for (const target of [accumTarget, scratchTarget]) {
+      gl.bindTexture(gl.TEXTURE_2D, target.texture)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target.texture, 0)
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
 
@@ -237,12 +275,31 @@ export function createGlRenderer (canvas, look) {
     gl.disableVertexAttribArray(pLoc.aColor)
     gl.disableVertexAttribArray(pLoc.aCorner)
     let t1 = now(); profile.discs = t1 - t; t = t1
-    // Pass 2: threshold and highlight, to the screen.
+    gl.disable(gl.BLEND)
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+    // Pass 2, when look.smooth is set: blur the field, across then down.
+    const radius = Math.min(MAX_BLUR, (look.smooth || 0) * view.k * scale)
+    if (radius >= 0.5) {
+      gl.useProgram(blur)
+      gl.enableVertexAttribArray(bLoc.aPosition)
+      gl.vertexAttribPointer(bLoc.aPosition, 2, gl.FLOAT, false, 0, 0)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.uniform1i(bLoc.uSource, 0)
+      gl.uniform1f(bLoc.uRadius, radius)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, scratchTarget.framebuffer)
+      gl.bindTexture(gl.TEXTURE_2D, accum)
+      gl.uniform2f(bLoc.uStep, 1 / width, 0)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+      gl.bindTexture(gl.TEXTURE_2D, scratchTarget.texture)
+      gl.uniform2f(bLoc.uStep, 0, 1 / height)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+    }
+    t1 = now(); profile.smooth = t1 - t; t = t1
+    // Pass 3: threshold and highlight, to the screen.
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, width, height)
-    gl.disable(gl.BLEND)
     gl.useProgram(composite)
-    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
     gl.enableVertexAttribArray(cLoc.aPosition)
     gl.vertexAttribPointer(cLoc.aPosition, 2, gl.FLOAT, false, 0, 0)
     gl.activeTexture(gl.TEXTURE0)
@@ -250,6 +307,9 @@ export function createGlRenderer (canvas, look) {
     gl.uniform1i(cLoc.uAccum, 0)
     gl.uniform2f(cLoc.uTexel, 1 / width, 1 / height)
     gl.uniform1f(cLoc.uThreshold, (ALPHA_THRESHOLD + 0.5) / 255)
+    // About one bitmap pixel of alpha slope at a lone disc's edge, wider when the field is blurred.
+    const sizePx = Math.max(1, look.particleSize * view.k * scale)
+    gl.uniform1f(cLoc.uSoft, Math.min(0.12, Math.max(0.004, 0.7 / sizePx)))
     gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
     const hl = look.highlightColor
     gl.uniform3f(cLoc.uHighlight, hl.r / 255, hl.g / 255, hl.b / 255)

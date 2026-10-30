@@ -225,7 +225,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, settle
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -504,7 +504,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, settle = 1 } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     if (cups.length === 0) layoutCups()
@@ -701,6 +701,23 @@ export function createSimulation ({ width, height, params }) {
         if (speed > limit) { vx[i] *= limit / speed; vy[i] *= limit / speed }
       }
       contain(i)
+    }
+    // Extra relaxation passes (settle > 1): the pressure solver is one sweep a frame, so particle
+    // spacing is never quite even and the outline wears that as bumps. Each further pass evens it
+    // out (skin spacing spread 23% to 13% at two passes in the pinch lab) for about 80% more step
+    // time in the full lamp (4.8 to 8.6 ms at 2439 particles). Robert: "reduce jiggle at the
+    // edges to make the surface less bumpy to begin with? that'd be a physics tuning adjustment,
+    // might be worth a knob". Viscosity (easing each velocity toward the neighbours' mean) was
+    // tried first and roughened the skin instead. No conduction or kick in these passes.
+    for (let pass = 1; pass < settle; pass++) {
+      hash.clear()
+      for (let i = 0; i < alive; i++) hash.add(x[i], y[i], i)
+      for (let i = 0; i < alive; i++) {
+        const neighbours = findNeighbours(state, hash, i, interactionRadius)
+        updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
+        relax(state, i, neighbours, dt, home[i] >= 0 ? RELAX_CAP : Infinity)
+        contain(i)
+      }
     }
     // Applied after the pass so every particle saw the same temperatures.
     for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i])

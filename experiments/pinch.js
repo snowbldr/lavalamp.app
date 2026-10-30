@@ -27,7 +27,9 @@ export function start () {
   // Half the lamp's grain, at Robert's suggestion: "maybe we need a smaller particle size? that
   // should be fine now that we have a much faster render". Same lava, four times the particles.
   const radius = fnstate(30)
+  const settle = fnstate(2) // relaxation passes a frame
   const size = fnstate(15)
+  const smooth = fnstate(8) // edge smoothing radius, px
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
   // had too much momentum taking off from the initial heating. maybe warm the whole bottom first,
   // then gently pulse the heat until it takes off". So: the lamp's own floor heater runs for Warm
@@ -57,6 +59,7 @@ export function start () {
   renderer.resize(W, H)
   const dress = () => {
     look.showHeat = view() === 'heat'
+    look.smooth = smooth()
     if (view() === 'silhouette') {
       look.lavaColor = { r: 10, g: 5, b: 5 }
       look.highlightColor = { r: 60, g: 20, b: 10 }
@@ -82,7 +85,7 @@ export function start () {
     return {
       particleCount: count(), interactionRadius: radius(), stiffness: stiffness(), stiffnessNear: near(), restDensity: density(),
       maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
-      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat()
+      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), settle: settle()
     }
   }
 
@@ -162,11 +165,15 @@ export function start () {
         knob('Density', 'density', density, { min: 0.01, max: 7, step: 0.01 }, () => 4.25, v => Number(v).toFixed(2)),
         knob('Radius', 'radius', radius, { min: 15, max: 100, step: 1 }, () => 30)
       ),
+      knobs(
+        knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => 2)
+      ),
       hint(help, [
         ['Stiff', 'pressure pushing particles apart when they crowd past the rest density.'],
         ['Near', 'the short range push that stops particles stacking; also the surface tension.'],
         ['Density', 'the rest density the pressure aims for: lower is a looser, more stretchy liquid.'],
-        ['Radius', 'how far a particle feels its neighbours, in pixels.']
+        ['Radius', 'how far a particle feels its neighbours, in pixels.'],
+        ['Settle', 'pressure passes per frame. 1 is the lamp; 2 spaces the particles more evenly so the skin is less bumpy to begin with.']
       ])),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
       knobs(
@@ -184,12 +191,14 @@ export function start () {
       knobs(
         knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1 }, () => 20),
         knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 2000, step: 10 }, () => 800),
-        knob('Size', 'size', size, { min: 5, max: 50, step: 1 }, () => 15)
+        knob('Size', 'size', size, { min: 5, max: 50, step: 1 }, () => 15),
+        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => 8)
       ),
       hint(help, [
         ['Heat', 'how hard each pulse heats: temperature added per frame under the finger. 12 is the lamp\'s touch.'],
         ['Max heat', 'the hottest lava can get. Rise speed is heat minus gravity (500), so 800 is a blob that climbs at 300 px/s at most and cools before the ceiling.'],
-        ['Size', 'the drawn radius of a particle, in pixels. Mostly the look; it also sets how close to the floor counts as touching the heater. For finer lava, halve Size and Radius and use four times the Lava.']
+        ['Size', 'the drawn radius of a particle, in pixels. Mostly the look; it also sets how close to the floor counts as touching the heater. For finer lava, halve Size and Radius and use four times the Lava.'],
+        ['Smooth', 'edge smoothing: the lava field is blurred by this many pixels before the edge is cut, which rounds off the bumps of the particles. 0 is the raw metaballs.']
       ]),
       knobs(
         knob('From', 'from', from, { min: 0, max: 30, step: 0.5 }, () => 14, v => `${v} s`),

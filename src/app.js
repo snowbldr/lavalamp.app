@@ -40,6 +40,8 @@ import {
   showHeat,
   showCups,
   showHeater,
+  settle,
+  smooth,
   stiffness,
   stiffnessNear,
   stir,
@@ -93,6 +95,7 @@ export function start () {
   mirror(heatSpots, params, 'heatSpots')
   mirror(cupDepth, params, 'cupDepth')
   mirror(wobble, params, 'wobble')
+  mirror(settle, params, 'settle')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
@@ -109,6 +112,7 @@ export function start () {
   mirror(showHeat, look, 'showHeat')
   mirror(showHeater, look, 'showHeater')
   mirror(showCups, look, 'showCups')
+  mirror(smooth, look, 'smooth')
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
   let edge = 'bottom' // the page edge the lamp's floor sits on

@@ -62,6 +62,13 @@ export const defaultCupDepth = 1
 // Inertia: seconds for a particle's velocity to ease toward its drift. 0 is the overdamped wax the
 // lamp was tuned as; above it, pinched necks snap back and freed blobs wobble.
 export const defaultWobble = 0
+// Edge smoothing: radius in px of the blur on the density field before the metaball threshold,
+// which rounds off the bumps of the individual particles along every edge. 0 is the lamp as
+// drawn before it existed; WebGL only.
+export const defaultSmooth = 0
+// Relaxation passes per frame. 1 is the lamp as tuned; 2 evens the particle spacing so the
+// outline is less bumpy, for most of a step's time again.
+export const defaultSettle = 1
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -93,6 +100,8 @@ export const drifters = fnstate(defaultDrifters)
 export const heatSpots = fnstate(defaultHeatSpots)
 export const cupDepth = fnstate(defaultCupDepth)
 export const wobble = fnstate(defaultWobble)
+export const smooth = fnstate(defaultSmooth)
+export const settle = fnstate(defaultSettle)
 // The random seed: every random number in the lamp comes from it, so the same seed on the same
 // window gives the same lamp. Drawn fresh on each load unless saved, shared or given as ?seed=.
 // Shown in the panel so a lamp worth keeping can be saved. Changing it reloads the page, since
@@ -113,9 +122,9 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, smooth, settle, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -144,6 +153,8 @@ const defaults = () => ({
   heatSpots: defaultHeatSpots,
   cupDepth: defaultCupDepth,
   wobble: defaultWobble,
+  smooth: defaultSmooth,
+  settle: defaultSettle,
   seed: randomSeed()
 })
 
