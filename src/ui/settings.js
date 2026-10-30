@@ -6,7 +6,11 @@ import { notify } from './components.js'
 // One particle per 4000 square px of window. The cap used to be 300, from when the lamp itself stopped
 // at 1000 px square; a full 2560 x 1300 window at 300 particles is a 50 px film of lava.
 export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 4000), 1000)
-export const computeDefaultMaxTemp = height => Math.min(height, 1000)
+// Max temp was min(height, 1000) with the slider running to twice that. With the heating rods and
+// conduction at 0.02 Robert had to run it at the top to get blobs at all ("I think I need to make
+// max temp the new mid same way as conduction"): the rods sit at twice gravity, and a cap at the
+// window height held the lava below the rods' own temperature. The old top is the new default.
+export const computeDefaultMaxTemp = height => Math.min(height * 2, 2000)
 export const computeDefaultGravity = height => Math.min(height / 2, 700)
 
 export const defaultBgColor = { r: 0, g: 0, b: 0 }
