@@ -36,7 +36,7 @@ export function drawHeater (context, width, height, scale, look, heaterAt, eleme
   for (const el of elements) {
     const [r, g, b] = heatColor(look, 0.1 + 0.9 * el.glow)
     const rx = Math.max(6, el.halfWidth * ELEMENT_SHOWN * scale)
-    const ry = Math.max(3, el.radius * ELEMENT_SHOWN * scale)
+    const ry = Math.max(3, Math.min(el.radius * ELEMENT_SHOWN, 24) * scale) // a low dome, whatever the element's reach
     context.fillStyle = `rgb(${r},${g},${b})`
     context.beginPath()
     context.ellipse(el.x * scale, height - strip, rx, ry, 0, Math.PI, 0)
@@ -124,7 +124,7 @@ export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
     context.lineTo(lampWidth, lineY)
     context.stroke()
     for (const b of sorted) {
-      const steps = 12
+      const steps = 24
       context.beginPath()
       // Left wall of the neck from the line to the bulb, then around the bulb, then the right wall back.
       for (let k = 0; k <= steps; k++) {
@@ -133,13 +133,19 @@ export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
         if (k === 0) context.moveTo(px, py)
         else context.lineTo(px, py)
       }
-      const angle = Math.asin(Math.min(1, b.w / b.R))
-      // The bulb's arc away from the neck: for a ceiling bottle (dir -1) the neck joins at the
-      // bottom of the circle, for a floor bottle (dir 1) at the top.
-      // Canvas angles run clockwise (y down): sweeping from join + angle to join - angle the long
-      // way round is clockwise for a bulb above its neck and anticlockwise for one below.
+      // The bulb's outline from the neck's left join the long way round to its right join: the
+      // shape's polar radius, sampled. Canvas angles run clockwise (y down); the join is straight
+      // down from a ceiling bulb's centre and straight up from a floor bulb's.
+      const angle = b.joinAngle !== undefined ? b.joinAngle : Math.asin(Math.min(1, b.w / b.R))
       const join = b.dir < 0 ? Math.PI / 2 : -Math.PI / 2
-      context.arc(b.cx, b.cy, b.R, join + angle, join - angle, b.dir > 0)
+      const samples = 96
+      const start = join + angle
+      const sweep = Math.PI * 2 - 2 * angle // the long way round, increasing, for both rows
+      for (let k = 0; k <= samples; k++) {
+        const theta = start + sweep * k / samples
+        const rr = b.radiusAt ? b.radiusAt(theta) : b.R
+        context.lineTo(b.cx + Math.cos(theta) * rr, b.cy + Math.sin(theta) * rr)
+      }
       for (let k = steps; k >= 0; k--) {
         const py = lineY + (b.neckEnd - lineY) * k / steps
         context.lineTo(b.cx + neckHalf(b, py), py)
@@ -154,6 +160,9 @@ export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
 }
 
 function neckHalf (b, py) {
-  const flare = t => (t < b.r ? b.r - Math.sqrt(Math.max(0, b.r * b.r - (b.r - t) * (b.r - t))) : 0)
-  return b.w + flare(Math.abs(py - b.lineY)) + flare(Math.abs(b.neckEnd - py))
+  const t = Math.abs(py - b.lineY)
+  const mouth = t < b.rm ? b.rm - Math.sqrt(Math.max(0, b.rm * b.rm - (b.rm - t) * (b.rm - t))) : 0
+  const u = (py - b.yf) * b.dir
+  const shoulder = u > 0 ? b.rs - Math.sqrt(Math.max(0, b.rs * b.rs - Math.min(u, b.rs) * Math.min(u, b.rs))) : 0
+  return b.w + mouth + shoulder
 }

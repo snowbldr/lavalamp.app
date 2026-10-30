@@ -124,10 +124,26 @@ const BOTTLE_NECK = [0.05, 0.4]
 // for the bottles' volume.
 const FLOOR_BULB = 0.7 // was 0.55; Robert: "make the bottles on the bottom a little deeper"
 const FLOOR_NECK = [0.05, 0.18] // of the shorter side, was 0.02 to 0.1
-// Every neck flares into its mouth and into its bulb on a quarter circle BOTTLE_ROUND of the
-// mouth's half width (Robert: "let's also round out the edges of the bottles instead of these
-// square ends").
+// Every neck is rounded at both ends with fillets BOTTLE_ROUND of the mouth's half width: a
+// quarter circle where it meets the line, and at the shoulder a circle tangent to both the neck
+// wall and the bulb, so the wall runs straight, curves outward once and meets the sphere with no
+// corner (Robert: "round out the edges of the bottles instead of these square ends", then, of a
+// first flare that widened the neck past the bulb, "those little flourishes are making these
+// mickey mouse ears that jitter ... the bottle neck should smooth meet the tangent on the sphere
+// at some point with no extra lines").
 const BOTTLE_ROUND = 0.6
+// Bulb shapes (Robert: "we should make randomly shaped bottles ... it's very clear that the shape
+// of the top and bottom have a significant impact on the way the lava blobs are shaped ... star
+// shaped. we'd just need to remove any stuff that would block the exit and trap lava. ooo
+// probably a cloud shape and random ooze and splat shapes could all be good... let's try a
+// bunch"). A bulb is a polar outline around its centre: a circle on the side facing the mouth,
+// so lava always funnels to the exit, and one of these shapes on the far side, faded in between
+// SHAPE_SMOOTH and SHAPE_FULL degrees from the mouth direction. Drawn per bottle from the seed.
+const BULB_SHAPES = ['round', 'star', 'cloud', 'ooze', 'splat']
+const SHAPE_SMOOTH = 60
+const SHAPE_FULL = 120
+// How well heat conducts between lava in two different bottles, as a share of the usual.
+const GLASS_CONDUCTION = 0.3
 // Robert: "the heater... should it like, be the cup? Like should there just be one heater that
 // heats the whole cup?" With this on, the heating elements are the floor cups themselves: one
 // per cup, centred on it, as wide as the cup and reaching as far above the bottom edge as the
@@ -241,13 +257,14 @@ export function createSimulation ({ width, height, params }) {
       let k = list.length - 1
       for (let j = 0; j < list.length; j++) { pick -= bottleArea(list[j]); if (pick <= 0) { k = j; break } }
       const b = list[k]
-      const bulb = Math.PI * b.R * b.R
+      const bulb = bottleArea(b) - 2 * b.w * Math.abs(b.neckEnd - b.lineY)
       for (let tries = 0; tries < 50; tries++) {
         let px, py
         if (random() * bottleArea(b) < bulb) {
-          px = b.cx + randomRange(-b.R, b.R)
-          py = b.cy + randomRange(-b.R, b.R)
-          if ((px - b.cx) ** 2 + (py - b.cy) ** 2 > b.R * b.R) continue
+          px = b.cx + randomRange(-b.reach, b.reach)
+          py = b.cy + randomRange(-b.reach, b.reach)
+          const rr = b.radiusAt(Math.atan2(py - b.cy, px - b.cx))
+          if ((px - b.cx) ** 2 + (py - b.cy) ** 2 > rr * rr) continue
         } else {
           px = b.cx + randomRange(-b.w, b.w)
           py = b.dir > 0 ? randomRange(b.lineY, b.neckEnd) : randomRange(b.neckEnd, b.lineY)
@@ -601,7 +618,7 @@ export function createSimulation ({ width, height, params }) {
       hash.add(x[i], y[i], i)
     }
 
-    const { g, shared } = state
+    const { g, shared, home } = state
     for (let i = 0; i < alive; i++) {
       const neighbours = findNeighbours(state, hash, i, interactionRadius)
       updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
@@ -609,8 +626,14 @@ export function createSimulation ({ width, height, params }) {
       let heat = 0
       for (let k = 0; k < neighbours.length; k++) {
         const n = neighbours[k]
-        weight += g[n]
-        heat += g[n] * temp[n]
+        // Heat crossing from one bottle to another goes through glass: GLASS_CONDUCTION of the
+        // usual (Robert: "the blobs can still share heat if they're close enough in the bottles,
+        // which is kinda good because it makes neighbor bottles interact and drop together, but i
+        // think we should model this intentionally and make the heat conduction less effective
+        // if it's crossing between bottles"). Through a mouth it is full.
+        const w = home[i] >= 0 && home[n] >= 0 && home[i] !== home[n] ? g[n] * GLASS_CONDUCTION : g[n]
+        weight += w
+        heat += w * temp[n]
       }
       shared[i] = weight > 0 ? heat / weight : temp[i]
       relax(state, i, neighbours, dt)
@@ -723,16 +746,55 @@ export function createSimulation ({ width, height, params }) {
       for (let i = 0; i < widths.length; i++) {
         const w = widths[i] * k
         if (i > 0) centre += widths[i - 1] * k / 2 + w / 2
-        into.push({ fx: centre / width, fw: w / width, fn: random() })
+        into.push({ fx: centre / width, fw: w / width, fn: random(), shape: drawShape() })
       }
       return
     }
     let at = 0
     for (const w of widths) {
       const fw = w / total
-      into.push({ fx: at + fw / 2, fw, fn: random() })
+      into.push({ fx: at + fw / 2, fw, fn: random(), shape: drawShape() })
       at += fw
     }
+  }
+
+  // A bulb's shape: the kind and its random numbers, as fractions, drawn once per bottle.
+  function drawShape () {
+    const kind = BULB_SHAPES[Math.floor(random() * BULB_SHAPES.length)]
+    const shape = { kind, n: 5 + Math.floor(random() * 4), amp: randomRange(0.18, 0.32), phase: random() * Math.PI * 2, waves: [], spikes: [] }
+    if (kind === 'cloud') { shape.n = 3 + Math.floor(random() * 3); shape.amp = randomRange(0.22, 0.38) }
+    if (kind === 'ooze' || kind === 'splat') {
+      for (let k = 0; k < 3; k++) shape.waves.push({ f: 1 + Math.floor(random() * 3), a: randomRange(0.05, 0.14), p: random() * Math.PI * 2 })
+    }
+    if (kind === 'splat') {
+      const count = 2 + Math.floor(random() * 3)
+      for (let k = 0; k < count; k++) shape.spikes.push({ at: random() * Math.PI * 2, a: randomRange(0.3, 0.55), w: randomRange(0.12, 0.22) })
+    }
+    return shape
+  }
+
+  // The bulb's radius factor at angle `theta` (canvas angles, clockwise from +x), 1 on a circle.
+  // `mouth` is the angle toward the mouth; the shape fades to nothing within SHAPE_SMOOTH of it.
+  function shapeFactor (shape, theta, mouth) {
+    let away = Math.abs(theta - mouth) % (Math.PI * 2)
+    if (away > Math.PI) away = Math.PI * 2 - away
+    const lo = SHAPE_SMOOTH * Math.PI / 180
+    const hi = SHAPE_FULL * Math.PI / 180
+    const t = Math.max(0, Math.min(1, (away - lo) / (hi - lo)))
+    const fade = t * t * (3 - 2 * t)
+    if (fade <= 0 || shape.kind === 'round') return 1
+    let bump = 0
+    if (shape.kind === 'star') bump = shape.amp * Math.cos(shape.n * theta + shape.phase)
+    else if (shape.kind === 'cloud') bump = shape.amp * Math.pow(Math.abs(Math.sin(shape.n * theta / 2 + shape.phase)), 0.6)
+    else {
+      for (const w of shape.waves) bump += w.a * Math.sin(w.f * theta + w.p)
+      for (const sp of shape.spikes) {
+        let d = Math.abs(theta - sp.at) % (Math.PI * 2)
+        if (d > Math.PI) d = Math.PI * 2 - d
+        bump += sp.a * Math.exp(-(d * d) / (sp.w * sp.w))
+      }
+    }
+    return 1 + bump * fade
   }
 
   // A bottle, in px: a mouth of half width w in the line at lineY (the lip for the ceiling, the
@@ -752,18 +814,45 @@ export function createSimulation ({ width, height, params }) {
       // (Robert: "bottles on the bottom look a bit fucked up").
       const w = BOTTLE_MOUTH * Math.min(a, R)
       const neck = (neckRange[0] + (neckRange[1] - neckRange[0]) * cup.fn) * shorter
-      const neckEnd = lineY + dir * neck
-      const cy = neckEnd + dir * Math.sqrt(Math.max(0, R * R - w * w))
-      const r = Math.min(BOTTLE_ROUND * w, neck / 2)
-      out.push({ cx: cup.fx * width, lineY, dir, w, neckEnd, cy, R, r })
+      const rm = Math.min(BOTTLE_ROUND * w, neck / 2) // the mouth fillet
+      const rs = BOTTLE_ROUND * w // the shoulder fillet
+      const yf = lineY + dir * neck // where the straight wall ends and the shoulder begins
+      // The shoulder fillet's centre is w + rs out from the axis at yf; the bulb's centre sits
+      // R + rs from it, straight on, so the fillet is tangent to both wall and bulb. The neck
+      // ends (and the bulb begins) at the tangent point.
+      const L = R + rs
+      const H = w + rs
+      const drop = Math.sqrt(Math.max(0, L * L - H * H))
+      const cy = yf + dir * drop
+      const neckEnd = yf + dir * rs * drop / L
+      const joinAngle = Math.asin(Math.min(1, H / L)) // from the mouth direction to the tangent point
+      // The mouth is straight down from a ceiling bulb's centre (canvas angle +90 degrees) and
+      // straight up from a floor bulb's (-90). The bulb's outline is R times the shape factor.
+      const mouth = dir < 0 ? Math.PI / 2 : -Math.PI / 2
+      const shape = cup.shape || { kind: 'round' }
+      const radiusAt = theta => R * shapeFactor(shape, theta, mouth)
+      out.push({ cx: cup.fx * width, lineY, dir, w, rm, rs, yf, neckEnd, cy, R, joinAngle, reach: R * 1.6, radiusAt, kind: shape.kind })
     }
     return out
   }
-  const bottleArea = b => Math.PI * b.R * b.R + 2 * b.w * Math.abs(b.neckEnd - b.lineY)
-  // The neck's half width at a height: the mouth's, flaring near the line and near the bulb.
+  // Area by sampling the outline (shapes are not circles).
+  function bottleArea (b) {
+    if (b.area === undefined) {
+      let sum = 0
+      const n = 72
+      for (let k = 0; k < n; k++) { const rr = b.radiusAt(k / n * Math.PI * 2); sum += rr * rr }
+      b.area = Math.PI * sum / n + 2 * b.w * Math.abs(b.neckEnd - b.lineY)
+    }
+    return b.area
+  }
+  // The neck's half width at a height: the mouth's, plus the mouth fillet near the line and the
+  // shoulder fillet past yf, where the wall curves out to meet the bulb.
   function neckHalf (b, py) {
-    const flare = t => (t < b.r ? b.r - Math.sqrt(Math.max(0, b.r * b.r - (b.r - t) * (b.r - t))) : 0)
-    return b.w + flare(Math.abs(py - b.lineY)) + flare(Math.abs(b.neckEnd - py))
+    const t = Math.abs(py - b.lineY)
+    const mouth = t < b.rm ? b.rm - Math.sqrt(Math.max(0, b.rm * b.rm - (b.rm - t) * (b.rm - t))) : 0
+    const u = (py - b.yf) * b.dir
+    const shoulder = u > 0 ? b.rs - Math.sqrt(Math.max(0, b.rs * b.rs - Math.min(u, b.rs) * Math.min(u, b.rs))) : 0
+    return b.w + mouth + shoulder
   }
   let ceilingCache = null
   let floorCache = null
@@ -783,7 +872,8 @@ export function createSimulation ({ width, height, params }) {
     const dx = px - b.cx
     if ((py - b.neckEnd) * b.dir <= 0 && (py - b.lineY) * b.dir >= 0 && Math.abs(dx) <= neckHalf(b, py)) return true
     const dy = py - b.cy
-    return dx * dx + dy * dy <= b.R * b.R
+    const rr = b.radiusAt(Math.atan2(dy, dx))
+    return dx * dx + dy * dy <= rr * rr
   }
 
   // Keep a particle that has crossed a line inside one bottle of that row: the one it entered
@@ -812,6 +902,7 @@ export function createSimulation ({ width, height, params }) {
     const dx = x[i] - b.cx
     const dy = y[i] - b.cy
     const dist = Math.sqrt(dx * dx + dy * dy)
+    const rim = b.radiusAt(Math.atan2(dy, dx)) // the outline along this ray
     let bestD = Math.abs(y[i] - lineY)
     let bestX = x[i]
     let bestY = lineY
@@ -823,24 +914,32 @@ export function createSimulation ({ width, height, params }) {
       // thing at the bottle tops").
       const side = Math.sign(dx || 1)
       const fromLine = Math.abs(y[i] - lineY)
-      const fromEnd = Math.abs(b.neckEnd - y[i])
-      let nx, ny
-      if (fromLine < b.r || fromEnd < b.r) {
-        const ccx = b.cx + side * (b.w + b.r)
-        const ccy = fromLine < fromEnd ? lineY + dir * b.r : b.neckEnd - dir * b.r
+      const pastShoulder = (y[i] - b.yf) * dir
+      let nx = b.cx + side * b.w
+      let ny = y[i]
+      let valid = true
+      const rc = fromLine < b.rm ? b.rm : pastShoulder > 0 ? b.rs : 0
+      if (rc > 0 && Math.abs(dx) <= b.w + rc) {
+        // In a fillet: push out from the fillet circle's centre along its radius, the wall's
+        // normal. The rim is the wall only inside the fillet's own square; a point past the
+        // square is in the lip, and goes to the line instead.
+        const ccx = b.cx + side * (b.w + rc)
+        const ccy = fromLine < b.rm ? lineY + dir * b.rm : b.yf
         const ex = x[i] - ccx
         const ey = y[i] - ccy
         const e = Math.sqrt(ex * ex + ey * ey) || 1
-        nx = ccx + ex / e * b.r
-        ny = ccy + ey / e * b.r
-      } else {
-        nx = b.cx + side * b.w
-        ny = y[i]
+        nx = ccx + ex / e * rc
+        ny = ccy + ey / e * rc
+        if (Math.abs(nx - b.cx) > b.w + rc + 0.01 || (ny - lineY) * dir < -0.01 || (ny - b.neckEnd) * dir > 0.01) valid = false
+      } else if (Math.abs(dx) > b.w + rc) {
+        valid = false
       }
-      const d = Math.hypot(nx - x[i], ny - y[i])
-      if (d < bestD) { bestD = d; bestX = nx; bestY = ny }
+      if (valid) {
+        const d = Math.hypot(nx - x[i], ny - y[i])
+        if (d < bestD) { bestD = d; bestX = nx; bestY = ny }
+      }
     }
-    if (dist > 0 && dist - b.R < bestD) { bestD = dist - b.R; bestX = b.cx + dx / dist * b.R; bestY = b.cy + dy / dist * b.R }
+    if (dist > 0 && dist - rim < bestD) { bestD = dist - rim; bestX = b.cx + dx / dist * rim; bestY = b.cy + dy / dist * rim }
     x[i] = bestX
     y[i] = bestY
     if (bestY === lineY && bestX === x[i]) home[i] = -1
@@ -857,14 +956,14 @@ export function createSimulation ({ width, height, params }) {
   function ceilingAt (px) {
     const list = ceilingBottleList()
     let top = list.length ? list[0].lineY : 0
-    for (const b of list) if (Math.abs(px - b.cx) <= b.R) top = Math.min(top, b.cy - b.R)
+    for (const b of list) if (Math.abs(px - b.cx) <= b.reach) top = Math.min(top, b.cy - b.reach)
     return top
   }
 
   function floorAt (px) {
     const list = floorBottleList()
     let bottom = height
-    for (const b of list) if (Math.abs(px - b.cx) <= b.R) bottom = Math.max(bottom, b.cy + b.R)
+    for (const b of list) if (Math.abs(px - b.cx) <= b.reach) bottom = Math.max(bottom, b.cy + b.reach)
     return bottom
   }
 
