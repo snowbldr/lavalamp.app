@@ -28,14 +28,14 @@ import {
   stir
 } from './ui/settings.js'
 
-// The lamp never grows past this in either direction; the simulation was tuned at this size.
-const MAX_SIZE = 1000
 // Fixed step. The sim does not track real frame time, and the tuning assumes it does not.
 const FRAME = 1 / 60
 // How hard a bump to the device shoves the lava.
 const MOTION_GAIN = 2
 
-const lampSize = () => [Math.min(window.innerWidth, MAX_SIZE), Math.min(window.innerHeight, MAX_SIZE)]
+// The lamp is the whole window. It used to stop at 1000 px each way to keep the per pixel metaball
+// pass affordable; the performance work since made that unnecessary.
+const lampSize = () => [window.innerWidth, window.innerHeight]
 
 // Copy a setting into a plain object now and whenever it changes. The sim and renderer read the
 // plain objects, so neither of them knows about fntags.

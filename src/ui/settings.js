@@ -3,7 +3,9 @@ import { notify } from './components.js'
 
 // Defaults that depend on the window. They take the raw window size, not the capped lamp size,
 // because that is what the lamp was tuned against.
-export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 4000), 300)
+// One particle per 4000 square px of window. The cap used to be 300, from when the lamp itself stopped
+// at 1000 px square; a full 2560 x 1300 window at 300 particles is a 50 px film of lava.
+export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 4000), 1000)
 export const computeDefaultMaxTemp = height => Math.min(height, 1000)
 export const computeDefaultGravity = height => Math.min(height / 2, 700)
 
