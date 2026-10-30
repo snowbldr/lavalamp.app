@@ -15,7 +15,7 @@ import {
   defaultMaxTemp,
   defaultParticleCount,
   gravityStrength,
-  heatWave,
+  heatSpots,
   highlightColor,
   interactionRadius,
   lavaColor,
@@ -73,7 +73,7 @@ export function start () {
   mirror(conduction, params, 'conduction')
   mirror(turbulence, params, 'turbulence')
   mirror(drifters, params, 'drifters')
-  mirror(heatWave, params, 'heatWave')
+  mirror(heatSpots, params, 'heatSpots')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')

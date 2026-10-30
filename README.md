@@ -25,9 +25,10 @@ stirs that spot (Turbulence), while a couple of others drift about, bounce off t
 (Drifting Eddies). Heat also conducts between touching particles, which is what lets a blob
 warm up and lift as one piece instead of shedding droplets; the Conduction slider sets how much, and a
 little goes a long way. On load the lava appears warm and settled on the floor and the heat spreads from
-the centre of the base outward, so the first thing to lift is one big glob from the middle. Once warm, the heater is a hot spot that sweeps
-along the floor (Heat Wave, its period in seconds, 0 for a steady heater), so a big stretch of the pool
-heats together and lifts as one glob. Pace runs the whole lamp in slow motion, and two buttons in the menu are ways of looking: Flow Field draws the stirring as arrows, like
+the centre of the base outward, so the first thing to lift is one big glob from the middle. Once warm, the heater is a few hot spots at random
+places along the floor, mostly near the middle, each with its own size, power and life (Heat Spots is the
+seconds between them, 0 for a steady heater), so a big stretch of the pool heats together and lifts as
+one glob. Pace runs the whole lamp in slow motion, and two buttons in the menu are ways of looking: Flow Field draws the stirring as arrows, like
 wind on a weather map, and Heat Map colours the lava by temperature like an infrared camera, with a
 strip along the floor for the heater.
 
