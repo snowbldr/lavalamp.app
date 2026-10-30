@@ -161,8 +161,8 @@ export function createSettingsPanel () {
         ['Density', 'The crowding the lava settles at; lower puffs it up, higher packs it.'],
         ['Max Temp', 'The hottest a particle can get, which is also the fastest it can rise.'],
         ['Gravity', 'How fast cold lava sinks; a particle at this temperature hovers.'],
-        ['Turb', 'How often a random eddy appears and stirs one spot for a few seconds.'],
-        ['Eddies', 'How many drifting tornado eddies wander the lamp at once.'],
+        ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
+        ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
         ['Cups', 'How deep the cups in the ceiling are, as a fraction of their width; 0 is a flat ceiling.']
       ])
     ),
