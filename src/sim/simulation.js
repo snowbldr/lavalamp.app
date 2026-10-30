@@ -53,11 +53,15 @@ const DRIFT_LIFE = [12, 30] // seconds
 const DRIFT_GAP = [2, 6] // seconds between one dying and the next being born
 // A drifter is shaped like a little tornado rather than a soft eddy: solid rotation inside a
 // core of DRIFT_CORE px, then falling off as one over distance so the arrows wrap around it from
-// far away, cut off smoothly at DRIFT_REACH of the lamp's shorter side. Its peak speed at the
-// edge of the core is DRIFT_GAIN times the turbulence setting.
-const DRIFT_CORE = [40, 80]
-const DRIFT_REACH = 0.4
+// far away, cut off smoothly at DRIFT_REACH cores out (or DRIFT_REACH_MAX of the lamp's shorter
+// side, whichever is less). Its peak speed at the edge of the core is DRIFT_GAIN times the
+// turbulence setting, times its own factor from DRIFT_VARIETY, so they come in random sizes and
+// strengths ("Can we make them random sizes too?").
+const DRIFT_CORE = [25, 140]
+const DRIFT_REACH = 6
+const DRIFT_REACH_MAX = 0.5
 const DRIFT_GAIN = 2.5
+const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
@@ -114,7 +118,7 @@ export function createSimulation ({ width, height, params }) {
     const pace = 1 - 0.75 * Math.min(1, Math.abs(turbulence) / EDDY_MAX)
     if (drifting.length < drifters && time >= nextDrifter) {
       const core = randomRange(...DRIFT_CORE)
-      const radius = DRIFT_REACH * Math.min(width, height)
+      const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
       const speed = randomRange(...DRIFT_SPEED)
       const heading = randomRange(0, 2 * Math.PI)
       drifting.push({
@@ -124,6 +128,7 @@ export function createSimulation ({ width, height, params }) {
         vy: speed * Math.sin(heading),
         core,
         radius,
+        gain: DRIFT_GAIN * randomRange(...DRIFT_VARIETY),
         spin: Math.random() < 0.5 ? -1 : 1,
         start: time,
         life: randomRange(...DRIFT_LIFE)
@@ -187,7 +192,7 @@ export function createSimulation ({ width, height, params }) {
       // Speed: rising linearly to the peak at the core's edge, then 2 r rc / (r^2 + rc^2),
       // which is one over distance in the tail, inside a Gaussian cutoff at the reach.
       const q = r / e.core
-      const speed = DRIFT_GAIN * strength * envelope * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
+      const speed = e.gain * strength * envelope * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
       out[0] += -dy / r * speed * e.spin
       out[1] += dx / r * speed * e.spin
     }
