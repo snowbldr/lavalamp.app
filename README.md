@@ -21,7 +21,8 @@ and rise as a unit because of the surface tension that falls out of the relaxati
 Left alone, that model has nothing sideways in it, so blobs rise and fall in the same lane forever.
 A slow convection roll (up the middle, down the walls, in along the floor) stirs the lava the way the
 circulation in a real lamp does, and now and then a slow eddy appears somewhere for a few seconds and
-stirs that spot (Turbulence). Heat also conducts between touching particles, which is what lets a blob
+stirs that spot (Turbulence), while a couple of others drift about, bounce off the walls and die away
+(Drifting Eddies). Heat also conducts between touching particles, which is what lets a blob
 warm up and lift as one piece instead of shedding droplets; the Conduction slider sets how much, and a
 little goes a long way. On load the lava appears warm and settled on the floor and the heat spreads from
 the centre of the base outward, so the first thing to lift is one big glob from the middle. Pace runs the

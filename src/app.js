@@ -8,6 +8,7 @@ import {
   bgColor,
   computeDefaultGravity,
   conduction,
+  drifters,
   computeDefaultMaxTemp,
   computeDefaultParticleCount,
   defaultGravityStrength,
@@ -69,6 +70,7 @@ export function start () {
   mirror(stir, params, 'stir')
   mirror(conduction, params, 'conduction')
   mirror(turbulence, params, 'turbulence')
+  mirror(drifters, params, 'drifters')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')

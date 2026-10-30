@@ -40,14 +40,21 @@ const CONDUCTION = 0.005
 // over a few seconds, spinning either way. Each is a Gaussian vortex, so it is divergence free
 // and moves the lava around without squashing it. The gap between eddies, their size and their
 // life are drawn from these ranges; `turbulence` in params is the peak speed in px/s.
-const EDDY_GAP = [6, 18] // seconds between one eddy starting and the next
+const EDDY_GAP = [6, 18] // seconds between one eddy starting and the next, at low turbulence
+const EDDY_MAX = 60 // the slider's top; the gap shrinks to a quarter there ("more frequent at the highest setting")
 const EDDY_RADIUS = [0.15, 0.3] // of the shorter side of the lamp
 const EDDY_LIFE = [4, 10] // seconds
 const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated speed
+// Drifting eddies: the same vortex, but born with a velocity, bouncing off the walls and floor
+// and dying away over its life instead of fading in and out in place. `drifters` in params is
+// how many are alive at once; a new one is born a few seconds after one dies.
+const DRIFT_SPEED = [30, 90] // px/s
+const DRIFT_LIFE = [12, 30] // seconds
+const DRIFT_GAP = [2, 6] // seconds between one dying and the next being born
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -58,6 +65,8 @@ export function createSimulation ({ width, height, params }) {
   let time = 0
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
+  const drifting = []
+  let nextDrifter = randomRange(...DRIFT_GAP)
 
   function allocate (count) {
     return {
@@ -90,9 +99,42 @@ export function createSimulation ({ width, height, params }) {
     state = grown
   }
 
-  // Start a new eddy when one is due and drop the ones that have faded out.
-  function stirEddies (dt) {
+  // Start a new eddy when one is due and drop the ones that have faded out. Move the drifting
+  // ones, bounce them off the walls, and replace the ones that have died.
+  function stirEddies (dt, turbulence, drifters) {
     time += dt
+    // Stronger turbulence is also more frequent: the gap scales from 1 at zero to 1/4 at the top.
+    const pace = 1 - 0.75 * Math.min(1, Math.abs(turbulence) / EDDY_MAX)
+    if (drifting.length < drifters && time >= nextDrifter) {
+      const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
+      const speed = randomRange(...DRIFT_SPEED)
+      const heading = randomRange(0, 2 * Math.PI)
+      drifting.push({
+        x: randomRange(radius / 2, width - radius / 2),
+        y: randomRange(radius / 2, height - radius / 2),
+        vx: speed * Math.cos(heading),
+        vy: speed * Math.sin(heading),
+        radius,
+        spin: Math.random() < 0.5 ? -1 : 1,
+        start: time,
+        life: randomRange(...DRIFT_LIFE)
+      })
+      nextDrifter = time + randomRange(...DRIFT_GAP)
+    }
+    for (let k = drifting.length - 1; k >= 0; k--) {
+      const e = drifting[k]
+      if (time - e.start > e.life) {
+        drifting.splice(k, 1)
+        if (time + randomRange(...DRIFT_GAP) < nextDrifter || nextDrifter < time) nextDrifter = time + randomRange(...DRIFT_GAP)
+        continue
+      }
+      e.x += e.vx * dt
+      e.y += e.vy * dt
+      const half = e.radius / 2
+      if (e.x < half) { e.x = half; e.vx = Math.abs(e.vx) } else if (e.x > width - half) { e.x = width - half; e.vx = -Math.abs(e.vx) }
+      if (e.y < half) { e.y = half; e.vy = Math.abs(e.vy) } else if (e.y > height - half) { e.y = height - half; e.vy = -Math.abs(e.vy) }
+    }
+    if (drifting.length > drifters) drifting.length = drifters
     if (time >= nextEddy) {
       const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
       eddies.push({
@@ -103,7 +145,7 @@ export function createSimulation ({ width, height, params }) {
         start: time,
         life: randomRange(...EDDY_LIFE)
       })
-      nextEddy = time + randomRange(...EDDY_GAP)
+      nextEddy = time + randomRange(...EDDY_GAP) * pace
     }
     for (let k = eddies.length - 1; k >= 0; k--) {
       if (time - eddies[k].start > eddies[k].life) eddies.splice(k, 1)
@@ -120,6 +162,17 @@ export function createSimulation ({ width, height, params }) {
       const dx = (px - e.x) / e.radius
       const dy = (py - e.y) / e.radius
       const envelope = Math.sin(Math.PI * (time - e.start) / e.life)
+      const f = e.spin * strength / EDDY_PEAK * envelope * Math.exp(-(dx * dx + dy * dy))
+      out[0] += -dy * f
+      out[1] += dx * f
+    }
+    for (let k = 0; k < drifting.length; k++) {
+      const e = drifting[k]
+      const dx = (px - e.x) / e.radius
+      const dy = (py - e.y) / e.radius
+      const age = time - e.start
+      // A second to spin up, then dying away to nothing.
+      const envelope = Math.min(1, age) * (1 - age / e.life)
       const f = e.spin * strength / EDDY_PEAK * envelope * Math.exp(-(dx * dx + dy * dy))
       out[0] += -dy * f
       out[1] += dx * f
@@ -147,10 +200,10 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0 } = params
     ensureCapacity(particleCount)
     fill(particleCount)
-    stirEddies(dt)
+    stirEddies(dt, turbulence, drifters)
     // Warm up: the heater power is a front spreading from the middle of the floor (see WARMUP).
     heaterTime += dt
     const progress = Math.min(1, heaterTime / WARMUP)

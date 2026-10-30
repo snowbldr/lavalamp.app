@@ -22,6 +22,7 @@ export const defaultStir = 20
 export const defaultConduction = 0.005
 export const defaultPace = 0.7
 export const defaultTurbulence = 15
+export const defaultDrifters = 2
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -42,14 +43,15 @@ export const stir = fnstate(defaultStir)
 export const conduction = fnstate(defaultConduction)
 export const pace = fnstate(defaultPace)
 export const turbulence = fnstate(defaultTurbulence)
+export const drifters = fnstate(defaultDrifters)
 // Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
 export const showFlow = fnstate(false)
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -66,7 +68,8 @@ const defaults = () => ({
   stir: defaultStir,
   conduction: defaultConduction,
   pace: defaultPace,
-  turbulence: defaultTurbulence
+  turbulence: defaultTurbulence,
+  drifters: defaultDrifters
 })
 
 export const getSettings = () => {
