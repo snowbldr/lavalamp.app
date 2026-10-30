@@ -62,6 +62,10 @@ const ELEMENT_GAP = 250 // px between elements, before jitter
 const ELEMENT_RADIUS = [0.08, 0.2] // of the shorter side
 const ELEMENT_HEAT = [2, 6] // temperature per step at the centre; the finger gives 12, and at 4 to 12 an element fired a stream of small globs
 const ELEMENT_LIFE = [5, 15] // seconds
+// How many elements light together at one lighting. Robert: "we should allow multiple to fire at
+// once. maybe like randomly between 1-5 of them, leaning toward an average of like 1.6". The
+// chances of 1, 2, 3, 4 and 5 at once; the mean is 1.6.
+const ELEMENT_CHORUS = [0.6, 0.25, 0.1, 0.035, 0.015]
 const SPOT_SPREAD = 0.2
 const SPOT_BASE = 0.2
 const SPOT_CAP = 3
@@ -343,15 +347,19 @@ export function createSimulation ({ width, height, params }) {
     // Once warmed up, elements light at random (see ELEMENT_GAP).
     if (progress >= 1 && heatSpots > 0) {
       if (heaterTime >= nextLight) {
-        let fx = 0.5 + randomNormal() * SPOT_SPREAD
-        if (fx < 0.05) fx = 0.05
-        if (fx > 0.95) fx = 0.95
-        let best = null
-        for (const el of elements) if (best === null || Math.abs(el.fx - fx) < Math.abs(best.fx - fx)) best = el
-        if (best.heat === 0) {
-          best.heat = randomRange(...ELEMENT_HEAT)
-          best.start = heaterTime
-          best.life = randomRange(...ELEMENT_LIFE)
+        let count = 1
+        for (let roll = Math.random() - ELEMENT_CHORUS[0]; roll > 0 && count < ELEMENT_CHORUS.length; count++) roll -= ELEMENT_CHORUS[count]
+        for (let n = 0; n < count; n++) {
+          let fx = 0.5 + randomNormal() * SPOT_SPREAD
+          if (fx < 0.05) fx = 0.05
+          if (fx > 0.95) fx = 0.95
+          let best = null
+          for (const el of elements) if (best === null || Math.abs(el.fx - fx) < Math.abs(best.fx - fx)) best = el
+          if (best.heat === 0) {
+            best.heat = randomRange(...ELEMENT_HEAT)
+            best.start = heaterTime
+            best.life = randomRange(...ELEMENT_LIFE)
+          }
         }
         nextLight = heaterTime + randomRange(0.5, 1.5) * heatSpots
       }
