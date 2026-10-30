@@ -97,6 +97,23 @@ const SPOT_CAP = 3
 const CUP_WIDTH = [0.3, 0.08] // mean, deviation
 const CUP_WIDTH_RANGE = [0.2, 0.45]
 const CUP_LIP = 0.04
+// Cups in the floor too, hidden below the screen like the base of the lamp (Robert: "what if,
+// we have hidden cups on the bottom too? that would fix the sheets shooting up. we would want
+// enough lava to fill all the cups and still leave a visible layer on the bottom that's
+// slightly smaller than what we see today"). Their own random row, rims at the bottom edge,
+// each FLOOR_CUP_SHARE of the ceiling cups' depth factor times its width deep; fill() adds
+// the cups' volume below the visible layer and the default particle count (settings.js) pays
+// for it. The hidden lava is a cold reserve the pool draws on as it lifts: heating it as well
+// put about twice the lava in reach of the heater and the whole pool hovered as one mass.
+const FLOOR_CUP_SHARE = 0.25
+// The ceiling and floor are sampled into tables every CUP_STEP px and smoothed over CUP_ROUND px
+// either side, which rounds off the cusp where two cups meet (Robert: "there's a jiggle on the
+// top at the point where the cups meet. when two cups next to each other get full, a bit of
+// lava sits there and jiggles. probably we need to round that point off to smooth that").
+const CUP_STEP = 2
+const CUP_ROUND = 40
+// Whether lava hidden in the floor cups is heated (see FLOOR_CUP_SHARE: heated, the pool hovered).
+const HEAT_IN_CUPS = false
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
 // across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
 // gathers it, spin is a tornado under the finger, heat and cool change temperature.
@@ -150,6 +167,7 @@ export function createSimulation ({ width, height, params }) {
   const elements = []
   // The ceiling cups, laid out once: { fx, fw } centre and width as fractions of the width.
   const cups = []
+  const floorCups = [] // same shape, for the floor
   let kicked = false // whether the kick-off lighting has happened
   let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
   const eddies = []
@@ -171,9 +189,11 @@ export function createSimulation ({ width, height, params }) {
     }
   }
 
+  // `depth` is the visible layer above the bottom edge; below it the lava also fills the floor cups.
   function spawn (i, depth) {
     state.x[i] = randomBetween(0, width)
-    state.y[i] = randomBetween(height - depth, height)
+    const floor = floorCups.length ? floorAt(state.x[i]) : height
+    state.y[i] = randomRange(height - depth, floor)
     state.vx[i] = 0
     state.vy[i] = 0
     state.temp[i] = SPAWN_HEAT * params.gravity
@@ -280,7 +300,8 @@ export function createSimulation ({ width, height, params }) {
   function fill (target) {
     if (alive > target) alive = target
     if (alive === target) return
-    const depth = SPAWN_AREA * target / width
+    if (floorCups.length === 0) layoutCups(floorCups)
+    const depth = Math.max(0, (SPAWN_AREA * target - floorCupArea()) / width)
     while (alive < target) spawn(alive++, depth)
   }
 
@@ -368,6 +389,7 @@ export function createSimulation ({ width, height, params }) {
     const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0 } = params
     cupDepthNow = cupDepth
     if (cups.length === 0) layoutCups()
+    if (floorCups.length === 0) layoutCups(floorCups)
     ensureCapacity(particleCount)
     fill(particleCount)
     stirEddies(dt, turbulence, drifters)
@@ -476,8 +498,8 @@ export function createSimulation ({ width, height, params }) {
 
     hash.clear()
     for (let i = 0; i < alive; i++) {
-      temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]))
-      if (maxReach > 0 && y[i] > elementReach) {
+      temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]), HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
+      if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || y[i] <= height)) {
         const heat = elementHeat(x[i], y[i])
         if (heat > 0) temp[i] = Math.min(maxTemp, temp[i] + heat)
       }
@@ -568,13 +590,14 @@ export function createSimulation ({ width, height, params }) {
     if (x[i] < 0) x[i] = 0
     else if (x[i] > width) x[i] = width
     const top = cupDepthNow > 0 ? ceilingAt(x[i]) : 0
+    const bottom = cupDepthNow > 0 ? floorAt(x[i]) : height
     if (y[i] < top) y[i] = top
-    else if (y[i] > height) y[i] = height
+    else if (y[i] > bottom) y[i] = bottom
   }
 
   // Lay the cups across the ceiling once (see CUP_WIDTH): bell curve widths, then all scaled so
   // they tile the width exactly. Fractions, so a resize keeps the same lamp.
-  function layoutCups () {
+  function layoutCups (into = cups) {
     const shorter = Math.min(width, height)
     const widths = []
     let total = 0
@@ -587,18 +610,85 @@ export function createSimulation ({ width, height, params }) {
     let at = 0
     for (const w of widths) {
       const fw = w / total
-      cups.push({ fx: at + fw / 2, fw })
+      into.push({ fx: at + fw / 2, fw })
       at += fw
     }
+  }
+
+  // Smoothed height tables for the ceiling and floor, rebuilt when the lamp or the depth changes.
+  let ceilingTable = null
+  let floorTable = null
+  let tableKey = ''
+  function buildTables () {
+    const key = `${width}/${height}/${cupDepthNow}`
+    if (key === tableKey) return
+    tableKey = key
+    const n = Math.ceil(width / CUP_STEP) + 1
+    const raw = (fn) => { const t = new Float32Array(n); for (let k = 0; k < n; k++) t[k] = fn(Math.min(width, k * CUP_STEP)); return t }
+    const smooth = (t) => {
+      const half = Math.round(CUP_ROUND / CUP_STEP)
+      const out = new Float32Array(n)
+      for (let k = 0; k < n; k++) {
+        let sum = 0
+        let count = 0
+        for (let j = Math.max(0, k - half); j <= Math.min(n - 1, k + half); j++) { sum += t[j]; count++ }
+        out[k] = sum / count
+      }
+      return out
+    }
+    ceilingTable = smooth(raw(rawCeilingAt))
+    floorTable = smooth(raw(rawFloorAt))
+  }
+  const lookup = (table, px) => {
+    const f = Math.max(0, Math.min(width, px)) / CUP_STEP
+    const k = Math.min(table.length - 2, Math.floor(f))
+    const t = f - k
+    return table[k] + (table[k + 1] - table[k]) * t
+  }
+
+  const cupAt = (row, px) => {
+    const f = Math.max(0, Math.min(1, px / width))
+    for (const c of row) if (f <= c.fx + c.fw / 2) return c
+    return row[row.length - 1]
+  }
+
+  // The floor's height at a point: the bottom edge at a cup's rim, deeper (below the screen) on
+  // a half ellipse to FLOOR_CUP_SHARE of cupDepth of the cup's width at its centre.
+  function rawFloorAt (px) {
+    const cup = cupAt(floorCups, px)
+    const a = cup.fw * width / 2
+    const depth = FLOOR_CUP_SHARE * cupDepthNow * cup.fw * width
+    const u = (px - cup.fx * width) / a
+    return height + depth * Math.sqrt(Math.max(0, 1 - u * u))
+  }
+
+  // The smoothed surfaces (see CUP_ROUND). Positive is down.
+  function ceilingAt (px) {
+    buildTables()
+    return lookup(ceilingTable, px)
+  }
+
+  function floorAt (px) {
+    buildTables()
+    return lookup(floorTable, px)
+  }
+
+  // The area of all the floor cups together, in square px: half ellipses.
+  function floorCupArea () {
+    let area = 0
+    for (const cup of floorCups) {
+      const a = cup.fw * width / 2
+      const depth = FLOOR_CUP_SHARE * cupDepthNow * cup.fw * width
+      area += Math.PI * a * depth / 2
+    }
+    return area
   }
 
   // The ceiling's height at a point: the cup lips at CUP_LIP of the shorter side below the top
   // edge, rising (to negative y, above the screen) on a half ellipse to cupDepth of the cup's
   // width above the lip at the centre. Positive is down.
-  function ceilingAt (px) {
-    const f = Math.max(0, Math.min(1, px / width))
-    let cup = cups[cups.length - 1]
-    for (const c of cups) if (f <= c.fx + c.fw / 2) { cup = c; break }
+  function rawCeilingAt (px) {
+    const cup = cupAt(cups, px)
     const a = cup.fw * width / 2
     const depth = cupDepthNow * cup.fw * width
     const u = (px - cup.fx * width) / a
@@ -615,6 +705,7 @@ export function createSimulation ({ width, height, params }) {
     heaterAt,
     heaterElements,
     ceilingAt,
+    floorAt,
     get state () { return state },
     get count () { return alive },
     get width () { return width },

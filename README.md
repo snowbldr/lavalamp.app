@@ -36,7 +36,9 @@ a Heater switch shows the heater strip and its elements along the floor in eithe
 The ceiling is a row of tall oval cups, laid out once in random sizes and sitting above the screen with
 only their bottom lips showing, like the cap on a real lamp, so a glob that reaches the top rises into
 a cup and keeps its shape while it cools instead of spreading into a sheet and falling as a strip
-(Cups, in Physics, is their depth as a fraction of their width; 0 is a flat ceiling).
+(Cups, in Physics, is their depth as a fraction of their width; 0 is a flat ceiling). The floor has
+shallower hidden cups too, holding a cold reserve of lava under the visible pool. Where two cups meet
+the surface is rounded off, so nothing catches on the point.
 
 Rendering is the metaball trick, on the GPU: soft discs composited into a texture, then one WebGL pass
 thresholds the alpha so nearby discs fuse and lights the underside of each blob. The same picture
@@ -82,4 +84,4 @@ numbers are knobs: drag sideways or up, scroll, or use the arrow keys; click the
 Save keeps the settings in local storage, Share copies a link that carries them, and the ? button
 puts one sentence under every control saying what it changes.
 
-<sub>Copyright © 2020 Robert Kempton</sub>
+<sub>Copyright © 2020-2026 Robert Kempton</sub>

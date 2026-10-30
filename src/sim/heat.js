@@ -18,15 +18,20 @@ export const HEAT_ZONE = 0.8
 // term that cooling swamps everywhere except within a few pixels of the floor, where the squared
 // bonus for touching takes over. That only ever warms the bottom row; the heating elements in
 // the simulation are what reach up into the pool.
-export function nextTemperature (temp, y, height, maxTemp, particleSize, power = 1) {
+// `floor` is where the floor is under this particle, which with cups in the floor is below the
+// bottom edge of the screen; the heater is measured from there. No test that y is above the
+// floor: a floor particle is often a hair below it when this runs, nudged by a neighbour's
+// relaxation after its own containment, and those are exactly the particles in contact with
+// the heater (a guard here cut the lamp's detached rising globs by five sixths).
+export function nextTemperature (temp, y, height, maxTemp, particleSize, power = 1, floor = height) {
   if (temp > 0) {
     temp -= randomNormalDistribution(0.25, 2.75, 1.8) * (height / REFERENCE_HEIGHT)
   }
-  if (y > height * HEAT_ZONE && temp < maxTemp) {
-    const distanceFromHeater = Math.max(1, height - y)
+  if (y > floor - height * (1 - HEAT_ZONE) && temp < maxTemp) {
+    const distanceFromHeater = Math.max(1, floor - y)
     const increase = randomNormalDistribution(0, 5) / distanceFromHeater * power
     temp += increase
-    if (y > height - particleSize) {
+    if (y > floor - particleSize) {
       temp += increase * increase
     }
   }

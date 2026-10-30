@@ -202,7 +202,7 @@ export function start () {
           'z-index': 200
         }
       },
-      a({ target: '_blank', href: 'https://github.com/snowbldr/lavalamp.app' }, 'Copyright © 2020 Robert Kempton')
+      a({ target: '_blank', href: 'https://github.com/snowbldr/lavalamp.app' }, 'Copyright © 2020-2026 Robert Kempton')
     )
   )
 
