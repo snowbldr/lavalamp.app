@@ -1,5 +1,5 @@
 import { SpatialHash } from './spatialHash.js'
-import { findNeighbours, relax, updatePressure } from './fluid.js'
+import { RELAX_CAP, findNeighbours, relax, updatePressure } from './fluid.js'
 import { nextTemperature } from './heat.js'
 import { random, randomBetween, randomNormal, randomRange } from './random.js'
 
@@ -94,8 +94,16 @@ const SPOT_CAP = 3
 // narrower, like elongated vertically ... hide the cups above the screen except for just the
 // bottom edge of the cups, they're kinda ugly and ruin the effect, and it's the same as the cap
 // on the lava lamp"); lava that rises into a cup goes out of sight and comes back as it cools.
-const CUP_WIDTH = [0.3, 0.08] // mean, deviation
-const CUP_WIDTH_RANGE = [0.2, 0.45]
+// Robert: "the variance in size is not significant enough. we need random normal here so we get
+// a couple tiny bottles and one or two giant bottles. I think we can also not overlap the bottles
+// since we have the bottle locking mechanism and conduction resolved between bottles. This
+// should allow for more variance in placement too since we can put a few bottles right next to
+// each other and occasionally have largish gaps". Widths from a wide bell curve, bottles laid
+// side by side without overlap (each bottle's exclusion is its bulb's largest radius, shape and
+// stretch included), with gaps drawn from an exponential: mostly a sliver, now and then wide.
+const CUP_WIDTH = [0.22, 0.12] // mean, deviation, of the shorter side
+const CUP_WIDTH_RANGE = [0.06, 0.6]
+const CUP_GAP = 0.04 // mean gap, of the shorter side
 const CUP_LIP = 0.04
 // The ceiling cups are bottles (Robert, on lava still spreading thin over the cups and coming
 // down as wavy sheets: "What if we did like globular cups. So it'd be like an upside down
@@ -123,7 +131,7 @@ const BOTTLE_NECK = [0.05, 0.4]
 // down into the bulb, so the neck is the spout. The default particle count (settings.js) pays
 // for the bottles' volume.
 const FLOOR_BULB = 0.7 // was 0.55; Robert: "make the bottles on the bottom a little deeper"
-const FLOOR_NECK = [0.05, 0.18] // of the shorter side, was 0.02 to 0.1
+const FLOOR_NECK = [0, 0] // the floor's bottles have no necks: open bulbs under the floor (Robert: "on the bottom bottles we should not have any bottle necks. This will encourage a bit more interaction between the bottles"); they were 5% to 18% of the shorter side
 // Every neck is rounded at both ends with fillets BOTTLE_ROUND of the mouth's half width: a
 // quarter circle where it meets the line, and at the shoulder a circle tangent to both the neck
 // wall and the bulb, so the wall runs straight, curves outward once and meets the sphere with no
@@ -383,7 +391,7 @@ export function createSimulation ({ width, height, params }) {
   function fill (target) {
     if (alive > target) alive = target
     if (alive === target) return
-    if (floorCups.length === 0) layoutCups(floorCups, true)
+    if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
     let area = 0
     for (const b of floorBottleList()) area += bottleArea(b) * (b.cx <= 0 || b.cx >= width ? 0.5 : 1)
     const hidden = Math.min(target, Math.round(area / SPAWN_AREA))
@@ -479,7 +487,7 @@ export function createSimulation ({ width, height, params }) {
     const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0 } = params
     cupDepthNow = cupDepth
     if (cups.length === 0) layoutCups()
-    if (floorCups.length === 0) layoutCups(floorCups, true)
+    if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
     ensureCapacity(particleCount)
     fill(particleCount)
     stirEddies(dt, turbulence, drifters)
@@ -636,7 +644,7 @@ export function createSimulation ({ width, height, params }) {
         heat += w * temp[n]
       }
       shared[i] = weight > 0 ? heat / weight : temp[i]
-      relax(state, i, neighbours, dt)
+      relax(state, i, neighbours, dt, home[i] >= 0 ? RELAX_CAP : Infinity)
       contain(i)
     }
     // Applied after the pass so every particle saw the same temperatures.
@@ -653,7 +661,7 @@ export function createSimulation ({ width, height, params }) {
   // the gap, each with its own radius. Positions are fractions so a resize keeps the same lamp.
   function layoutElements () {
     if (ELEMENTS_ARE_CUPS) {
-      if (floorCups.length === 0) layoutCups(floorCups, true)
+      if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
       const shorter = Math.min(width, height)
       const smallest = CUP_WIDTH_RANGE[0] * shorter
       for (const cup of floorCups) {
@@ -719,43 +727,46 @@ export function createSimulation ({ width, height, params }) {
     }
   }
 
-  // Lay the cups across the ceiling once (see CUP_WIDTH): bell curve widths, then all scaled so
-  // they tile the width exactly. Fractions, so a resize keeps the same lamp.
-  // With `onWalls` the end cups are centred on the walls, so the corners are the deepest points:
-  // the floor's cups are laid out that way, because with rims at the walls the corner was the
-  // highest point of the floor, the convection roll brings lava down the walls to exactly there,
-  // and it piled up ("we got significant wall climbing back").
-  function layoutCups (into = cups, onWalls = false) {
+  // Lay a row of bottles once (see CUP_WIDTH): widths from the bell curve, each placed after the
+  // last with a random gap and no overlap, until the row is full. Fractions, so a resize keeps
+  // the same lamp. `onWalls` centres the first and last on the walls; the floor used that while
+  // its cups tiled the width (rims at the walls made the corner the floor's high point under the
+  // down-the-wall flow and lava piled there: "we got significant wall climbing back"), but a
+  // bottle straddling a wall squeezes its lava into the half that exists and extrudes it up the
+  // wall, and with gaps in the row a flat corner is just another stretch of floor.
+  function layoutCups (into = cups, onWalls = false, bulbShare = 1) {
     const shorter = Math.min(width, height)
-    const widths = []
-    let total = 0
-    while (total < width + (onWalls ? CUP_WIDTH_RANGE[1] * shorter : 0)) {
+    const mouth = onWalls ? -Math.PI / 2 : Math.PI / 2
+    // A candidate bottle: its width, its shape, and the half width its bulb can reach at Bottles 1.
+    const draw = () => {
       let w = (CUP_WIDTH[0] + randomNormal() * CUP_WIDTH[1]) * shorter
       w = Math.max(CUP_WIDTH_RANGE[0] * shorter, Math.min(CUP_WIDTH_RANGE[1] * shorter, w))
-      widths.push(w)
-      total += w
+      const shape = drawShape()
+      let factor = 1
+      for (let k = 0; k < 72; k++) factor = Math.max(factor, shapeFactor(shape, k / 72 * Math.PI * 2, mouth))
+      return { w, shape, reach: Math.max(w / 2, w / 2 * bulbShare * factor) + 2 }
     }
+    const drawGap = () => Math.min(0.4 * shorter, -Math.log(1 - random()) * CUP_GAP * shorter)
+    let edge = 0 // the right edge of the last bottle's reach
     if (onWalls) {
-      // Centres at 0 and the width: the span from the first centre to the last is half the first
-      // and last widths plus all the middle ones, scaled to the width.
-      if (widths.length < 2) widths.push(widths[0])
-      let span = widths[0] / 2 + widths[widths.length - 1] / 2
-      for (let k = 1; k < widths.length - 1; k++) span += widths[k]
-      const k = width / span
-      let centre = 0
-      for (let i = 0; i < widths.length; i++) {
-        const w = widths[i] * k
-        if (i > 0) centre += widths[i - 1] * k / 2 + w / 2
-        into.push({ fx: centre / width, fw: w / width, fn: random(), shape: drawShape() })
-      }
-      return
+      const c = draw()
+      into.push({ fx: 0, fw: c.w / width, fn: random(), shape: c.shape })
+      edge = c.reach
+    } else {
+      edge = drawGap() * 0.5
     }
-    let at = 0
-    for (const w of widths) {
-      const fw = w / total
-      into.push({ fx: at + fw / 2, fw, fn: random(), shape: drawShape() })
-      at += fw
+    // The last one on the right wall needs room: reserve its reach.
+    const last = onWalls ? draw() : null
+    const limit = width - (last ? last.reach : 0)
+    for (let guard = 0; guard < 200; guard++) {
+      const c = draw()
+      const gap = drawGap()
+      const centre = edge + gap + c.reach
+      if (centre + c.reach > limit) break
+      into.push({ fx: centre / width, fw: c.w / width, fn: random(), shape: c.shape })
+      edge = centre + c.reach
     }
+    if (last) into.push({ fx: 1, fw: last.w / width, fn: random(), shape: last.shape })
   }
 
   // A bulb's shape: the kind and its random numbers, as fractions, drawn once per bottle.
@@ -903,9 +914,14 @@ export function createSimulation ({ width, height, params }) {
     if ((y[i] - lineY) * dir <= 0) { home[i] = -1; return }
     let k = home[i]
     if (k < 0 || k >= list.length) {
-      // Entering: which mouth is it under?
+      // Entering from the pool: the bottle that already contains the point if there is one
+      // (bulbs reach under their neighbours' mouths), else the one whose mouth it is under.
+      // Choosing by mouth alone sent a particle that had been nudged out of one bottle into
+      // the next, a jump of a bulb's width ("huge jitter jumps between the bottles, looks like
+      // quantum tunneling again but it seems like it's snapping back into the same pot").
       k = -1
-      for (let j = 0; j < list.length; j++) if (Math.abs(x[i] - list[j].cx) <= neckHalf(list[j], lineY)) { k = j; break }
+      for (let j = 0; j < list.length; j++) if (insideBottle(list[j], x[i], y[i])) { k = j; break }
+      if (k < 0) for (let j = 0; j < list.length; j++) if (Math.abs(x[i] - list[j].cx) <= neckHalf(list[j], lineY)) { k = j; break }
       if (k < 0) { y[i] = lineY; return }
       home[i] = k
     }
@@ -954,7 +970,8 @@ export function createSimulation ({ width, height, params }) {
     if (dist > 0 && dist - rim < bestD) { bestD = dist - rim; bestX = b.cx + dx / dist * rim; bestY = b.cy + dy / dist * rim }
     x[i] = bestX
     y[i] = bestY
-    if (bestY === lineY && bestX === x[i]) home[i] = -1
+    // A particle held at the line keeps its bottle; it only loses it once it is up in the pool
+    // (see contain), so it cannot be re-sorted into a neighbour on the way back down.
   }
 
   const cupAt = (row, px) => {

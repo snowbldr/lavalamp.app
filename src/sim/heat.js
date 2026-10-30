@@ -9,6 +9,13 @@ export const REFERENCE_HEIGHT = 1000
 export const HEAT_ZONE = 0.8
 
 
+// Lava hidden below the floor, in the reservoirs, cools at RESERVE_COOLING of the rate: the base
+// of a lamp is glass over the bulb and holds its warmth. Without it the deep reservoirs ran cold
+// (88 to 180 against 323 to 406 for the shallow cups they replaced), the cold lava they fed into
+// the pool fell at full gravity into the floor and the visible layer jittered ("we have major
+// jitter issues on the top layer").
+export const RESERVE_COOLING = 0.3
+
 // Temperature is in the same units as vertical velocity, pixels per second. A particle rises exactly
 // as fast as it is hot and gravity pulls it down at a fixed rate, so neutral buoyancy is temp == gravity.
 // That is the overdamped (Stokes) regime, which is the right one for wax in oil.
@@ -25,7 +32,7 @@ export const HEAT_ZONE = 0.8
 // the heater (a guard here cut the lamp's detached rising globs by five sixths).
 export function nextTemperature (temp, y, height, maxTemp, particleSize, power = 1, floor = height) {
   if (temp > 0) {
-    temp -= randomNormalDistribution(0.25, 2.75, 1.8) * (height / REFERENCE_HEIGHT)
+    temp -= randomNormalDistribution(0.25, 2.75, 1.8) * (height / REFERENCE_HEIGHT) * (y > height ? RESERVE_COOLING : 1)
   }
   if (y > floor - height * (1 - HEAT_ZONE) && temp < maxTemp) {
     // Distance to the heater line either way: lava below the line, in a floor bottle, is as far

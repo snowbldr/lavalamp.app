@@ -51,10 +51,21 @@ export function updatePressure (state, i, neighbours, stiffness, stiffnessNear, 
 // neighbour a tenth of it. That is a tuning choice, not an oversight: it is part of how the lamp moves.
 // The direction is measured from where i was when its turn started, not where it has drifted to
 // mid-loop, which is also how it was tuned.
-export function relax (state, i, neighbours, dt) {
+// Particle i's own displacement is summed and, when `cap` is given, limited to that many px a
+// step. The caller caps lava hidden in a reservoir (RELAX_CAP): packed deep under the weight of
+// the pool and held in by the glass, it now and then crowds past its rest density and the
+// pressure throws particles 40 to 70 px in one step (1.0% of hidden steps with the bottles,
+// 0.5% with the shallow cups before them, none on a flat floor), which read as "huge jitter
+// jumps". The visible pool is never capped: capping it kept the lava at the walls from relieving
+// its pressure and it was extruded up the walls in a column (111 to 162 particles at the walls
+// against 7 to 12).
+export const RELAX_CAP = 20
+export function relax (state, i, neighbours, dt, cap = Infinity) {
   const xi = state.x[i]
   const yi = state.y[i]
   const dtSq = dt * dt
+  let sx = 0
+  let sy = 0
   for (let k = 0; k < neighbours.length; k++) {
     const n = neighbours[k]
     const g = state.g[n]
@@ -62,11 +73,19 @@ export function relax (state, i, neighbours, dt) {
     unitApprox(state.x[n] - xi, state.y[n] - yi)
     const dx = unit[0] * magnitude
     const dy = unit[1] * magnitude
-    state.x[i] -= dx
-    state.y[i] -= dy
+    sx += dx
+    sy += dy
     state.x[n] += dx * 0.1
     state.y[n] += dy * 0.1
   }
+  const shift = Math.sqrt(sx * sx + sy * sy)
+  if (shift > cap) {
+    const scale = cap / shift
+    sx *= scale
+    sy *= scale
+  }
+  state.x[i] -= sx
+  state.y[i] -= sy
 }
 
 // Fast approximate unit vector, from Nick Vogt:

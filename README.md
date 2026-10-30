@@ -39,9 +39,12 @@ a glob that reaches the top rises through the mouth, gathers in the bulb while i
 glob and falls back out whole instead of spreading into a sheet and falling as a strip (Bottles, in
 Physics, scales the bulbs; 0 is a flat ceiling). The floor has smaller bottles too, hanging below the
 screen, holding a cold reserve of lava under the visible pool; each one is a heating element whose
-core runs from its mouth down into its bulb, so its neck is the spout. Bulbs come in shapes drawn from
-the seed, round, star, cloud, ooze or splat, stretched into ellipses at random angles, shaped only on
-the side away from the mouth so nothing can trap lava; necks meet their bulbs on tangent fillets; lava never passes from one bottle to
+core runs from its mouth down into its bulb, so its neck is the spout. Bottles are laid out from the seed
+in sizes from a wide bell curve, a few tiny and the odd giant, side by side without overlapping and
+with gaps that are mostly slivers and now and then wide; the floor's have no necks, so neighbours
+interact through the pool. Bulbs come in shapes drawn from the seed, round, star, cloud, ooze or
+splat, stretched into ellipses at random angles, shaped only on the side away from the mouth so
+nothing can trap lava; necks meet their bulbs on tangent fillets; lava never passes from one bottle to
 another, and heat conducts between neighbouring bottles at a third of the usual rate, as through glass.
 The Reservoirs switch in the menu
 pulls the whole lamp into frame, hidden bottles and all, with their outlines and the screen edge drawn
