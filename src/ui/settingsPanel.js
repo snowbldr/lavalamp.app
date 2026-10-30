@@ -1,6 +1,5 @@
-import { button, div, input } from '@srfnstack/fntags'
-import { hexToRgb, rgbToHex } from '../color.js'
-import { formInput, notify, resetToDefaultButton } from './components.js'
+import { button, div, fnstate, span } from '@srfnstack/fntags'
+import { knob, knobs, notify, row, section, segmented, swatch, toggle } from './components.js'
 import {
   bgColor,
   clearSavedSettings,
@@ -43,69 +42,28 @@ import {
   turbulence
 } from './settings.js'
 
-const colorPicker = (title, id, state) => formInput(
-  title,
-  input({
-    id,
-    type: 'color',
-    value: state.bindAttr(() => rgbToHex(state())),
-    oninput: e => state(hexToRgb(e.target.value))
-  })
-)
-
-// `max` may be a number or a bound attribute, for sliders whose range follows the window size.
-const slider = (title, id, state, { min, max, step }, resetTo) => formInput(
-  title,
-  input({
-    id,
-    type: 'range',
-    min,
-    max,
-    step,
-    value: state.bindAttr(),
-    oninput: e => state(parseFloat(e.target.value))
-  }),
-  resetTo && resetToDefaultButton(() => state(resetTo()))
-)
-
-// A row of buttons, one lit, for a state that takes one of a few words.
-const choice = (title, state, options) => formInput(
-  title,
-  div(
-    { style: { display: 'flex', gap: '4px', 'flex-wrap': 'wrap', 'justify-content': 'center' } },
-    ...options.map(option => button(
-      {
-        id: `touch-${option}`,
-        onclick: () => state(option),
-        style: {
-          'border-radius': '5px',
-          padding: '5px 8px',
-          'text-transform': 'capitalize',
-          'font-weight': state.bindStyle(() => state() === option ? 'bold' : 'normal'),
-          outline: state.bindStyle(() => state() === option ? '2px solid #b67cfe' : 'none')
-        }
-      },
-      option
-    ))
-  )
-)
-
-const actionButton = (title, id, text, onclick) => formInput(
-  title,
-  button({ id, onclick, style: { 'border-radius': '5px', padding: '5px' } }, text)
-)
+// Two sections: Lamp, for anyone (colours, how often it heats, how gloopy, how fast, what a
+// finger does, how to look at it), and Physics, folded away, for the particle model. The knob
+// labels are short because four knobs share a row; Gloop is the Conduction setting, named for
+// what Robert said it does ("the mechanism we were missing for maximum lava gloopiness").
+const seconds = v => `${v} s`
+const whole = v => String(Math.round(v))
+const fixed = digits => v => Number(v).toFixed(digits)
+const times = v => `${Number(v).toFixed(2)}x`
 
 export function createSettingsPanel () {
   let panel
+  const physicsOpen = fnstate(false)
+  const lampOpen = fnstate(true)
 
   const open = () => document.body.append(panel)
   const close = () => panel.remove()
 
   const copyShareLink = () =>
     navigator.clipboard.writeText(shareLink()).then(
-      () => notify('Link Copied to Clipboard'),
+      () => notify('Link copied to clipboard'),
       err => {
-        notify('Failed to Copy Share Link...')
+        notify('Failed to copy share link')
         console.error(err)
       }
     )
@@ -118,71 +76,58 @@ export function createSettingsPanel () {
   }
 
   panel = div(
-    {
-      style: {
-        float: 'left',
-        background: 'rgb(150,150,150,.6)',
-        'z-index': 20,
-        padding: '22px 22px',
-        display: 'flex',
-        position: 'relative',
-        'max-width': '700px',
-        'border-radius': '10px',
-        'flex-direction': 'column',
-        'justify-content': 'space-evenly',
-        'align-items': 'center'
-      }
-    },
-    colorPicker('Background Color', 'bgColor', bgColor),
-    colorPicker('Lava Color', 'lavaColor', lavaColor),
-    colorPicker('Highlight Color', 'highlightColor', highlightColor),
-    slider('Particle Size', 'particleSize', particleSize, { min: 5, max: 50, step: 1 }, () => defaultParticleSize),
-    slider('Particle Count', 'particle-count', particleCount, {
-      min: 5,
-      max: defaultParticleCount.bindAttr(() => Math.trunc(defaultParticleCount()) * 2),
-      step: 1
-    }, defaultParticleCount),
-    slider('Interaction Radius', 'interaction-radius', interactionRadius, { min: 30, max: 100, step: 1 }, () => defaultInteractionRadius),
-    slider('Stiffness', 'stiffness', stiffness, { min: 1, max: 6500, step: 1 }, () => defaultStiffness),
-    slider('Stiffness Near', 'stiffness-near', stiffnessNear, { min: 1, max: 40000, step: 10 }, () => defaultStiffnessNear),
-    slider('Rest Density', 'rest-density', restDensity, { min: 0.01, max: 7, step: 0.01 }, () => defaultRestDensity),
-    slider('Max Temp', 'max-temp', maxTemp, {
-      min: 420,
-      max: defaultMaxTemp.bindAttr(() => defaultMaxTemp() * 2),
-      step: 1
-    }, defaultMaxTemp),
-    slider('Gravity Strength', 'gravity', gravityStrength, {
-      min: 220,
-      max: defaultGravityStrength.bindAttr(() => defaultGravityStrength() * 2),
-      step: 1
-    }, defaultGravityStrength),
-    slider('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir),
-    slider('Turbulence', 'turbulence', turbulence, { min: 0, max: 150, step: 1 }, () => defaultTurbulence),
-    slider('Drifting Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters),
-    slider('Heat Spots', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots),
-    slider('Conduction', 'conduction', conduction, { min: 0, max: 0.04, step: 0.0005 }, () => defaultConduction),
-    slider('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace),
-    choice('Touch', touchMode, touchModes),
-    actionButton('Flow Field', 'flow', showFlow.bindAs(() => showFlow() ? 'Hide Arrows' : 'Show Arrows'), () => showFlow(!showFlow())),
-    actionButton('Heat Map', 'heat', showHeat.bindAs(() => showHeat() ? 'Hide Heat' : 'Show Heat'), () => showHeat(!showHeat())),
-    actionButton('Share', 'share', 'Share', copyShareLink),
-    actionButton('Save', 'save', 'Save and Close', () => {
-      saveSettings()
-      close()
-    }),
-    actionButton('Reset Defaults', 'reset', 'Reset Defaults', resetDefaults),
+    { class: 'panel', onclick: e => e.stopPropagation() },
     div(
-      {
-        style: {
-          position: 'absolute',
-          top: '10px',
-          right: '20px',
-          'font-size': '26px',
-          cursor: 'pointer'
-        },
-        onclick: close
-      },
-      'x'
+      { class: 'panel-header' },
+      span({ class: 'panel-title' }, 'lavalamp.app'),
+      button({ class: 'panel-close', onclick: close, title: 'Close' }, '×')
+    ),
+    section(
+      'Lamp', lampOpen,
+      row('Colours', div(
+        { class: 'swatches' },
+        swatch('Lava', 'lavaColor', lavaColor),
+        swatch('Glow', 'highlightColor', highlightColor),
+        swatch('Background', 'bgColor', bgColor)
+      )),
+      knobs(
+        knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
+        knob('Gloop', 'conduction', conduction, { min: 0, max: 0.04, step: 0.0005 }, () => defaultConduction, fixed(4)),
+        knob('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir),
+        knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
+      ),
+      row('Touch', segmented('touch', touchMode, touchModes)),
+      row('Heat Map', toggle('heat', showHeat)),
+      row('Flow Field', toggle('flow', showFlow))
+    ),
+    section(
+      'Physics', physicsOpen,
+      knobs(
+        knob('Size', 'particleSize', particleSize, { min: 5, max: 50, step: 1 }, () => defaultParticleSize),
+        knob('Count', 'particle-count', particleCount, { min: 5, max: () => Math.trunc(defaultParticleCount()) * 2, step: 1 }, defaultParticleCount, whole),
+        knob('Radius', 'interaction-radius', interactionRadius, { min: 30, max: 100, step: 1 }, () => defaultInteractionRadius),
+        knob('Stiff', 'stiffness', stiffness, { min: 1, max: 6500, step: 1 }, () => defaultStiffness),
+        knob('Near', 'stiffness-near', stiffnessNear, { min: 1, max: 40000, step: 10 }, () => defaultStiffnessNear),
+        knob('Density', 'rest-density', restDensity, { min: 0.01, max: 7, step: 0.01 }, () => defaultRestDensity, fixed(2)),
+        knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
+        knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
+        knob('Turb', 'turbulence', turbulence, { min: 0, max: 150, step: 1 }, () => defaultTurbulence),
+        knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters)
+      )
+    ),
+    div(
+      { class: 'actions' },
+      button({ id: 'share', onclick: copyShareLink }, 'Share'),
+      button({ id: 'reset', onclick: resetDefaults }, 'Reset'),
+      button({
+        id: 'save',
+        class: 'primary',
+        onclick: () => {
+          saveSettings()
+          close()
+          notify('Settings saved')
+        }
+      }, 'Save')
     )
   )
 

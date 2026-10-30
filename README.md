@@ -63,7 +63,9 @@ the lava, so it behaves like the liquid in a real lamp.
 
 ### Settings
 
-The menu in the top left exposes every tuning parameter. Save keeps them in local storage, Share
-copies a link that carries them.
+The menu in the top left has two sections: Lamp, for colours, heat, gloop (conduction), stir, pace,
+what a finger does and how to look at it, and Physics, folded away, for the particle model. The
+numbers are knobs: drag sideways or up, scroll, or use the arrow keys; click the number to reset one.
+Save keeps the settings in local storage, Share copies a link that carries them.
 
 <sub>Copyright © 2020 Robert Kempton</sub>

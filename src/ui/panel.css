@@ -1,0 +1,133 @@
+/* The settings panel. Robert: "we should stop using the native controls (people complain they look
+   shitty). we also should have like basic controls for normal human stuff, and advanced for all the
+   physics nerd stuff". Range inputs keep their keyboard and touch behaviour and lose their look;
+   colour inputs hide behind a swatch. */
+.panel {
+  --accent: #b67cfe;
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 20;
+  width: 320px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 14px 18px 18px;
+  border-radius: 14px;
+  background: rgba(18, 14, 28, 0.84);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #f1ecfa;
+  font: 14px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.panel * { box-sizing: border-box; }
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.panel-title { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
+.panel-close {
+  width: 30px; height: 30px;
+  border: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit; font-size: 18px; line-height: 30px; text-align: center;
+  cursor: pointer;
+}
+.panel-close:hover { background: rgba(255, 255, 255, 0.16); }
+.panel-section { padding: 6px 0; }
+.panel-section + .panel-section { border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.panel-section-title {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 8px 0; border: 0; background: none;
+  color: rgba(241, 236, 250, 0.7); font: inherit; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; text-align: left;
+}
+.panel-section-title .chevron { transition: transform 0.2s; }
+.panel-section.closed .chevron { transform: rotate(-90deg); }
+.panel-section.closed .panel-rows { display: none; }
+
+.row {
+  display: grid;
+  grid-template-columns: 96px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+.row-label { font-size: 13px; color: rgba(241, 236, 250, 0.9); }
+.row-value {
+  font-size: 11px; text-align: right; font-variant-numeric: tabular-nums;
+  color: rgba(241, 236, 250, 0.55); cursor: pointer;
+}
+.row-value:hover { color: #b67cfe; }
+.row-control { display: flex; align-items: center; min-width: 0; }
+.row-control.wide { grid-column: 2 / 4; }
+
+/* Knobs: a retro dial that turns with a straight drag */
+.knobs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 6px; padding: 6px 0 4px; }
+.knob-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.knob {
+  position: relative; width: 54px; height: 54px; border-radius: 50%; cursor: ns-resize;
+  touch-action: none; outline: none;
+}
+.knob-ring { position: absolute; inset: 0; border-radius: 50%; }
+.knob-ring::after {
+  content: ""; position: absolute; inset: 5px; border-radius: 50%; background: rgba(18, 14, 28, 1);
+}
+.knob-face {
+  position: absolute; inset: 8px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #5a5266, #2a2434 60%, #1b1623);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+}
+.knob-pointer {
+  position: absolute; left: 50%; top: 4px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px;
+  background: #f1ecfa; box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+}
+.knob.turning .knob-face, .knob:focus-visible .knob-face { box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0, 0, 0, 0.7); }
+.knob-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(241, 236, 250, 0.7); text-align: center; }
+.knob-value { font-size: 11px; font-variant-numeric: tabular-nums; color: rgba(241, 236, 250, 0.9); cursor: pointer; }
+.knob-value:hover { color: var(--accent); }
+
+/* Colour swatches: the native input sits invisibly over a round swatch */
+.swatches { display: flex; gap: 14px; }
+.swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: rgba(241, 236, 250, 0.7); }
+.swatch-well {
+  position: relative; width: 34px; height: 34px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); cursor: pointer;
+}
+.swatch-well input[type=color] {
+  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0;
+}
+
+/* Segmented choice and toggles */
+.segmented { display: flex; width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.08); padding: 2px; }
+.segmented button {
+  flex: 1; border: 0; border-radius: 6px; padding: 6px 0; background: none;
+  color: rgba(241, 236, 250, 0.75); font: inherit; font-size: 12px; text-transform: capitalize; cursor: pointer;
+}
+.segmented button.on { background: #b67cfe; color: #1a1026; font-weight: 600; }
+.toggle {
+  width: 42px; height: 24px; border: 0; border-radius: 12px; position: relative; cursor: pointer;
+  background: rgba(255, 255, 255, 0.18); transition: background 0.2s;
+}
+.toggle::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: transform 0.2s;
+}
+.toggle.on { background: #b67cfe; }
+.toggle.on::after { transform: translateX(18px); }
+
+/* Actions */
+.actions { display: flex; gap: 8px; margin-top: 10px; }
+.actions button {
+  flex: 1; border: 0; border-radius: 8px; padding: 9px 0;
+  background: rgba(255, 255, 255, 0.1); color: inherit; font: inherit; font-size: 13px; cursor: pointer;
+}
+.actions button:hover { background: rgba(255, 255, 255, 0.18); }
+.actions button.primary { background: #b67cfe; color: #1a1026; font-weight: 600; }
+.actions button.primary:hover { background: #c796ff; }
