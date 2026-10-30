@@ -94,3 +94,23 @@ export function drawFlow (context, width, height, scale, look, flowAt) {
     context.fill()
   }
 }
+
+// The Cups view's outlines: the ceiling and floor surfaces, and the edge of the screen as a dashed
+// box, drawn in lamp coordinates (the caller has set the transform).
+export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
+  context.lineWidth = lineWidth
+  context.strokeStyle = 'rgba(236, 236, 236, 0.55)'
+  for (const surface of [view.ceilingAt, view.floorAt]) {
+    context.beginPath()
+    for (let px = 0; px <= lampWidth; px += 4) {
+      const py = surface(px)
+      if (px === 0) context.moveTo(px, py)
+      else context.lineTo(px, py)
+    }
+    context.stroke()
+  }
+  context.setLineDash([6 * lineWidth, 6 * lineWidth])
+  context.strokeStyle = 'rgba(236, 236, 236, 0.3)'
+  context.strokeRect(0, 0, lampWidth, lampHeight)
+  context.setLineDash([])
+}

@@ -1,4 +1,4 @@
-import { drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
+import { drawCups, drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
 
 const HIGHLIGHT_HEIGHT = 15
 const ALPHA_THRESHOLD = 70
@@ -32,10 +32,14 @@ export function createCanvasRenderer (canvas, look) {
   let heatKey = ''
   let width = 0 // of the canvas bitmap, where all the pixel work happens
   let height = 0
+  let lampWidth = 0
+  let lampHeight = 0
   let scale = 1 // bitmap pixels per window pixel, 1 or less
   let highlightHeight = HIGHLIGHT_HEIGHT
 
   function resize (newWidth, newHeight) {
+    lampWidth = newWidth
+    lampHeight = newHeight
     scale = Math.min(1, Math.sqrt(PIXEL_BUDGET / (newWidth * newHeight)))
     width = canvas.width = Math.max(1, Math.round(newWidth * scale))
     height = canvas.height = Math.max(1, Math.round(newHeight * scale))
@@ -53,7 +57,8 @@ export function createCanvasRenderer (canvas, look) {
 
   function render (state, count, overlays = {}) {
     const { r, g, b } = look.lavaColor
-    const size = look.particleSize * scale
+    const view = overlays.view || { k: 1, ox: 0, oy: 0 }
+    const size = look.particleSize * view.k * scale
     const heat = look.showHeat && state.temp && overlays.neutral > 0
     let t = now()
     context.clearRect(0, 0, width, height)
@@ -65,14 +70,14 @@ export function createCanvasRenderer (canvas, look) {
       const perTemp = top / (2 * overlays.neutral)
       for (let i = 0; i < count; i++) {
         const step = Math.max(0, Math.min(top, Math.round(state.temp[i] * perTemp)))
-        context.drawImage(heatDiscs[step], state.x[i] * scale - offset, state.y[i] * scale - offset, span, span)
+        context.drawImage(heatDiscs[step], (state.x[i] * view.k + view.ox) * scale - offset, (state.y[i] * view.k + view.oy) * scale - offset, span, span)
       }
     } else {
       prepareDisc(size, r, g, b)
       const span = disc.width
       const offset = span / 2
       for (let i = 0; i < count; i++) {
-        context.drawImage(disc, state.x[i] * scale - offset, state.y[i] * scale - offset, span, span)
+        context.drawImage(disc, (state.x[i] * view.k + view.ox) * scale - offset, (state.y[i] * view.k + view.oy) * scale - offset, span, span)
       }
     }
     let t1 = now(); profile.discs = t1 - t; t = t1
@@ -87,8 +92,12 @@ export function createCanvasRenderer (canvas, look) {
     t1 = now(); profile.write = t1 - t; t = t1
     // The heater is its own view (Robert: "hide the heating elements by default, but add a switch to
     // show the heating element. should work independently of heat map").
-    if (look.showHeater && overlays.heaterAt) drawHeater(context, width, height, scale, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
-    if (look.showFlow && overlays.flowAt) drawFlow(context, width, height, scale, look, overlays.flowAt)
+    const k = view.k * scale
+    context.setTransform(k, 0, 0, k, view.ox * scale, view.oy * scale)
+    if (look.showHeater && overlays.heaterAt) drawHeater(context, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+    if (look.showFlow && overlays.flowAt) drawFlow(context, lampWidth, lampHeight, 1, look, overlays.flowAt)
+    if (overlays.view) drawCups(context, lampWidth, lampHeight, overlays.view, 1 / k)
+    context.setTransform(1, 0, 0, 1, 0, 0)
     profile.overlays = now() - t
   }
 

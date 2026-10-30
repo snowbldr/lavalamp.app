@@ -105,7 +105,7 @@ const CUP_LIP = 0.04
 // the cups' volume below the visible layer and the default particle count (settings.js) pays
 // for it. The hidden lava is a cold reserve the pool draws on as it lifts: heating it as well
 // put about twice the lava in reach of the heater and the whole pool hovered as one mass.
-const FLOOR_CUP_SHARE = 0.25
+const FLOOR_CUP_SHARE = 0.35 // was 0.25; Robert: "make the reserves underneath a little bigger"
 // The ceiling and floor are sampled into tables every CUP_STEP px and smoothed over CUP_ROUND px
 // either side, which rounds off the cusp where two cups meet (Robert: "there's a jiggle on the
 // top at the point where the cups meet. when two cups next to each other get full, a bit of

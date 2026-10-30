@@ -37,6 +37,7 @@ import {
   restDensity,
   showFlow,
   showHeat,
+  showCups,
   showHeater,
   stiffness,
   stiffnessNear,
@@ -105,6 +106,7 @@ export function start () {
   mirror(showFlow, look, 'showFlow')
   mirror(showHeat, look, 'showHeat')
   mirror(showHeater, look, 'showHeater')
+  mirror(showCups, look, 'showCups')
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
   let edge = 'bottom' // the page edge the lamp's floor sits on
@@ -267,7 +269,20 @@ export function start () {
       shown.y[i] = previous.y[i] + (y[i] - previous.y[i]) * due
     }
     shown.temp = sim.state.temp
-    renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity })
+    // The Cups view: fit everything from the top of the highest cup to the bottom of the deepest
+    // into the frame, scaled down and centred, so the hidden lava can be watched.
+    let view = null
+    if (showCups()) {
+      let minY = 0
+      let maxY = height
+      for (let px = 0; px <= width; px += 8) {
+        minY = Math.min(minY, sim.ceilingAt(px))
+        maxY = Math.max(maxY, sim.floorAt(px))
+      }
+      const k = Math.min(1, height / (maxY - minY))
+      view = { k, ox: (width - width * k) / 2, oy: -minY * k, ceilingAt: sim.ceilingAt, floorAt: sim.floorAt }
+    }
+    renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view })
     if (profiling) {
       const t2 = performance.now()
       tally.frames++

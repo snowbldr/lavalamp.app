@@ -43,6 +43,7 @@ import {
   shareLink,
   showFlow,
   showHeat,
+  showCups,
   showHeater,
   touchMode,
   touchModes,
@@ -134,8 +135,11 @@ export function createSettingsPanel () {
         ['Heat Map', 'Colour the lava by its temperature instead of the lava colour.'],
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.']
       ]),
-      pair('Heater', toggle('heater', showHeater)),
-      hint(help, 'Show the heater strip and its elements along the floor.')
+      pair('Heater', toggle('heater', showHeater), 'Cups', toggle('cups', showCups)),
+      hint(help, [
+        ['Heater', 'Show the heater strip and its elements along the floor.'],
+        ['Cups', 'Pull the whole lamp into frame, hidden cups and all, so you can watch the lava in them.']
+      ])
     ),
     section(
       'Physics', physicsOpen,

@@ -1,4 +1,4 @@
-import { drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
+import { drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
 // WebGL exists: soft discs composited source-over into a texture, then one fullscreen pass
@@ -141,11 +141,15 @@ export function createGlRenderer (canvas, look) {
 
   let width = 0
   let height = 0
+  let lampWidth = 0 // in lamp (window) px
+  let lampHeight = 0
   let scale = 1
   const profile = { discs: 0, composite: 0, overlays: 0 }
   const now = () => (look.profile ? performance.now() : 0)
 
   function resize (newWidth, newHeight) {
+    lampWidth = newWidth
+    lampHeight = newHeight
     scale = Math.min(1, Math.sqrt(PIXEL_BUDGET / (newWidth * newHeight)))
     width = canvas.width = Math.max(1, Math.round(newWidth * scale))
     height = canvas.height = Math.max(1, Math.round(newHeight * scale))
@@ -176,6 +180,8 @@ export function createGlRenderer (canvas, look) {
 
   function render (state, count, overlays = {}) {
     const heat = look.showHeat && state.temp && overlays.neutral > 0
+    // overlays.view, when set, fits the whole lamp into the frame: lamp px to window px.
+    const view = overlays.view || IDENTITY
     let t = now()
     // Pass 1: the discs, into the accumulation texture.
     const floats = count * 6 * STRIDE
@@ -187,8 +193,8 @@ export function createGlRenderer (canvas, look) {
     const perTemp = heat ? top / (2 * overlays.neutral) : 0
     let k = 0
     for (let i = 0; i < count; i++) {
-      const cx = state.x[i] * scale
-      const cy = state.y[i] * scale
+      const cx = (state.x[i] * view.k + view.ox) * scale
+      const cy = (state.y[i] * view.k + view.oy) * scale
       let cr = lava[0]
       let cg = lava[1]
       let cb = lava[2]
@@ -226,7 +232,7 @@ export function createGlRenderer (canvas, look) {
     gl.enableVertexAttribArray(pLoc.aColor)
     gl.vertexAttribPointer(pLoc.aColor, 3, gl.FLOAT, false, bytes, 16)
     gl.uniform2f(pLoc.uResolution, width, height)
-    gl.uniform1f(pLoc.uSize, look.particleSize * scale)
+    gl.uniform1f(pLoc.uSize, look.particleSize * view.k * scale)
     gl.drawArrays(gl.TRIANGLES, 0, count * 6)
     gl.disableVertexAttribArray(pLoc.aColor)
     gl.disableVertexAttribArray(pLoc.aCorner)
@@ -247,13 +253,13 @@ export function createGlRenderer (canvas, look) {
     gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
     const hl = look.highlightColor
     gl.uniform3f(cLoc.uHighlight, hl.r / 255, hl.g / 255, hl.b / 255)
-    gl.uniform1f(cLoc.uSteps, Math.min(MAX_HIGHLIGHT, Math.max(1, Math.round(HIGHLIGHT_HEIGHT * scale))))
+    gl.uniform1f(cLoc.uSteps, Math.min(MAX_HIGHLIGHT, Math.max(1, Math.round(HIGHLIGHT_HEIGHT * view.k * scale))))
     gl.uniform1f(cLoc.uHeat, heat ? 1 : 0)
     gl.uniform1f(cLoc.uRows, height)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     t1 = now(); profile.composite = t1 - t; t = t1
     // The overlay canvas: only touched while a drawn-on-top view is on.
-    const wantOverlay = (look.showHeater && overlays.heaterAt) || (look.showFlow && overlays.flowAt)
+    const wantOverlay = (look.showHeater && overlays.heaterAt) || (look.showFlow && overlays.flowAt) || overlays.view
     if (wantOverlay) {
       if (!overlayShown) {
         canvas.parentNode.insertBefore(overlay, canvas.nextSibling)
@@ -262,9 +268,14 @@ export function createGlRenderer (canvas, look) {
       const turn = canvas.style.transform || ''
       const wanted = `translate(-50%, -50%) ${turn}`
       if (overlay.style.transform !== wanted) overlay.style.transform = wanted
+      overlayContext.setTransform(1, 0, 0, 1, 0, 0)
       overlayContext.clearRect(0, 0, width, height)
-      if (look.showHeater && overlays.heaterAt) drawHeater(overlayContext, width, height, scale, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
-      if (look.showFlow && overlays.flowAt) drawFlow(overlayContext, width, height, scale, look, overlays.flowAt)
+      // Draw in lamp coordinates through the view and the pixel scale.
+      const k = view.k * scale
+      overlayContext.setTransform(k, 0, 0, k, view.ox * scale, view.oy * scale)
+      if (look.showHeater && overlays.heaterAt) drawHeater(overlayContext, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+      if (look.showFlow && overlays.flowAt) drawFlow(overlayContext, lampWidth, lampHeight, 1, look, overlays.flowAt)
+      if (overlays.view) drawCups(overlayContext, lampWidth, lampHeight, overlays.view, 1 / k)
     } else if (overlayShown) {
       overlay.remove()
       overlayShown = false
@@ -276,3 +287,4 @@ export function createGlRenderer (canvas, look) {
 }
 
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]]
+const IDENTITY = { k: 1, ox: 0, oy: 0 }
