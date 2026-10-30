@@ -7,7 +7,8 @@ import { button, div, fnstate, span } from '@srfnstack/fntags'
 import { createSimulation } from '../src/sim/simulation.js'
 import { seedRandom } from '../src/sim/random.js'
 import { createRenderer } from '../src/render/renderer.js'
-import { knob, knobs, pair, toggle } from '../src/ui/components.js'
+import { hint, knob, knobs, row, segmented, toggle } from '../src/ui/components.js'
+import { defaultHeatColors } from '../src/ui/settings.js'
 
 const W = 360
 const H = 900
@@ -25,26 +26,36 @@ export function start () {
   const gloop = fnstate(0.02)
   const radius = fnstate(60)
   const size = fnstate(30)
-  // The experiment.
+  // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
+  // had too much momentum taking off from the initial heating. maybe warm the whole bottom first,
+  // then gently pulse the heat until it takes off". So: the lamp's own floor heater runs for Warm
+  // seconds, then a finger on the floor's middle pulses for Pulse seconds every Gap seconds at Heat,
+  // and Max heat caps the temperature (rise speed is temperature minus gravity, 500).
   const count = fnstate(160)
-  const pulse = fnstate(2) // seconds of finger heat
-  const heat = fnstate(12) // finger heat per step
+  const warm = fnstate(6) // seconds of whole-floor heating before the pulses
+  const pulse = fnstate(0.6) // seconds of finger heat per pulse
+  const gap = fnstate(1.5) // seconds between pulses
+  const heat = fnstate(20) // finger heat per step
+  const maxHeat = fnstate(800)
   const interval = fnstate(0.6) // seconds between filmstrip frames
   const frames = fnstate(12)
-  const from = fnstate(3) // the filmstrip starts itself at this time after a Replay
+  const from = fnstate(14) // the filmstrip starts itself at this time after a Replay
   const slow = fnstate(false)
-  const silhouette = fnstate(true) // black on orange like the video, or the lamp's own colours and lighting
+  // Silhouette is black on orange like the video, Lamp the lamp's own colours and lighting, Heat the heat map.
+  const view = fnstate('silhouette')
+  const help = fnstate(false)
 
   const canvas = document.createElement('canvas')
   const lamp = div({ class: 'lamp' }, canvas)
   const strip = div({ class: 'strip' })
   const clock = span({ class: 'readout' }, '')
 
-  const look = { lavaColor: { r: 10, g: 5, b: 5 }, highlightColor: { r: 60, g: 20, b: 10 }, particleSize: size(), showFlow: false, showHeat: false, showHeater: false }
+  const look = { lavaColor: { r: 10, g: 5, b: 5 }, highlightColor: { r: 60, g: 20, b: 10 }, particleSize: size(), showFlow: false, showHeat: false, showHeater: false, ...defaultHeatColors }
   const renderer = createRenderer(canvas, look)
   renderer.resize(W, H)
   const dress = () => {
-    if (silhouette()) {
+    look.showHeat = view() === 'heat'
+    if (view() === 'silhouette') {
       look.lavaColor = { r: 10, g: 5, b: 5 }
       look.highlightColor = { r: 60, g: 20, b: 10 }
       lamp.style.background = '#e8420a'
@@ -68,8 +79,8 @@ export function start () {
   function params () {
     return {
       particleCount: count(), interactionRadius: radius(), stiffness: stiffness(), stiffnessNear: near(), restDensity: density(),
-      maxTemp: 2000, gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 1e9, cupDepth: 0,
-      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: false, touchHeat: heat()
+      maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
+      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat()
     }
   }
 
@@ -104,14 +115,15 @@ export function start () {
     let steps = 0
     while (owed >= FRAME && steps < 4) { owed -= FRAME; steps++ }
     for (let k = 0; k < steps; k++) {
-      // The pulse: a heat finger on the floor's middle from 1 s to 1 s + pulse.
-      const on = time >= 1 && time < 1 + pulse()
+      // After the warm floor, a heat finger on the floor's middle pulses: on for Pulse, off for Gap.
+      const since = time - warm()
+      const on = since >= 0 && since % (pulse() + gap()) < pulse()
       sim.setTouches(on ? [{ x: W / 2, y: H - 30, vx: 0, vy: 0, mode: 'heat' }] : [])
       Object.assign(live, params()) // the knobs apply live; the simulation reads this object
       sim.step(FRAME)
       time += FRAME
     }
-    renderer.render(sim.state, sim.count, { neutral: 500 })
+    renderer.render(sim.state, sim.count, { neutral: 500 }) // neutral buoyancy is the gravity, 500
     if (capturing && time >= nextCapture) {
       const shot = document.createElement('canvas')
       shot.width = W / 3
@@ -128,6 +140,7 @@ export function start () {
 
   const panel = div(
     { class: 'panel' },
+    button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the knobs do' }, '?'),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Liquid')),
       knobs(
         knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02 }, () => 0.3, v => `${v} s`),
@@ -135,25 +148,60 @@ export function start () {
         knob('Cap', 'cap', cap, { min: 0.5, max: 5, step: 0.1 }, () => 2, v => `${v} g`),
         knob('Gloop', 'gloop', gloop, { min: 0, max: 0.04, step: 0.0005 }, () => 0.02, v => Number(v).toFixed(4))
       ),
+      hint(help, [
+        ['Wobble', 'inertia: seconds for a particle to ease onto its drift. 0 is the overdamped wax with no snap at all.'],
+        ['Kick', 'how much of the surface tension pull on a stretched neck or a blob skin is carried on as velocity.'],
+        ['Cap', 'the fastest that carried velocity may get, in gravities.'],
+        ['Gloop', 'heat conduction between touching particles: high is lava that warms and lifts as one piece.']
+      ]),
       knobs(
         knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1 }, () => 4000),
         knob('Near', 'near', near, { min: 1, max: 40000, step: 10 }, () => 25000),
         knob('Density', 'density', density, { min: 0.01, max: 7, step: 0.01 }, () => 4.25, v => Number(v).toFixed(2)),
         knob('Radius', 'radius', radius, { min: 30, max: 100, step: 1 }, () => 60)
-      )),
+      ),
+      hint(help, [
+        ['Stiff', 'pressure pushing particles apart when they crowd past the rest density.'],
+        ['Near', 'the short range push that stops particles stacking; also the surface tension.'],
+        ['Density', 'the rest density the pressure aims for: lower is a looser, more stretchy liquid.'],
+        ['Radius', 'how far a particle feels its neighbours, in pixels.']
+      ])),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
       knobs(
         knob('Lava', 'count', count, { min: 50, max: 600, step: 10 }, () => 160),
-        knob('Pulse', 'pulse', pulse, { min: 0.5, max: 8, step: 0.1 }, () => 2, v => `${v} s`),
-        knob('Heat', 'heat', heat, { min: 2, max: 30, step: 1 }, () => 12),
+        knob('Warm', 'warm', warm, { min: 0, max: 20, step: 0.5 }, () => 6, v => `${v} s`),
+        knob('Pulse', 'pulse', pulse, { min: 0.1, max: 4, step: 0.1 }, () => 0.6, v => `${v} s`),
+        knob('Gap', 'gap', gap, { min: 0.1, max: 6, step: 0.1 }, () => 1.5, v => `${v} s`)
+      ),
+      hint(help, [
+        ['Lava', 'particles in the pool. The blob is cut from these, so more lava is a bigger blob or a second one.'],
+        ['Warm', 'seconds the whole floor heats like a real lamp base before any pulse, so the pool starts warm and soft.'],
+        ['Pulse', 'seconds each heat pulse lasts: a finger on Heat held at the middle of the floor.'],
+        ['Gap', 'seconds between pulses. They repeat until you Replay, so a blob keeps coming.']
+      ]),
+      knobs(
+        knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1 }, () => 20),
+        knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 2000, step: 10 }, () => 800),
         knob('Size', 'size', size, { min: 5, max: 50, step: 1 }, () => 30)
       ),
+      hint(help, [
+        ['Heat', 'how hard each pulse heats: temperature added per frame under the finger. 12 is the lamp\'s touch.'],
+        ['Max heat', 'the hottest lava can get. Rise speed is heat minus gravity (500), so 800 is a blob that climbs at 300 px/s at most and cools before the ceiling.'],
+        ['Size', 'the drawn radius of a particle, in pixels: the look, not the physics.']
+      ]),
       knobs(
-        knob('From', 'from', from, { min: 0, max: 20, step: 0.5 }, () => 3, v => `${v} s`),
+        knob('From', 'from', from, { min: 0, max: 30, step: 0.5 }, () => 14, v => `${v} s`),
         knob('Every', 'interval', interval, { min: 0.1, max: 2, step: 0.1 }, () => 0.6, v => `${v} s`),
         knob('Frames', 'frames', frames, { min: 4, max: 24, step: 1 }, () => 12)
       ),
-      pair('Slow motion', toggle('slow', slow), 'Silhouette', toggle('silhouette', silhouette))),
+      hint(help, [
+        ['From', 'the filmstrip starts itself this many seconds after a Replay.'],
+        ['Every', 'seconds between filmstrip frames.'],
+        ['Frames', 'how many frames the strip takes before it stops.']
+      ]),
+      row('View', segmented('view', view, ['silhouette', 'lamp', 'heat'])),
+      row('Slow motion', toggle('slow', slow)),
+      hint(help, 'Slow motion runs the lab at a quarter speed. View: silhouette is black lava on the video\'s orange for shape, lamp is the lamp\'s own colours and lighting, heat is the heat map (blue sinking, red rising).')),
     div({ class: 'actions' },
       button({ id: 'replay', onclick: reset }, 'Replay'),
       button({ id: 'film', class: 'primary', onclick: film }, 'Filmstrip now'),
