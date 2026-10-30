@@ -33,7 +33,7 @@ export const defaultLavaHighlight = { r: 182, g: 124, b: 254 }
 // Robert picked these in the lamp and asked for them as the defaults: a weather map rather than
 // the infrared it started with (cold sky blue, cool green, warm orange, hot red, peak cream).
 export const defaultHeatColors = {
-  heatCold: { r: 0, g: 191, b: 255 },
+  heatCold: { r: 0, g: 20, b: 117 }, // was sky blue 0,191,255; Robert: "just darker blue, now that we get a lot colder"
   heatCool: { r: 68, g: 255, b: 0 },
   heatWarm: { r: 255, g: 126, b: 20 },
   heatHot: { r: 255, g: 0, b: 0 },
