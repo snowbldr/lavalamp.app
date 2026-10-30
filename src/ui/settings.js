@@ -17,6 +17,8 @@ export const defaultRestDensity = 4.25
 export const defaultParticleSize = 30
 // Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
 export const defaultStir = 20
+export const defaultConduction = 0.005
+export const defaultPace = 0.7
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -34,12 +36,14 @@ export const maxTemp = fnstate(defaultMaxTemp())
 export const particleCount = fnstate(defaultParticleCount())
 export const particleSize = fnstate(defaultParticleSize)
 export const stir = fnstate(defaultStir)
+export const conduction = fnstate(defaultConduction)
+export const pace = fnstate(defaultPace)
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir'])
+const signedSettings = new Set(['stir', 'conduction'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -53,7 +57,9 @@ const defaults = () => ({
   maxTemp: defaultMaxTemp(),
   particleCount: defaultParticleCount(),
   particleSize: defaultParticleSize,
-  stir: defaultStir
+  stir: defaultStir,
+  conduction: defaultConduction,
+  pace: defaultPace
 })
 
 export const getSettings = () => {

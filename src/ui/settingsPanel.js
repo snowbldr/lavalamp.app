@@ -4,6 +4,9 @@ import { formInput, notify, resetToDefaultButton } from './components.js'
 import {
   bgColor,
   clearSavedSettings,
+  conduction,
+  defaultConduction,
+  defaultPace,
   defaultGravityStrength,
   defaultInteractionRadius,
   defaultMaxTemp,
@@ -19,6 +22,7 @@ import {
   lavaColor,
   maxTemp,
   particleCount,
+  pace,
   particleSize,
   resetSettings,
   restDensity,
@@ -121,6 +125,8 @@ export function createSettingsPanel () {
       step: 1
     }, defaultGravityStrength),
     slider('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir),
+    slider('Conduction', 'conduction', conduction, { min: 0, max: 0.02, step: 0.0005 }, () => defaultConduction),
+    slider('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace),
     actionButton('Share', 'share', 'Share', copyShareLink),
     actionButton('Save', 'save', 'Save and Close', () => {
       saveSettings()

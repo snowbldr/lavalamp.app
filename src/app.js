@@ -7,6 +7,7 @@ import { createSettingsPanel } from './ui/settingsPanel.js'
 import {
   bgColor,
   computeDefaultGravity,
+  conduction,
   computeDefaultMaxTemp,
   computeDefaultParticleCount,
   defaultGravityStrength,
@@ -18,6 +19,7 @@ import {
   lavaColor,
   loadSavedSettings,
   maxTemp,
+  pace,
   particleCount,
   particleSize,
   restDensity,
@@ -63,6 +65,7 @@ export function start () {
   mirror(gravityStrength, params, 'gravity')
   mirror(particleSize, params, 'particleSize')
   mirror(stir, params, 'stir')
+  mirror(conduction, params, 'conduction')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
@@ -145,11 +148,29 @@ export function start () {
     )
   )
 
+  // Pace is slow motion, not a smaller step: the sim always steps by FRAME, which every tuned
+  // number assumes, but only on `pace` of the frames, and the drawing interpolates between the
+  // last two sim states so it stays smooth. At pace 1 it steps and draws every frame as before.
+  const shown = { x: new Float32Array(0), y: new Float32Array(0) }
+  let previous = { x: new Float32Array(0), y: new Float32Array(0) }
+  let due = 1
   function frame () {
     const [ax, ay] = motion.consume()
     sim.push(ax / FRAME * MOTION_GAIN, ay / FRAME * MOTION_GAIN)
-    sim.step(FRAME)
-    renderer.render(sim.state, sim.count)
+    due += pace()
+    while (due >= 1) {
+      due -= 1
+      previous = { x: sim.state.x.slice(0, sim.count), y: sim.state.y.slice(0, sim.count) }
+      sim.step(FRAME)
+    }
+    const { x, y } = sim.state
+    const count = Math.min(sim.count, previous.x.length)
+    if (shown.x.length < count) { shown.x = new Float32Array(count); shown.y = new Float32Array(count) }
+    for (let i = 0; i < count; i++) {
+      shown.x[i] = previous.x[i] + (x[i] - previous.x[i]) * due
+      shown.y[i] = previous.y[i] + (y[i] - previous.y[i]) * due
+    }
+    renderer.render(shown, count)
     requestAnimationFrame(frame)
   }
 

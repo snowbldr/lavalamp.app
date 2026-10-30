@@ -1,58 +1,48 @@
 import { SpatialHash } from './spatialHash.js'
 import { findNeighbours, relax, updatePressure } from './fluid.js'
-import { nextTemperature, warmupTemperature } from './heat.js'
+import { nextTemperature } from './heat.js'
 import { randomBetween } from './random.js'
 
 const CELL_SIZE = 50
-// How the lava arrives on load. All of this was tuned by measuring relaxation jitter (px per frame
-// of movement that is not advection) against the steady state lamp, which sits around 1.2.
-//
-// Particles ooze up out of the middle OOZE_WIDTH of the floor at OOZE_RATE per second. A single
-// point inlet was tried first: pressure shoved the puddle out to both walls into the same U shape.
-const OOZE_RATE = 30
-const OOZE_WIDTH = 0.25
-// They arrive warm, at this fraction of gravity. Cold lava falls at full gravity into the stack
-// every frame and pressure has to push it back apart, which jitters at 5x the steady state and
-// reads as anxious. At 0.8 the stack is calm (1.6).
-const OOZE_HEAT = 0.8
-// A fresh particle stays anchored this many frames so the puddle moves out of its way instead of
-// the particle being kicked out of the puddle. Takes the fill from 2.8 down to the settled 1.7.
-const OOZE_SETTLE_FRAMES = 60
-// After the fill the heat starts in the middle of the floor and spreads to the walls over WARMUP
+// How the lava arrives on load: all at once, as a warm slab already lying on the floor.
+// SPAWN_HEAT is the fraction of gravity each particle starts at. Cold lava falls at full gravity
+// into the stack every frame and pressure has to push it back apart, which jitters at 5x the
+// steady state and reads as anxious; warm lava is calm lava. SPAWN_AREA is the floor area a
+// settled particle takes up in square pixels (measured: 250 particles across 1000 px settle
+// 100 px deep), so the slab appears at its resting depth and neither collapses nor bulges. The
+// first second then jitters at 1.0 to 1.4 against the steady state 1.2; oozing the lava in from
+// the floor, which this replaced, ran at 2.8 during the fill and "just feels weird".
+const SPAWN_HEAT = 0.8
+const SPAWN_AREA = 400
+// On load the heat starts in the middle of the floor and spreads to the walls over WARMUP
 // seconds, like a coil warming the base from the centre out. The floor outside the front still
 // gets IDLE_HEAT, enough to hold the lava warm (heating roughly balances cooling near 0.3) but
 // not enough to lift it. A flat warm up only delayed the explosion: every floor particle heats
 // at the same rate from the same place, so they all cross buoyancy within the same second.
+// An earlier version heated the whole depth of the slab during warm up and switched to contact
+// heating when the front reached the walls; the switch read as a phase change ("it explodes into
+// a bunch of small pieces"). Now there is one heat model from the first frame: contact heating at
+// the floor, and conduction to carry it up into the blob.
 const WARMUP = 45
 const IDLE_HEAT = 0.35
-// During warm up the heat reaches WARMUP_DEPTH particle sizes up into the slab, flat all the way
-// up (shape 0). Contact heating only warms the bottom layer, and hot bottom particles pop through
-// the cold layers above as droplets; a linear falloff still let the bottom of the bulge escape
-// first and it vented droplets. Flat heating takes a whole column buoyant together so the first
-// thing to lift is one big glob. Measured by the clusters among lifted particles: contact only
-// sent 60 up within a second in clusters of 7; linear depth 5 gain 1 gave 21 and 15 over ten
-// seconds; flat depth 4 gain 0.6 gave 17 at 27 s and 48 at 31 s with little else. Gain 0.4 took
-// a minute, gain 1 went back to many small globs.
-const WARMUP_DEPTH = 4
-const WARMUP_GAIN = 0.6
-const WARMUP_SHAPE = 0
+// Conduction: each step a particle's temperature moves this fraction of the way toward the
+// weighted mean of its neighbours. Without it every particle heats and cools on its own noise,
+// neighbours drift apart in temperature and the hot ones tear out of a blob as droplets. It is
+// a setting because it has a cliff: at 1000 px with 250 particles, 0 gives globs of 58 particles
+// and 587 midline crossings a minute, 0.005 gives 67 and 399, 0.01 gives 112 and 36, and from
+// 0.02 up the lamp is one hovering mass. Where to sit on that slope is a matter of taste.
+const CONDUCTION = 0.005
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
   let state = allocate(params.particleCount)
-  // Particles are not all alive at once. They ooze up out of the middle of the floor until the
-  // count is reached, and ooze again whenever the count is raised. The heater comes on when the
-  // first fill is done.
+  // The live count follows params.particleCount; particles added later appear in the slab too.
   let alive = 0
-  let pending = 0
-  let heater = false
   let heaterTime = 0
-  let frame = 0
-  let born = new Int32Array(params.particleCount) // frame each particle appeared
 
   function allocate (count) {
     return {
@@ -63,18 +53,17 @@ export function createSimulation ({ width, height, params }) {
       temp: new Float32Array(count),
       p: new Float32Array(count), // pressure
       pNear: new Float32Array(count), // near pressure
-      g: new Float32Array(count) // kernel weight scratch space, indexed by neighbour
+      g: new Float32Array(count), // kernel weight scratch space, indexed by neighbour
+      shared: new Float32Array(count) // neighbour mean temperature scratch space
     }
   }
 
-  function spawn (i) {
-    const span = width * OOZE_WIDTH
-    state.x[i] = randomBetween((width - span) / 2, (width + span) / 2)
-    state.y[i] = height
+  function spawn (i, depth) {
+    state.x[i] = randomBetween(0, width)
+    state.y[i] = randomBetween(height - depth, height)
     state.vx[i] = 0
     state.vy[i] = 0
-    state.temp[i] = OOZE_HEAT * params.gravity
-    born[i] = frame
+    state.temp[i] = SPAWN_HEAT * params.gravity
   }
 
   // Make room for more particles. Existing particles keep their state. The arrays never shrink;
@@ -84,25 +73,14 @@ export function createSimulation ({ width, height, params }) {
     const grown = allocate(count)
     for (const field of Object.keys(state)) grown[field].set(state[field])
     state = grown
-    const grownBorn = new Int32Array(count)
-    grownBorn.set(born)
-    born = grownBorn
   }
 
-  // Bring the live count toward the target, a few particles per frame.
-  function pour (target, dt) {
+  // Bring the live count to the target, all at once, as a slab lying on the floor.
+  function fill (target) {
     if (alive > target) alive = target
-    if (alive === target) {
-      pending = 0
-      heater = true
-      return
-    }
-    heaterTime = 0
-    pending += OOZE_RATE * dt
-    while (pending >= 1 && alive < target) {
-      spawn(alive++)
-      pending -= 1
-    }
+    if (alive === target) return
+    const depth = SPAWN_AREA * target / width
+    while (alive < target) spawn(alive++, depth)
   }
 
   function resize (newWidth, newHeight) {
@@ -118,18 +96,12 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0 } = params
-    frame++
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION } = params
     ensureCapacity(particleCount)
-    pour(particleCount, dt)
-    // Warm up: the heat starts in the middle of the floor and spreads to the walls over `warmup`
-    // seconds, like a coil warming the base from the centre out, so the first glob lifts from the
-    // middle and the rest follow instead of the whole cold puddle exploding at once.
-    let progress = 1
-    if (heater) {
-      heaterTime += dt
-      progress = Math.min(1, heaterTime / WARMUP)
-    }
+    fill(particleCount)
+    // Warm up: the heater power is a front spreading from the middle of the floor (see WARMUP).
+    heaterTime += dt
+    const progress = Math.min(1, heaterTime / WARMUP)
     const halfWidth = width / 2
     const powerAt = x => {
       if (progress >= 1) return 1
@@ -154,11 +126,7 @@ export function createSimulation ({ width, height, params }) {
 
     hash.clear()
     for (let i = 0; i < alive; i++) {
-      if (heater) {
-        temp[i] = progress < 1
-          ? warmupTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]), WARMUP_DEPTH, WARMUP_GAIN, WARMUP_SHAPE)
-          : nextTemperature(temp[i], y[i], height, maxTemp, particleSize)
-      }
+      temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]))
       // Velocity is rebuilt from scratch every frame instead of carried over, which makes the fluid
       // fully overdamped. The paper recomputes velocity from the previous position (Algorithm 1,
       // line 20); dropping that is what turns splashing water into wax.
@@ -169,12 +137,23 @@ export function createSimulation ({ width, height, params }) {
       hash.add(x[i], y[i], i)
     }
 
+    const { g, shared } = state
     for (let i = 0; i < alive; i++) {
       const neighbours = findNeighbours(state, hash, i, interactionRadius)
       updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
-      relax(state, i, neighbours, dt, frame - born[i] < OOZE_SETTLE_FRAMES)
+      let weight = 0
+      let heat = 0
+      for (let k = 0; k < neighbours.length; k++) {
+        const n = neighbours[k]
+        weight += g[n]
+        heat += g[n] * temp[n]
+      }
+      shared[i] = weight > 0 ? heat / weight : temp[i]
+      relax(state, i, neighbours, dt)
       contain(i)
     }
+    // Applied after the pass so every particle saw the same temperatures.
+    for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i])
   }
 
   function contain (i) {
