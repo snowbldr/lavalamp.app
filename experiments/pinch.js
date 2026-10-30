@@ -24,14 +24,16 @@ export function start () {
   const near = fnstate(25000)
   const density = fnstate(4.25)
   const gloop = fnstate(0.02)
-  const radius = fnstate(60)
-  const size = fnstate(30)
+  // Half the lamp's grain, at Robert's suggestion: "maybe we need a smaller particle size? that
+  // should be fine now that we have a much faster render". Same lava, four times the particles.
+  const radius = fnstate(30)
+  const size = fnstate(15)
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
   // had too much momentum taking off from the initial heating. maybe warm the whole bottom first,
   // then gently pulse the heat until it takes off". So: the lamp's own floor heater runs for Warm
   // seconds, then a finger on the floor's middle pulses for Pulse seconds every Gap seconds at Heat,
   // and Max heat caps the temperature (rise speed is temperature minus gravity, 500).
-  const count = fnstate(160)
+  const count = fnstate(640)
   const warm = fnstate(6) // seconds of whole-floor heating before the pulses
   const pulse = fnstate(0.6) // seconds of finger heat per pulse
   const gap = fnstate(1.5) // seconds between pulses
@@ -158,7 +160,7 @@ export function start () {
         knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1 }, () => 4000),
         knob('Near', 'near', near, { min: 1, max: 40000, step: 10 }, () => 25000),
         knob('Density', 'density', density, { min: 0.01, max: 7, step: 0.01 }, () => 4.25, v => Number(v).toFixed(2)),
-        knob('Radius', 'radius', radius, { min: 30, max: 100, step: 1 }, () => 60)
+        knob('Radius', 'radius', radius, { min: 15, max: 100, step: 1 }, () => 30)
       ),
       hint(help, [
         ['Stiff', 'pressure pushing particles apart when they crowd past the rest density.'],
@@ -168,7 +170,7 @@ export function start () {
       ])),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
       knobs(
-        knob('Lava', 'count', count, { min: 50, max: 600, step: 10 }, () => 160),
+        knob('Lava', 'count', count, { min: 50, max: 1200, step: 10 }, () => 640),
         knob('Warm', 'warm', warm, { min: 0, max: 20, step: 0.5 }, () => 6, v => `${v} s`),
         knob('Pulse', 'pulse', pulse, { min: 0.1, max: 4, step: 0.1 }, () => 0.6, v => `${v} s`),
         knob('Gap', 'gap', gap, { min: 0.1, max: 6, step: 0.1 }, () => 1.5, v => `${v} s`)
@@ -182,12 +184,12 @@ export function start () {
       knobs(
         knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1 }, () => 20),
         knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 2000, step: 10 }, () => 800),
-        knob('Size', 'size', size, { min: 5, max: 50, step: 1 }, () => 30)
+        knob('Size', 'size', size, { min: 5, max: 50, step: 1 }, () => 15)
       ),
       hint(help, [
         ['Heat', 'how hard each pulse heats: temperature added per frame under the finger. 12 is the lamp\'s touch.'],
         ['Max heat', 'the hottest lava can get. Rise speed is heat minus gravity (500), so 800 is a blob that climbs at 300 px/s at most and cools before the ceiling.'],
-        ['Size', 'the drawn radius of a particle, in pixels: the look, not the physics.']
+        ['Size', 'the drawn radius of a particle, in pixels. Mostly the look; it also sets how close to the floor counts as touching the heater. For finer lava, halve Size and Radius and use four times the Lava.']
       ]),
       knobs(
         knob('From', 'from', from, { min: 0, max: 30, step: 0.5 }, () => 14, v => `${v} s`),
