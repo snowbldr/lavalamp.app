@@ -26,7 +26,13 @@ and a Stop hook (scripts/talk-check.sh) will nag when it is skipped. Capture:
 4. Measurements, when something is argued from numbers (lane persistence, wall mass, frame
    time), copied into the log entry so the talk can show them.
 
-Do not push to origin unless asked. Committing checkpoints locally is expected.
+docs/ is its own git repository, private, at github.com/snowbldr/lavalamp-docs, and is ignored by
+this one: raw records do not belong on a public system. Commit in docs/ and push it every time
+the log, a screenshot or the talk changes (Robert: "push to lavalamp-docs any time the context is
+updated"). The lamp repository itself is public: commit checkpoints locally, never push it unless
+asked. A full backup of the repository from before docs was split out is at
+~/lavalamp.app-backup-2026-10-30 (and the ref backup/master-with-docs); keep both until Robert
+says go.
 
 ## Layout
 

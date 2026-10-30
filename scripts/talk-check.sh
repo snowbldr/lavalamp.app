@@ -20,7 +20,18 @@ $entry"
 fi
 
 code_changed="$(git status --porcelain -- src index.html experiments 2>/dev/null)"
-log_changed="$(git status --porcelain -- docs/decisions.md 2>/dev/null)"
+# docs/ is its own repository (private, github.com/snowbldr/lavalamp-docs), ignored by this one.
+# The log counts as updated if it is dirty there or its last commit is newer than the lamp's.
+log_changed="$(git -C docs status --porcelain -- decisions.md 2>/dev/null)"
+if [ -z "$log_changed" ]; then
+  docs_time="$(git -C docs log -1 --format=%ct 2>/dev/null || echo 0)"
+  code_time="$(git log -1 --format=%ct 2>/dev/null || echo 0)"
+  [ "${docs_time:-0}" -gt "${code_time:-0}" ] && log_changed="newer"
+fi
+docs_unpushed=""
+if [ -n "$(git -C docs status --porcelain 2>/dev/null)" ] || [ "$(git -C docs rev-list --count origin/master..HEAD 2>/dev/null || echo 0)" -gt 0 ]; then
+  docs_unpushed="The docs repository has uncommitted or unpushed changes: commit in docs/ and push to lavalamp-docs (Robert: \"push to lavalamp-docs any time the context is updated\"). Never push the lamp repository itself unless asked."
+fi
 already_nagged="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null)"
 
 block=""
@@ -36,8 +47,8 @@ if [ -n "$last_tag" ]; then
 fi
 
 if [ -n "$block" ] && [ "$already_nagged" != "true" ]; then
-  printf '{"decision":"block","reason":%s}\n' "$(json "$block${note:+ Also: $note}")"
-elif [ -n "$block$note" ]; then
-  printf '{"systemMessage":%s}\n' "$(json "${block:+$block }$note")"
+  printf '{"decision":"block","reason":%s}\n' "$(json "$block${note:+ Also: $note}${docs_unpushed:+ Also: $docs_unpushed}")"
+elif [ -n "$block$note$docs_unpushed" ]; then
+  printf '{"systemMessage":%s}\n' "$(json "${block:+$block }${note:+$note }$docs_unpushed")"
 fi
 exit 0
