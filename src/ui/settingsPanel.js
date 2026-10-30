@@ -4,7 +4,9 @@ import {
   bgColor,
   clearSavedSettings,
   conduction,
+  cupDepth,
   defaultConduction,
+  defaultCupDepth,
   defaultDrifters,
   defaultHeatSpots,
   defaultPace,
@@ -134,7 +136,8 @@ export function createSettingsPanel () {
         knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
         knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
         knob('Turb', 'turbulence', turbulence, { min: 0, max: 150, step: 1 }, () => defaultTurbulence),
-        knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters)
+        knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters),
+        knob('Cups', 'cup-depth', cupDepth, { min: 0, max: 0.5, step: 0.01 }, () => defaultCupDepth, fixed(2))
       )
     ),
     div(

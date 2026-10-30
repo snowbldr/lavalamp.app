@@ -10,6 +10,7 @@ import {
   bgColor,
   computeDefaultGravity,
   conduction,
+  cupDepth,
   drifters,
   computeDefaultMaxTemp,
   computeDefaultParticleCount,
@@ -88,6 +89,7 @@ export function start () {
   mirror(turbulence, params, 'turbulence')
   mirror(drifters, params, 'drifters')
   mirror(heatSpots, params, 'heatSpots')
+  mirror(cupDepth, params, 'cupDepth')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')

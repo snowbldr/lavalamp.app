@@ -75,6 +75,17 @@ const ELEMENT_RATE = 3
 const SPOT_SPREAD = 0.2
 const SPOT_BASE = 0.2
 const SPOT_CAP = 3
+// Cups in the ceiling. Robert, on a glob that spread flat under the ceiling, cooled as a sheet
+// and fell as a strip: "put like a zig zag, or cups at the top for the lava to sit in so that
+// they would stay globbed as they cool and fall down as big blobs instead of a strip", then
+// "cups with random normal sizes from medium to pretty big, more wide than tall, oval shape
+// cups". The ceiling is a row of half ellipse arches laid once at start: widths drawn from a
+// bell curve (CUP_WIDTH mean and deviation, clipped to CUP_WIDTH_RANGE, all as fractions of the
+// shorter side) and scaled to tile the width exactly; each cup is params.cupDepth of its width
+// deep at the centre (0 for the flat ceiling). Lava rising into a cup pools in it and keeps a
+// glob's outline while it cools.
+const CUP_WIDTH = [0.4, 0.1] // mean, deviation
+const CUP_WIDTH_RANGE = [0.25, 0.6]
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
 // across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
 // gathers it, spin is a tornado under the finger, heat and cool change temperature.
@@ -112,7 +123,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -126,6 +137,9 @@ export function createSimulation ({ width, height, params }) {
   // The heating elements, laid out once: { fx, fr } as fractions of the width and shorter side,
   // plus their lit state { heat, start, life } while lit.
   const elements = []
+  // The ceiling cups, laid out once: { fx, fw } centre and width as fractions of the width.
+  const cups = []
+  let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -339,7 +353,9 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0 } = params
+    cupDepthNow = cupDepth
+    if (cups.length === 0) layoutCups()
     ensureCapacity(particleCount)
     fill(particleCount)
     stirEddies(dt, turbulence, drifters)
@@ -522,8 +538,41 @@ export function createSimulation ({ width, height, params }) {
     const { x, y } = state
     if (x[i] < 0) x[i] = 0
     else if (x[i] > width) x[i] = width
-    if (y[i] < 0) y[i] = 0
+    const top = cupDepthNow > 0 ? ceilingAt(x[i]) : 0
+    if (y[i] < top) y[i] = top
     else if (y[i] > height) y[i] = height
+  }
+
+  // Lay the cups across the ceiling once (see CUP_WIDTH): bell curve widths, then all scaled so
+  // they tile the width exactly. Fractions, so a resize keeps the same lamp.
+  function layoutCups () {
+    const shorter = Math.min(width, height)
+    const widths = []
+    let total = 0
+    while (total < width) {
+      let w = (CUP_WIDTH[0] + randomNormal() * CUP_WIDTH[1]) * shorter
+      w = Math.max(CUP_WIDTH_RANGE[0] * shorter, Math.min(CUP_WIDTH_RANGE[1] * shorter, w))
+      widths.push(w)
+      total += w
+    }
+    let at = 0
+    for (const w of widths) {
+      const fw = w / total
+      cups.push({ fx: at + fw / 2, fw })
+      at += fw
+    }
+  }
+
+  // The ceiling's height at a point: 0 at the centre of a cup, cupDepth of the cup's width at its
+  // edges, a half ellipse between. Also used to draw the cups.
+  function ceilingAt (px) {
+    const f = Math.max(0, Math.min(1, px / width))
+    let cup = cups[cups.length - 1]
+    for (const c of cups) if (f <= c.fx + c.fw / 2) { cup = c; break }
+    const a = cup.fw * width / 2
+    const depth = cupDepthNow * cup.fw * width
+    const u = (px - cup.fx * width) / a
+    return depth * (1 - Math.sqrt(Math.max(0, 1 - u * u)))
   }
 
   return {
@@ -535,6 +584,7 @@ export function createSimulation ({ width, height, params }) {
     flowAt,
     heaterAt,
     heaterElements,
+    ceilingAt,
     get state () { return state },
     get count () { return alive },
     get width () { return width },

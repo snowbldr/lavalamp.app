@@ -45,6 +45,8 @@ export const defaultPace = 0.7
 export const defaultTurbulence = 45
 export const defaultDrifters = 2
 export const defaultHeatSpots = 15
+// How deep the ceiling cups are, as a fraction of each cup's width. 0 is a flat ceiling.
+export const defaultCupDepth = 0.4
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -74,6 +76,7 @@ export const pace = fnstate(defaultPace)
 export const turbulence = fnstate(defaultTurbulence)
 export const drifters = fnstate(defaultDrifters)
 export const heatSpots = fnstate(defaultHeatSpots)
+export const cupDepth = fnstate(defaultCupDepth)
 // Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
 export const showFlow = fnstate(false)
 export const showHeat = fnstate(true)
@@ -85,9 +88,9 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -113,7 +116,8 @@ const defaults = () => ({
   pace: defaultPace,
   turbulence: defaultTurbulence,
   drifters: defaultDrifters,
-  heatSpots: defaultHeatSpots
+  heatSpots: defaultHeatSpots,
+  cupDepth: defaultCupDepth
 })
 
 export const getSettings = () => {
