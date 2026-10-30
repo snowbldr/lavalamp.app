@@ -20,8 +20,8 @@ and rise as a unit because of the surface tension that falls out of the relaxati
 
 Left alone, that model has nothing sideways in it, so blobs rise and fall in the same lane forever.
 A slow convection roll (up the middle, down the walls, in along the floor) stirs the lava the way the
-circulation in a real lamp does. On load the lava oozes up out of the floor instead of appearing all
-at once.
+circulation in a real lamp does. On load the lava oozes up cold out of the middle of the floor, and the heater
+comes on once it is all in.
 
 Rendering is the 2D canvas metaball trick: soft discs, an alpha threshold so nearby discs fuse, then a
 highlight along the underside of each blob.

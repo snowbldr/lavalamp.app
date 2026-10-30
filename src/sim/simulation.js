@@ -4,11 +4,11 @@ import { nextTemperature } from './heat.js'
 import { randomBetween } from './random.js'
 
 const CELL_SIZE = 50
-// Particles ooze up out of the floor at this rate, in particles per second.
+// Particles ooze up out of the floor at this rate, in particles per second, across the middle
+// OOZE_WIDTH of the floor. A single point inlet was tried first: pressure shoved the puddle out to
+// both walls and it always set into the same U shape.
 const OOZE_RATE = 40
-// New particles start anywhere from cold up to this fraction of gravity, so some of the puddle is
-// already warm and the first blobs lift off at different times on every load.
-const OOZE_HEAT = 0.5
+const OOZE_WIDTH = 0.25
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
@@ -18,9 +18,11 @@ export function createSimulation ({ width, height, params }) {
   const impulse = [0, 0]
   let state = allocate(params.particleCount)
   // Particles are not all alive at once. They ooze up out of the middle of the floor until the
-  // count is reached, and ooze again whenever the count is raised.
+  // count is reached, and ooze again whenever the count is raised. The heater stays off until the
+  // first fill is done, so the lava settles cold and every load warms up from a different puddle.
   let alive = 0
   let pending = 0
+  let heater = false
 
   function allocate (count) {
     return {
@@ -36,11 +38,12 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function spawn (i) {
-    state.x[i] = width / 2 + randomBetween(-5, 6)
+    const span = width * OOZE_WIDTH
+    state.x[i] = randomBetween((width - span) / 2, (width + span) / 2)
     state.y[i] = height
     state.vx[i] = 0
     state.vy[i] = 0
-    state.temp[i] = randomBetween(0, params.gravity * OOZE_HEAT)
+    state.temp[i] = 0
   }
 
   // Make room for more particles. Existing particles keep their state. The arrays never shrink;
@@ -57,6 +60,7 @@ export function createSimulation ({ width, height, params }) {
     if (alive > target) alive = target
     if (alive === target) {
       pending = 0
+      heater = true
       return
     }
     pending += OOZE_RATE * dt
@@ -99,7 +103,7 @@ export function createSimulation ({ width, height, params }) {
 
     hash.clear()
     for (let i = 0; i < alive; i++) {
-      temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize)
+      if (heater) temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize)
       // Velocity is rebuilt from scratch every frame instead of carried over, which makes the fluid
       // fully overdamped. The paper recomputes velocity from the previous position (Algorithm 1,
       // line 20); dropping that is what turns splashing water into wax.
