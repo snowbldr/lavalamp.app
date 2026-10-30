@@ -211,6 +211,26 @@ export function start () {
   // last two sim states so it stays smooth. At pace 1 it steps and draws every frame as before.
   const shown = { x: new Float32Array(0), y: new Float32Array(0), temp: null }
   let due = 1
+  // ?profile in the URL: average sim and render time per frame, printed every two seconds and
+  // kept on window.lavaProfile, for finding what a slow device is spending its time on.
+  const profiling = new URLSearchParams(window.location.search).has('profile')
+  look.profile = profiling
+  const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
+  const report = () => {
+    const out = {
+      fps: (tally.frames / (tally.span / 1000)).toFixed(1),
+      frameMs: (tally.span / tally.frames).toFixed(2),
+      simMs: (tally.sim / tally.frames).toFixed(2),
+      stepsPerFrame: (tally.steps / tally.frames).toFixed(2),
+      renderMs: (tally.render / tally.frames).toFixed(2),
+      pixels: renderer.pixels(),
+      particles: sim.count
+    }
+    for (const k in tally.phases) out[k] = (tally.phases[k] / tally.frames).toFixed(2)
+    window.lavaProfile = out
+    console.log('[profile]', JSON.stringify(out))
+    tally.frames = 0; tally.sim = 0; tally.steps = 0; tally.render = 0; tally.span = 0; tally.phases = {}
+  }
   let leaning = 0 // seconds gravity has pointed at an edge other than the current one
   function frame () {
     // A shake is a shove, in the lamp's frame.
@@ -227,11 +247,14 @@ export function start () {
     const mode = touchMode()
     sim.setTouches(pointer.consume(FRAME).map(p => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, mode })))
     due += pace()
+    const t0 = profiling ? performance.now() : 0
     while (due >= 1) {
       due -= 1
       previous = { x: sim.state.x.slice(0, sim.count), y: sim.state.y.slice(0, sim.count) }
       sim.step(FRAME)
+      tally.steps++
     }
+    const t1 = profiling ? performance.now() : 0
     const { x, y } = sim.state
     const count = Math.min(sim.count, previous.x.length)
     if (shown.x.length < count) { shown.x = new Float32Array(count); shown.y = new Float32Array(count) }
@@ -241,6 +264,16 @@ export function start () {
     }
     shown.temp = sim.state.temp
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity })
+    if (profiling) {
+      const t2 = performance.now()
+      tally.frames++
+      tally.sim += t1 - t0
+      tally.render += t2 - t1
+      tally.span += t2 - tally.last
+      tally.last = t2
+      for (const k in renderer.profile) tally.phases[k] = (tally.phases[k] || 0) + renderer.profile[k]
+      if (tally.span >= 2000) report()
+    }
     requestAnimationFrame(frame)
   }
 

@@ -52,10 +52,15 @@ export function createCanvasRenderer (canvas, look) {
   // `overlays` is { flowAt, heaterAt, elements, neutral }: the stirring velocity at a window point,
   // the heater power under a floor point, the heating elements, and the temperature of neutral buoyancy, for the flow field and heat
   // map when look.showFlow or look.showHeat is set. `state.temp` is needed for the heat map.
+  // Per-phase timings of the last frame in ms, kept up to date when look.profile is set.
+  const profile = { discs: 0, read: 0, threshold: 0, highlight: 0, write: 0, overlays: 0 }
+  const now = () => (look.profile ? performance.now() : 0)
+
   function render (state, count, overlays = {}) {
     const { r, g, b } = look.lavaColor
     const size = look.particleSize * scale
     const heat = look.showHeat && state.temp && overlays.neutral > 0
+    let t = now()
     context.clearRect(0, 0, width, height)
     if (heat) {
       prepareHeatDiscs(size)
@@ -75,15 +80,21 @@ export function createCanvasRenderer (canvas, look) {
         context.drawImage(disc, state.x[i] * scale - offset, state.y[i] * scale - offset, span, span)
       }
     }
+    let t1 = now(); profile.discs = t1 - t; t = t1
     const imageData = context.getImageData(0, 0, width, height)
     const pix = imageData.data
+    t1 = now(); profile.read = t1 - t; t = t1
     threshold(pix)
+    t1 = now(); profile.threshold = t1 - t; t = t1
     if (!heat) highlight(pix, look.highlightColor)
+    t1 = now(); profile.highlight = t1 - t; t = t1
     context.putImageData(imageData, 0, 0)
+    t1 = now(); profile.write = t1 - t; t = t1
     // The heater is its own view (Robert: "hide the heating elements by default, but add a switch to
     // show the heating element. should work independently of heat map").
     if (look.showHeater && overlays.heaterAt) drawHeater(overlays.heaterAt, overlays.elements ? overlays.elements() : [])
     if (look.showFlow && overlays.flowAt) drawFlow(overlays.flowAt)
+    profile.overlays = now() - t
   }
 
   const paletteKey = () => HEAT_STOPS.map(stop => rgbKey(look[stop])).join('/')
@@ -244,5 +255,5 @@ export function createCanvasRenderer (canvas, look) {
     }
   }
 
-  return { render, resize }
+  return { render, resize, profile, pixels: () => width * height }
 }

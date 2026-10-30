@@ -26,8 +26,10 @@ const SPAWN_AREA = 400
 // An earlier version heated the whole depth of the slab during warm up and switched to contact
 // heating when the front reached the walls; the switch read as a phase change ("it explodes into
 // a bunch of small pieces"). Now there is one heat model from the first frame: contact heating at
-// the floor, and conduction to carry it up into the blob.
-const WARMUP = 20
+// the floor, and conduction to carry it up into the blob. The front was 20 s; the heating
+// elements only start once it is done, and Robert: "there's a long delay before the donuts fire
+// ... needs to be like 1/10th the time".
+const WARMUP = 2
 const IDLE_HEAT = 0.6
 // Conduction: each step a particle's temperature moves this fraction of the way toward the
 // weighted mean of its neighbours. Without it every particle heats and cools on its own noise,
