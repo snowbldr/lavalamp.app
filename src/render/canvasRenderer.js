@@ -10,11 +10,16 @@ const PIXEL_BUDGET = 1_000_000
 // typical (median) speed on screen draws at half the cell, and the fastest tends toward most of
 // it, so a tornado reads as the strongest thing without shrinking the roll around it to dots.
 const FLOW_SPACING = 40
+// The heat map: lava coloured by temperature on an infrared palette, neutral buoyancy in the
+// middle, so purple is sinking and yellow is rising, with a strip along the floor for the heater.
+const HEAT_STEPS = 48
+const HEAT_STRIP = 10 // window px
+const HEAT_PALETTE = [[20, 0, 60], [110, 0, 170], [220, 40, 40], [255, 170, 0], [255, 255, 230]]
 
 // Draws the particles as soft discs, thresholds the alpha channel so that overlapping discs fuse
 // into one blob (the classic metaball trick), then lights the underside of every blob with a short
 // gradient, as if lit by the bulb below.
-// `look` is a plain object the caller keeps up to date: { lavaColor, highlightColor, particleSize, showFlow }
+// `look` is a plain object the caller keeps up to date: { lavaColor, highlightColor, particleSize, showFlow, showHeat }
 export function createCanvasRenderer (canvas, look) {
   const context = canvas.getContext('2d', { willReadFrequently: true })
   // One soft disc, drawn once and blitted per particle. Shading a radial gradient per particle
@@ -23,6 +28,9 @@ export function createCanvasRenderer (canvas, look) {
   const disc = document.createElement('canvas')
   const discContext = disc.getContext('2d')
   let discKey = ''
+  // Heat map discs, one per palette step, same size as the lava disc.
+  const heatDiscs = []
+  let heatKey = ''
   let width = 0 // of the canvas bitmap, where all the pixel work happens
   let height = 0
   let scale = 1 // bitmap pixels per window pixel, 1 or less
@@ -37,23 +45,77 @@ export function createCanvasRenderer (canvas, look) {
     highlightHeight = Math.max(1, Math.round(HIGHLIGHT_HEIGHT * scale))
   }
 
-  // `flowAt(x, y)` gives the stirring velocity at a window point, drawn when look.showFlow is set.
-  function render (state, count, flowAt) {
+  // `overlays` is { flowAt, heaterAt, neutral }: the stirring velocity at a window point, the heater
+  // power under a floor point, and the temperature of neutral buoyancy, for the flow field and heat
+  // map when look.showFlow or look.showHeat is set. `state.temp` is needed for the heat map.
+  function render (state, count, overlays = {}) {
     const { r, g, b } = look.lavaColor
     const size = look.particleSize * scale
-    prepareDisc(size, r, g, b)
-    const span = disc.width
-    const offset = span / 2
+    const heat = look.showHeat && state.temp && overlays.neutral > 0
     context.clearRect(0, 0, width, height)
-    for (let i = 0; i < count; i++) {
-      context.drawImage(disc, state.x[i] * scale - offset, state.y[i] * scale - offset, span, span)
+    if (heat) {
+      prepareHeatDiscs(size)
+      const span = heatDiscs[0].width
+      const offset = span / 2
+      const top = HEAT_STEPS - 1
+      const perTemp = top / (2 * overlays.neutral)
+      for (let i = 0; i < count; i++) {
+        const step = Math.max(0, Math.min(top, Math.round(state.temp[i] * perTemp)))
+        context.drawImage(heatDiscs[step], state.x[i] * scale - offset, state.y[i] * scale - offset, span, span)
+      }
+    } else {
+      prepareDisc(size, r, g, b)
+      const span = disc.width
+      const offset = span / 2
+      for (let i = 0; i < count; i++) {
+        context.drawImage(disc, state.x[i] * scale - offset, state.y[i] * scale - offset, span, span)
+      }
     }
     const imageData = context.getImageData(0, 0, width, height)
     const pix = imageData.data
     threshold(pix)
-    highlight(pix, look.highlightColor)
+    if (!heat) highlight(pix, look.highlightColor)
     context.putImageData(imageData, 0, 0)
-    if (look.showFlow && flowAt) drawFlow(flowAt)
+    if (heat && overlays.heaterAt) drawHeater(overlays.heaterAt)
+    if (look.showFlow && overlays.flowAt) drawFlow(overlays.flowAt)
+  }
+
+  // The infrared colour for t in [0, 1], interpolated along HEAT_PALETTE.
+  function heatColor (t) {
+    const pos = Math.max(0, Math.min(1, t)) * (HEAT_PALETTE.length - 1)
+    const k = Math.min(HEAT_PALETTE.length - 2, Math.floor(pos))
+    const f = pos - k
+    const a = HEAT_PALETTE[k]
+    const b = HEAT_PALETTE[k + 1]
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f].map(Math.round)
+  }
+
+  function prepareHeatDiscs (size) {
+    const key = `${size}`
+    if (key === heatKey) return
+    heatKey = key
+    const span = Math.max(2, Math.ceil(size * 2))
+    heatDiscs.length = 0
+    for (let step = 0; step < HEAT_STEPS; step++) {
+      const [r, g, b] = heatColor(step / (HEAT_STEPS - 1))
+      const c = document.createElement('canvas')
+      c.width = c.height = span
+      paintDisc(c.getContext('2d'), span, size, r, g, b)
+      heatDiscs.push(c)
+    }
+  }
+
+  // A strip along the floor coloured by the heater power under each column: dark where the
+  // heater is off, white hot at the peak of the wave. Normal power sits at the middle of the palette.
+  function drawHeater (heaterAt) {
+    const strip = Math.max(2, Math.round(HEAT_STRIP * scale))
+    const cell = Math.max(1, Math.round(4 * scale))
+    for (let x = 0; x < width; x += cell) {
+      const power = heaterAt((x + cell / 2) / scale)
+      const [r, g, b] = heatColor(power / 2)
+      context.fillStyle = `rgb(${r},${g},${b})`
+      context.fillRect(x, height - strip, cell, strip)
+    }
   }
 
   // Wind map arrows: one per grid cell, pointing with the flow, as long as the flow is fast.
@@ -113,15 +175,19 @@ export function createCanvasRenderer (canvas, look) {
     discKey = key
     const span = Math.max(2, Math.ceil(size * 2))
     disc.width = disc.height = span
+    paintDisc(discContext, span, size, r, g, b)
+  }
+
+  function paintDisc (target, span, size, r, g, b) {
     const centre = span / 2
-    const gradient = discContext.createRadialGradient(centre, centre, 0, centre, centre, size)
+    const gradient = target.createRadialGradient(centre, centre, 0, centre, centre, size)
     gradient.addColorStop(0, `rgba(${r},${g},${b},1)`)
     gradient.addColorStop(1, `rgba(${r},${g},${b},0)`)
-    discContext.clearRect(0, 0, span, span)
-    discContext.beginPath()
-    discContext.fillStyle = gradient
-    discContext.arc(centre, centre, size, 0, Math.PI * 2)
-    discContext.fill()
+    target.clearRect(0, 0, span, span)
+    target.beginPath()
+    target.fillStyle = gradient
+    target.arc(centre, centre, size, 0, Math.PI * 2)
+    target.fill()
   }
 
   // Alpha above the threshold becomes solid, everything else transparent. Where discs overlap their

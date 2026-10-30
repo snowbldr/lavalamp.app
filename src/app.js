@@ -15,6 +15,7 @@ import {
   defaultMaxTemp,
   defaultParticleCount,
   gravityStrength,
+  heatWave,
   highlightColor,
   interactionRadius,
   lavaColor,
@@ -25,6 +26,7 @@ import {
   particleSize,
   restDensity,
   showFlow,
+  showHeat,
   stiffness,
   stiffnessNear,
   stir,
@@ -71,12 +73,14 @@ export function start () {
   mirror(conduction, params, 'conduction')
   mirror(turbulence, params, 'turbulence')
   mirror(drifters, params, 'drifters')
+  mirror(heatWave, params, 'heatWave')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
   mirror(highlightColor, look, 'highlightColor')
   mirror(particleSize, look, 'particleSize')
   mirror(showFlow, look, 'showFlow')
+  mirror(showHeat, look, 'showHeat')
 
   let [width, height] = lampSize()
   const lamp = canvas({ id: 'lavalamp' })
@@ -157,7 +161,7 @@ export function start () {
   // Pace is slow motion, not a smaller step: the sim always steps by FRAME, which every tuned
   // number assumes, but only on `pace` of the frames, and the drawing interpolates between the
   // last two sim states so it stays smooth. At pace 1 it steps and draws every frame as before.
-  const shown = { x: new Float32Array(0), y: new Float32Array(0) }
+  const shown = { x: new Float32Array(0), y: new Float32Array(0), temp: null }
   let previous = { x: new Float32Array(0), y: new Float32Array(0) }
   let due = 1
   function frame () {
@@ -176,7 +180,8 @@ export function start () {
       shown.x[i] = previous.x[i] + (x[i] - previous.x[i]) * due
       shown.y[i] = previous.y[i] + (y[i] - previous.y[i]) * due
     }
-    renderer.render(shown, count, sim.flowAt)
+    shown.temp = sim.state.temp
+    renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, neutral: params.gravity })
     requestAnimationFrame(frame)
   }
 

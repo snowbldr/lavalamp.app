@@ -36,6 +36,21 @@ const IDLE_HEAT = 0.6
 // and 587 midline crossings a minute, 0.005 gives 67 and 399, 0.01 gives 112 and 36, and from
 // 0.02 up the lamp is one hovering mass. Where to sit on that slope is a matter of taste.
 const CONDUCTION = 0.005
+// The heat wave (params.heatWave is its period in seconds, 0 for a steady heater). Robert: "it'd
+// be cool if sometimes like 1/2 of the stuff formed one big glob" and "what if we did waves of
+// heating to heat bigger groups of particles at the same time?" A steady heater lifts lava as
+// soon as its bottom layer is warm, so nothing big ever builds; a uniform on/off cycle in time
+// made globs smaller (every floor particle still heats at the same rate from the same place). A
+// Gaussian hot spot WAVE_WIDTH of the lamp wide, WAVE_HIGH times normal power at its centre and
+// WAVE_LOW elsewhere, sweeping WAVE_SWING of the half width each way, heats one big stretch of
+// the pool together. At 2560 x 1294 with 828 particles the biggest detached glob went from 21%
+// of the lava to 51%, with six globs of a quarter or more in three and a half minutes against
+// none. It also doubles the activity (375 to 697 midline crossings a minute); Pace is the
+// counterweight.
+const WAVE_WIDTH = 0.3
+const WAVE_LOW = 0.2
+const WAVE_HIGH = 1.8
+const WAVE_SWING = 0.9
 // Turbulence: now and then an eddy appears at a random spot, a slow vortex that fades in and out
 // over a few seconds, spinning either way. Each is a Gaussian vortex, so it is divergence free
 // and moves the lava around without squashing it. The gap between eddies, their size and their
@@ -65,7 +80,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatWave
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -74,6 +89,7 @@ export function createSimulation ({ width, height, params }) {
   let alive = 0
   let heaterTime = 0
   let time = 0
+  let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -219,7 +235,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatWave = 0 } = params
     ensureCapacity(particleCount)
     fill(particleCount)
     stirEddies(dt, turbulence, drifters)
@@ -227,12 +243,23 @@ export function createSimulation ({ width, height, params }) {
     heaterTime += dt
     const progress = Math.min(1, heaterTime / WARMUP)
     const halfWidth = width / 2
+    // The heat wave: once warmed up, the heater is a hot spot that sweeps back and forth along
+    // the floor every `heatWave` seconds (0 is a steady heater), so one big contiguous stretch
+    // of the pool heats together and lifts as one glob instead of the whole floor shedding small
+    // ones at the same rate from the same place.
+    const waveX = heatWave > 0 ? halfWidth + halfWidth * WAVE_SWING * Math.sin(2 * Math.PI * heaterTime / heatWave) : -1
+    const waveSigma = WAVE_WIDTH * width
     const powerAt = x => {
-      if (progress >= 1) return 1
+      if (progress >= 1) {
+        if (waveX < 0) return 1
+        const d = (x - waveX) / waveSigma
+        return WAVE_LOW + (WAVE_HIGH - WAVE_LOW) * Math.exp(-d * d)
+      }
       const r = Math.abs(x - halfWidth) / halfWidth
       const p = (progress * 1.2 - r) / 0.2
       return p < IDLE_HEAT ? IDLE_HEAT : p > 1 ? 1 : p
     }
+    heaterPower = powerAt
     const { x, y, vx, vy, temp } = state
     const fx = impulse[0]
     const fy = impulse[1]
@@ -282,6 +309,12 @@ export function createSimulation ({ width, height, params }) {
     for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i])
   }
 
+  // The heater power under a point on the floor as of the last step, 0 up to WAVE_HIGH, for
+  // drawing the heat map.
+  function heaterAt (px) {
+    return heaterPower(px)
+  }
+
   // The stirring velocity (convection roll plus eddies) at a point, for drawing the flow field.
   function flowAt (px, py) {
     const { stir = 0, turbulence = 0 } = params
@@ -307,6 +340,7 @@ export function createSimulation ({ width, height, params }) {
     resize,
     push,
     flowAt,
+    heaterAt,
     get state () { return state },
     get count () { return alive },
     get width () { return width },
