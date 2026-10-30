@@ -48,7 +48,9 @@ export function updatePressure (state, i, neighbours, stiffness, stiffnessNear, 
 // neighbour a tenth of it. That is a tuning choice, not an oversight: it is part of how the lamp moves.
 // The direction is measured from where i was when its turn started, not where it has drifted to
 // mid-loop, which is also how it was tuned.
-export function relax (state, i, neighbours, dt) {
+// `anchored` leaves particle i where it is and only nudges the neighbours, used for particles that
+// have just oozed out of the floor so they push the puddle up instead of being kicked out of it.
+export function relax (state, i, neighbours, dt, anchored = false) {
   const xi = state.x[i]
   const yi = state.y[i]
   const dtSq = dt * dt
@@ -59,8 +61,10 @@ export function relax (state, i, neighbours, dt) {
     const [ux, uy] = unitApprox(state.x[n] - xi, state.y[n] - yi)
     const dx = ux * magnitude
     const dy = uy * magnitude
-    state.x[i] -= dx
-    state.y[i] -= dy
+    if (!anchored) {
+      state.x[i] -= dx
+      state.y[i] -= dy
+    }
     state.x[n] += dx * 0.1
     state.y[n] += dy * 0.1
   }
