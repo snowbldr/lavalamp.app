@@ -225,7 +225,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -244,6 +244,7 @@ export function createSimulation ({ width, height, params }) {
   const floorCups = [] // same shape, for the floor
   let kicked = false // whether the kick-off lighting has happened
   let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
+  let touchHeatNow = TOUCH_HEAT // params.touchHeat as of the last step
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -482,10 +483,10 @@ export function createSimulation ({ width, height, params }) {
           break
         }
         case 'heat':
-          heat += TOUCH_HEAT * w
+          heat += touchHeatNow * w
           break
         case 'cool':
-          heat -= TOUCH_HEAT * w
+          heat -= touchHeatNow * w
           break
       }
     }
@@ -503,8 +504,9 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT } = params
     cupDepthNow = cupDepth
+    touchHeatNow = touchHeat
     if (cups.length === 0) layoutCups()
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
     // params.particleCount is the visible lava; the floor's reservoirs fill themselves on top of
@@ -522,7 +524,7 @@ export function createSimulation ({ width, height, params }) {
     if (elements.length === 0) layoutElements()
     const shorter = Math.min(width, height)
     // Once warmed up, elements light on their own clocks (see ELEMENT_GAP and ELEMENT_RATE).
-    if (progress >= 1 && heatSpots > 0) {
+    if (progress >= 1 && heatSpots > 0 && heater) {
       let weight = 0
       for (const el of elements) weight += el.weight
       // Kick off: the first time the warm-up is done, the heaviest element (small, near the
@@ -579,6 +581,7 @@ export function createSimulation ({ width, height, params }) {
       if (el.glow > 0 && el.radius * 2 > maxReach) maxReach = el.radius * 2
     }
     const powerAt = x => {
+      if (!heater) return 0 // the pinch lab heats with a finger only
       if (progress >= 1) {
         if (heatSpots <= 0) return 1
         let power = SPOT_BASE
@@ -627,7 +630,7 @@ export function createSimulation ({ width, height, params }) {
 
     hash.clear()
     for (let i = 0; i < alive; i++) {
-      temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]), HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
+      temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, heater ? powerAt(x[i]) : 0, HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
       if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || ELEMENTS_ARE_CUPS || y[i] <= height)) {
         const heat = elementHeat(x[i], y[i])
         if (heat > 0) temp[i] = Math.min(maxTemp, temp[i] + heat)
@@ -691,10 +694,10 @@ export function createSimulation ({ width, height, params }) {
         // velocity, capped at WOBBLE_MAX gravities. Carrying the bulk pressure's kicks as well
         // made the whole pool slosh like water even at a tenth of a second. Walls and glass never
         // kick: contain comes after.
-        vx[i] += (x[i] - px[i]) / dt * WOBBLE_KICK
-        vy[i] += (y[i] - py[i]) / dt * WOBBLE_KICK
+        vx[i] += (x[i] - px[i]) / dt * wobbleKick
+        vy[i] += (y[i] - py[i]) / dt * wobbleKick
         const speed = Math.hypot(vx[i], vy[i])
-        const limit = WOBBLE_MAX * gravity
+        const limit = wobbleMax * gravity
         if (speed > limit) { vx[i] *= limit / speed; vy[i] *= limit / speed }
       }
       contain(i)

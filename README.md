@@ -88,7 +88,8 @@ the lava, so it behaves like the liquid in a real lamp.
     src/input/pointer.js       fingers and the mouse
     src/input/frame.js         the lamp's quarter turns inside the page
     src/ui/                    settings state, persistence, the settings panel
-    experiments/               scratch pages
+    experiments/               scratch pages; pinch.html is the pinch lab: one blob, one heat pulse,
+                               fixed seed, silhouette on orange, knobs for the liquid, a filmstrip
 
 ### Settings
 
