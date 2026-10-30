@@ -21,8 +21,10 @@ export function heatColor (look, t) {
 export const paletteKey = look => HEAT_STOPS.map(stop => { const c = look[stop]; return c ? `${c.r},${c.g},${c.b}` : '' }).join('/')
 
 // A strip along the floor coloured by the heater power under each column, with the heating
-// elements sitting on it as domes, dark when off and up to white hot when lit. `scale` is bitmap
-// pixels per window pixel.
+// elements sitting on it as half ellipses in their own proportions (footballs, three times wider
+// than tall) at ELEMENT_SHOWN of their heating footprint, dark when off and up to white hot when
+// lit. `scale` is bitmap pixels per window pixel.
+const ELEMENT_SHOWN = 0.4
 export function drawHeater (context, width, height, scale, look, heaterAt, elements) {
   const strip = Math.max(2, Math.round(HEAT_STRIP * scale))
   const cell = Math.max(1, Math.round(4 * scale))
@@ -33,10 +35,11 @@ export function drawHeater (context, width, height, scale, look, heaterAt, eleme
   }
   for (const el of elements) {
     const [r, g, b] = heatColor(look, 0.1 + 0.9 * el.glow)
-    const dome = Math.max(4, Math.min(el.radius * 0.3, 24) * scale)
+    const rx = Math.max(6, el.halfWidth * ELEMENT_SHOWN * scale)
+    const ry = Math.max(3, el.radius * ELEMENT_SHOWN * scale)
     context.fillStyle = `rgb(${r},${g},${b})`
     context.beginPath()
-    context.arc(el.x * scale, height - strip, dome, Math.PI, 0)
+    context.ellipse(el.x * scale, height - strip, rx, ry, 0, Math.PI, 0)
     context.fill()
   }
 }

@@ -406,6 +406,7 @@ export function createSimulation ({ width, height, params }) {
     for (const el of elements) {
       el.x = el.fx * width
       el.radius = el.fr * shorter
+      el.halfWidth = el.radius * ELEMENT_ASPECT
       el.glow = el.heat > 0 ? Math.sin(Math.PI * (heaterTime - el.start) / el.life) : 0
       if (el.glow > 0 && el.radius * 2 > maxReach) maxReach = el.radius * 2
     }
@@ -517,11 +518,11 @@ export function createSimulation ({ width, height, params }) {
       // the middle more than ones by the walls (the same lean as the old heat spots).
       const d = (fx - 0.5) / SPOT_SPREAD
       const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / fr
-      elements.push({ fx, fr, weight, heat: 0, start: 0, life: 0, next: 0, x: 0, radius: 0, glow: 0 })
+      elements.push({ fx, fr, weight, heat: 0, start: 0, life: 0, next: 0, x: 0, radius: 0, halfWidth: 0, glow: 0 })
     }
   }
 
-  // The heating elements, { x, radius, glow } in px and 0 to 1, for drawing the heat map.
+  // The heating elements, { x, radius, halfWidth, glow } in px and 0 to 1, for the heater view.
   function heaterElements () {
     return elements
   }
