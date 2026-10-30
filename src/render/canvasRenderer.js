@@ -94,7 +94,7 @@ export function createCanvasRenderer (canvas, look) {
     // show the heating element. should work independently of heat map").
     const k = view.k * scale
     context.setTransform(k, 0, 0, k, view.ox * scale, view.oy * scale)
-    if (look.showHeater && overlays.heaterAt) drawHeater(context, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+    if (look.showHeater && overlays.heaterAt && !overlays.view) drawHeater(context, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
     if (look.showFlow && overlays.flowAt) drawFlow(context, lampWidth, lampHeight, 1, look, overlays.flowAt)
     if (overlays.view) drawCups(context, lampWidth, lampHeight, overlays.view, 1 / k)
     context.setTransform(1, 0, 0, 1, 0, 0)

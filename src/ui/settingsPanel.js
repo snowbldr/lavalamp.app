@@ -151,10 +151,10 @@ export function createSettingsPanel () {
         ['Heat Map', 'Colour the lava by its temperature instead of the lava colour.'],
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.']
       ]),
-      pair('Heater', toggle('heater', showHeater), 'Cups', toggle('cups', showCups)),
+      pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
       hint(help, [
         ['Heater', 'Show the heater strip and its elements along the floor.'],
-        ['Cups', 'Pull the whole lamp into frame, hidden cups and all, so you can watch the lava in them.']
+        ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and below and all, so you can watch the lava in them; with Heater on, the floor bottles light up as their heaters do.']
       ]),
       row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
       hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.')
@@ -172,7 +172,7 @@ export function createSettingsPanel () {
         knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
         knob('Turb', 'turbulence', turbulence, { min: 0, max: 150, step: 1 }, () => defaultTurbulence),
         knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters),
-        knob('Cups', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2))
+        knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2))
       ),
       hint(help, [
         ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
@@ -185,7 +185,7 @@ export function createSettingsPanel () {
         ['Gravity', 'How fast cold lava sinks; a particle at this temperature hovers.'],
         ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
         ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
-        ['Cups', 'How deep the cups in the ceiling are, as a fraction of their width; 0 is a flat ceiling.']
+        ['Bottles', 'How big the bottles above and below are, as a fraction of their width; 0 is a flat ceiling and floor.']
       ])
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),

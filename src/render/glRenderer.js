@@ -273,7 +273,7 @@ export function createGlRenderer (canvas, look) {
       // Draw in lamp coordinates through the view and the pixel scale.
       const k = view.k * scale
       overlayContext.setTransform(k, 0, 0, k, view.ox * scale, view.oy * scale)
-      if (look.showHeater && overlays.heaterAt) drawHeater(overlayContext, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+      if (look.showHeater && overlays.heaterAt && !overlays.view) drawHeater(overlayContext, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
       if (look.showFlow && overlays.flowAt) drawFlow(overlayContext, lampWidth, lampHeight, 1, look, overlays.flowAt)
       if (overlays.view) drawCups(overlayContext, lampWidth, lampHeight, overlays.view, 1 / k)
     } else if (overlayShown) {

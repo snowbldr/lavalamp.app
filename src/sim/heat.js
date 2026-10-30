@@ -28,10 +28,15 @@ export function nextTemperature (temp, y, height, maxTemp, particleSize, power =
     temp -= randomNormalDistribution(0.25, 2.75, 1.8) * (height / REFERENCE_HEIGHT)
   }
   if (y > floor - height * (1 - HEAT_ZONE) && temp < maxTemp) {
-    const distanceFromHeater = Math.max(1, floor - y)
+    // Distance to the heater line either way: lava below the line, in a floor bottle, is as far
+    // from the heater as lava the same distance above it. With `floor - y` alone every hidden
+    // particle clamped to 1 px and got full contact heat all the time, and the reserve glowed
+    // (Robert: "the baseline heater is now keeping the bottles quite warm ... then when the
+    // heaters fire, it just blasts out aggressively every time instead of like, glooping out").
+    const distanceFromHeater = Math.max(1, Math.abs(floor - y))
     const increase = randomNormalDistribution(0, 5) / distanceFromHeater * power
     temp += increase
-    if (y > floor - particleSize) {
+    if (Math.abs(floor - y) < particleSize) {
       temp += increase * increase
     }
   }

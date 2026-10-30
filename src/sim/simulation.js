@@ -62,7 +62,7 @@ const CONDUCTION = 0.02
 // blobs: "It does kind of work, but ..."). The record is in docs/decisions.md.
 const ELEMENT_GAP = 200 // px between elements, before jitter
 const ELEMENT_RADIUS = [0.08, 0.2] // of the shorter side
-const ELEMENT_HEAT = [2, 6] // temperature per step at the centre; the finger gives 12, and at 4 to 12 an element fired a stream of small globs
+const ELEMENT_HEAT = [3, 8] // temperature per step at the core; the finger gives 12. Was 2 to 6 with the cups (at 4 to 12 an element fired a stream of small globs); the bottles hold twice the cold mass
 const ELEMENT_LIFE = [5, 15] // seconds
 // Elements are footballs, ELEMENT_ASPECT times as wide as they are tall (Robert: "perhaps we
 // should make them wider? like football shaped? that might get bigger blobs"); the radius above
@@ -77,7 +77,7 @@ const ELEMENT_ASPECT = 3
 // Several lit at once falls out of that on its own; a first version lit 1 to 5 together from one
 // shared clock with a mean of 1.6, at Robert's request, and this replaced it the same hour.
 const ELEMENT_SIZE_SKEW = 1.6
-const ELEMENT_RATE = 3
+const ELEMENT_RATE = 4 // was 3 with the cups; the bottles hold twice the cold mass
 const SPOT_SPREAD = 0.2
 const SPOT_BASE = 0.2
 const SPOT_CAP = 3
@@ -761,7 +761,10 @@ export function createSimulation ({ width, height, params }) {
   // A bulb's shape: the kind and its random numbers, as fractions, drawn once per bottle.
   function drawShape () {
     const kind = BULB_SHAPES[Math.floor(random() * BULB_SHAPES.length)]
-    const shape = { kind, n: 5 + Math.floor(random() * 4), amp: randomRange(0.18, 0.32), phase: random() * Math.PI * 2, waves: [], spikes: [] }
+    // Every bulb is also stretched: an ellipse `aspect` long along `tilt`, so bulbs come wide and
+    // shallow, tall, or oblong at an angle (Robert: "some should be sorta oblong and wide, also
+    // weird angles of oblong is good too"); like the shapes it fades out toward the mouth.
+    const shape = { kind, n: 5 + Math.floor(random() * 4), amp: randomRange(0.18, 0.32), phase: random() * Math.PI * 2, waves: [], spikes: [], aspect: randomRange(0.7, 1.9), tilt: random() * Math.PI }
     if (kind === 'cloud') { shape.n = 3 + Math.floor(random() * 3); shape.amp = randomRange(0.22, 0.38) }
     if (kind === 'ooze' || kind === 'splat') {
       for (let k = 0; k < 3; k++) shape.waves.push({ f: 1 + Math.floor(random() * 3), a: randomRange(0.05, 0.14), p: random() * Math.PI * 2 })
@@ -782,7 +785,13 @@ export function createSimulation ({ width, height, params }) {
     const hi = SHAPE_FULL * Math.PI / 180
     const t = Math.max(0, Math.min(1, (away - lo) / (hi - lo)))
     const fade = t * t * (3 - 2 * t)
-    if (fade <= 0 || shape.kind === 'round') return 1
+    if (fade <= 0) return 1
+    // The stretch: an ellipse's radius at this angle, relative to a circle.
+    const c = Math.cos(theta - (shape.tilt || 0))
+    const sn = Math.sin(theta - (shape.tilt || 0))
+    const a = shape.aspect || 1
+    const stretch = 1 / Math.sqrt((c * c) / (a * a) + sn * sn)
+    if (shape.kind === 'round') return 1 + (stretch - 1) * fade
     let bump = 0
     if (shape.kind === 'star') bump = shape.amp * Math.cos(shape.n * theta + shape.phase)
     else if (shape.kind === 'cloud') bump = shape.amp * Math.pow(Math.abs(Math.sin(shape.n * theta / 2 + shape.phase)), 0.6)
@@ -794,7 +803,7 @@ export function createSimulation ({ width, height, params }) {
         bump += sp.a * Math.exp(-(d * d) / (sp.w * sp.w))
       }
     }
-    return 1 + bump * fade
+    return 1 + ((1 + bump) * stretch - 1) * fade
   }
 
   // A bottle, in px: a mouth of half width w in the line at lineY (the lip for the ceiling, the
@@ -831,7 +840,10 @@ export function createSimulation ({ width, height, params }) {
       const mouth = dir < 0 ? Math.PI / 2 : -Math.PI / 2
       const shape = cup.shape || { kind: 'round' }
       const radiusAt = theta => R * shapeFactor(shape, theta, mouth)
-      out.push({ cx: cup.fx * width, lineY, dir, w, rm, rs, yf, neckEnd, cy, R, joinAngle, reach: R * 1.6, radiusAt, kind: shape.kind })
+      // The outline's largest radius, for the lamp's extent and for quick "could it be inside" tests.
+      let reach = R
+      for (let k = 0; k < 72; k++) reach = Math.max(reach, radiusAt(k / 72 * Math.PI * 2))
+      out.push({ cx: cup.fx * width, lineY, dir, w, rm, rs, yf, neckEnd, cy, R, joinAngle, reach: reach + 1, radiusAt, kind: shape.kind })
     }
     return out
   }

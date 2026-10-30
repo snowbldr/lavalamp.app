@@ -111,7 +111,7 @@ export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
       continue
     }
     const lineY = bottles[0].lineY
-    const sorted = [...bottles].sort((p, q) => p.cx - q.cx)
+    const sorted = bottles.map((b, index) => ({ ...b, index })).sort((p, q) => p.cx - q.cx)
     context.beginPath()
     let at = 0
     for (const b of sorted) {
@@ -123,12 +123,26 @@ export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
     context.moveTo(at, lineY)
     context.lineTo(lampWidth, lineY)
     context.stroke()
-    for (const b of sorted) {
-      const steps = 24
+    for (let index = 0; index < sorted.length; index++) {
+      const b = sorted[index]
+      // Walls sampled densely at both ends, where the fillets curve, so a rounded mouth does not
+      // draw as a chamfer (Robert: "all the bottom ones have this weird lip artifact").
+      const steps = 48
+      const at = k => lineY + (b.neckEnd - lineY) * (1 - Math.cos(Math.PI * k / steps)) / 2
+      // In the Heater view the floor bottles are the heaters: stroke each in its element's colour.
+      const glow = view.glow && b.dir > 0 ? view.glow[b.index] : undefined
+      if (glow !== undefined) {
+        const [r, g, bl] = heatColor(view.look, 0.1 + 0.9 * glow)
+        context.strokeStyle = `rgb(${r},${g},${bl})`
+        context.lineWidth = lineWidth * (1 + 2 * glow)
+      } else {
+        context.strokeStyle = 'rgba(236, 236, 236, 0.55)'
+        context.lineWidth = lineWidth
+      }
       context.beginPath()
       // Left wall of the neck from the line to the bulb, then around the bulb, then the right wall back.
       for (let k = 0; k <= steps; k++) {
-        const py = lineY + (b.neckEnd - lineY) * k / steps
+        const py = at(k)
         const px = b.cx - neckHalf(b, py)
         if (k === 0) context.moveTo(px, py)
         else context.lineTo(px, py)
@@ -147,11 +161,13 @@ export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
         context.lineTo(b.cx + Math.cos(theta) * rr, b.cy + Math.sin(theta) * rr)
       }
       for (let k = steps; k >= 0; k--) {
-        const py = lineY + (b.neckEnd - lineY) * k / steps
+        const py = at(k)
         context.lineTo(b.cx + neckHalf(b, py), py)
       }
       context.stroke()
     }
+    context.lineWidth = lineWidth
+    context.strokeStyle = 'rgba(236, 236, 236, 0.55)'
   }
   context.setLineDash([6 * lineWidth, 6 * lineWidth])
   context.strokeStyle = 'rgba(236, 236, 236, 0.3)'
