@@ -3,7 +3,7 @@
    physics nerd stuff". Range inputs keep their keyboard and touch behaviour and lose their look;
    colour inputs hide behind a swatch. */
 .panel {
-  --accent: #b67cfe;
+  --accent: #f2a33c; /* amber, like a dial lamp; Robert: "make the control not purple themed" */
   position: fixed;
   top: 10px;
   left: 10px;
@@ -13,26 +13,20 @@
   max-height: calc(100vh - 20px);
   overflow-y: auto;
   box-sizing: border-box;
-  padding: 14px 18px 18px;
+  padding: 8px 18px 18px;
   border-radius: 14px;
-  background: rgba(18, 14, 28, 0.84);
+  background: rgba(20, 20, 22, 0.86);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  color: #f1ecfa;
+  color: #ececec;
   font: 14px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   user-select: none;
   -webkit-user-select: none;
 }
 .panel * { box-sizing: border-box; }
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.panel-title { font-size: 16px; font-weight: 600; letter-spacing: 0.02em; }
 .panel-close {
+  position: absolute; top: 8px; right: 10px;
   width: 30px; height: 30px;
   border: 0; border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
@@ -45,10 +39,10 @@
 .panel-section-title {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: 8px 0; border: 0; background: none;
-  color: rgba(241, 236, 250, 0.7); font: inherit; font-size: 11px; font-weight: 600;
+  color: rgba(236, 236, 236, 0.7); font: inherit; font-size: 11px; font-weight: 600;
   letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; text-align: left;
 }
-.panel-section-title .chevron { transition: transform 0.2s; }
+.panel-section-title .chevron { transition: transform 0.2s; margin-right: 34px; }
 .panel-section.closed .chevron { transform: rotate(-90deg); }
 .panel-section.closed .panel-rows { display: none; }
 
@@ -59,12 +53,12 @@
   gap: 10px;
   min-height: 34px;
 }
-.row-label { font-size: 13px; color: rgba(241, 236, 250, 0.9); }
+.row-label { font-size: 13px; color: rgba(236, 236, 236, 0.9); }
 .row-value {
   font-size: 11px; text-align: right; font-variant-numeric: tabular-nums;
-  color: rgba(241, 236, 250, 0.55); cursor: pointer;
+  color: rgba(236, 236, 236, 0.55); cursor: pointer;
 }
-.row-value:hover { color: #b67cfe; }
+.row-value:hover { color: var(--accent); }
 .row-control { display: flex; align-items: center; min-width: 0; }
 .row-control.wide { grid-column: 2 / 4; }
 
@@ -77,27 +71,27 @@
 }
 .knob-ring { position: absolute; inset: 0; border-radius: 50%; }
 .knob-ring::after {
-  content: ""; position: absolute; inset: 5px; border-radius: 50%; background: rgba(18, 14, 28, 1);
+  content: ""; position: absolute; inset: 5px; border-radius: 50%; background: rgb(20, 20, 22);
 }
 .knob-face {
   position: absolute; inset: 8px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #5a5266, #2a2434 60%, #1b1623);
+  background: radial-gradient(circle at 35% 30%, #6a6a6e, #2e2e31 60%, #1c1c1e);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.25);
 }
 .knob-pointer {
   position: absolute; left: 50%; top: 4px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px;
-  background: #f1ecfa; box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+  background: var(--accent); box-shadow: 0 0 4px rgba(242, 163, 60, 0.7);
 }
 .knob.turning .knob-face, .knob:focus-visible .knob-face { box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0, 0, 0, 0.7); }
-.knob-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(241, 236, 250, 0.7); text-align: center; }
-.knob-value { font-size: 11px; font-variant-numeric: tabular-nums; color: rgba(241, 236, 250, 0.9); cursor: pointer; }
+.knob-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(236, 236, 236, 0.7); text-align: center; }
+.knob-value { font-size: 11px; font-variant-numeric: tabular-nums; color: rgba(236, 236, 236, 0.9); cursor: pointer; }
 .knob-value:hover { color: var(--accent); }
 
 /* Colour swatches: the native input sits invisibly over a round swatch */
 .swatch-row { padding: 4px 0 8px; }
-.swatch-caption { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(241, 236, 250, 0.6); margin-bottom: 6px; }
+.swatch-caption { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(236, 236, 236, 0.6); margin-bottom: 6px; }
 .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
-.swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: rgba(241, 236, 250, 0.7); }
+.swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
 .swatch-well {
   position: relative; width: 34px; height: 34px; border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.35); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); cursor: pointer;
@@ -110,9 +104,9 @@
 .segmented { display: flex; width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.08); padding: 2px; }
 .segmented button {
   flex: 1; border: 0; border-radius: 6px; padding: 6px 0; background: none;
-  color: rgba(241, 236, 250, 0.75); font: inherit; font-size: 12px; text-transform: capitalize; cursor: pointer;
+  color: rgba(236, 236, 236, 0.75); font: inherit; font-size: 12px; text-transform: capitalize; cursor: pointer;
 }
-.segmented button.on { background: #b67cfe; color: #1a1026; font-weight: 600; }
+.segmented button.on { background: var(--accent); color: #1c1c1e; font-weight: 600; }
 .toggle {
   width: 42px; height: 24px; border: 0; border-radius: 12px; position: relative; cursor: pointer;
   background: rgba(255, 255, 255, 0.18); transition: background 0.2s;
@@ -121,7 +115,7 @@
   content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
   background: #fff; transition: transform 0.2s;
 }
-.toggle.on { background: #b67cfe; }
+.toggle.on { background: var(--accent); }
 .toggle.on::after { transform: translateX(18px); }
 
 /* Actions */
@@ -131,5 +125,5 @@
   background: rgba(255, 255, 255, 0.1); color: inherit; font: inherit; font-size: 13px; cursor: pointer;
 }
 .actions button:hover { background: rgba(255, 255, 255, 0.18); }
-.actions button.primary { background: #b67cfe; color: #1a1026; font-weight: 600; }
-.actions button.primary:hover { background: #c796ff; }
+.actions button.primary { background: var(--accent); color: #1c1c1e; font-weight: 600; }
+.actions button.primary:hover { background: #f7b45a; }

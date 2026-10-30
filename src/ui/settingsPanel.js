@@ -1,4 +1,4 @@
-import { button, div, fnstate, span } from '@srfnstack/fntags'
+import { button, div, fnstate } from '@srfnstack/fntags'
 import { knob, knobs, notify, row, section, segmented, swatch, swatchRow, toggle } from './components.js'
 import {
   bgColor,
@@ -87,11 +87,9 @@ export function createSettingsPanel () {
 
   panel = div(
     { class: 'panel', onclick: e => e.stopPropagation() },
-    div(
-      { class: 'panel-header' },
-      span({ class: 'panel-title' }, 'lavalamp.app'),
-      button({ class: 'panel-close', onclick: close, title: 'Close' }, '×')
-    ),
+    // No title bar (Robert: "remove the lavalamp.app from the panel tons of wasted space"); the
+    // close button sits in the corner over the first section's title.
+    button({ class: 'panel-close', onclick: close, title: 'Close' }, '×'),
     section(
       'Lamp', lampOpen,
       // The colour rows follow the views: the heat gradient while the heat map is on, the lava
