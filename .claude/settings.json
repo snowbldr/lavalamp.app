@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/talk-check.sh start",
+            "timeout": 10,
+            "statusMessage": "Loading the talk record"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/talk-check.sh stop",
+            "timeout": 10,
+            "statusMessage": "Checking for talk material"
+          }
+        ]
+      }
+    ]
+  }
+}
