@@ -6,10 +6,10 @@ import { notify } from './components.js'
 // One particle per 4000 square px of window. The cap used to be 300, from when the lamp itself stopped
 // at 1000 px square; a full 2560 x 1300 window at 300 particles is a 50 px film of lava.
 export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 4000), 1000)
-// Max temp was min(height, 1000) with the slider running to twice that. With the heating rods and
+// Max temp was min(height, 1000) with the slider running to twice that. With heating in depth and
 // conduction at 0.02 Robert had to run it at the top to get blobs at all ("I think I need to make
-// max temp the new mid same way as conduction"): the rods sit at twice gravity, and a cap at the
-// window height held the lava below the rods' own temperature. The old top is the new default.
+// max temp the new mid same way as conduction"): with heating in depth a cap at the window height
+// held the lava back. The old top is the new default.
 export const computeDefaultMaxTemp = height => Math.min(height * 2, 2000)
 export const computeDefaultGravity = height => Math.min(height / 2, 700)
 
@@ -24,17 +24,13 @@ export const defaultParticleSize = 30
 // Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
 export const defaultStir = 20
 // Conduction was 0.005 with a flat floor, where 0.02 was the top of the slider and a lamp that never
-// lifted. With the heating rods the top became the lamp Robert wanted ("max needs to be the new mid
+// lifted. With heating in depth the top became the lamp Robert wanted ("max needs to be the new mid
 // and default. This is the mechanism we were missing for maximum lava gloopiness").
 export const defaultConduction = 0.02
 export const defaultPace = 0.7
 export const defaultTurbulence = 45
 export const defaultDrifters = 2
 export const defaultHeatSpots = 15
-// Heating elements: rods this many pixels tall stand up from the floor this many pixels apart,
-// like the coil in a real lamp, so a lit run heats a lump of the pool. Height 0 is a flat floor.
-export const defaultRodHeight = 40
-export const defaultRodSpacing = 40
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -57,8 +53,6 @@ export const pace = fnstate(defaultPace)
 export const turbulence = fnstate(defaultTurbulence)
 export const drifters = fnstate(defaultDrifters)
 export const heatSpots = fnstate(defaultHeatSpots)
-export const rodHeight = fnstate(defaultRodHeight)
-export const rodSpacing = fnstate(defaultRodSpacing)
 // Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
 export const showFlow = fnstate(false)
 export const showHeat = fnstate(false)
@@ -68,9 +62,9 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, rodHeight, rodSpacing }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'rodHeight'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -89,9 +83,7 @@ const defaults = () => ({
   pace: defaultPace,
   turbulence: defaultTurbulence,
   drifters: defaultDrifters,
-  heatSpots: defaultHeatSpots,
-  rodHeight: defaultRodHeight,
-  rodSpacing: defaultRodSpacing
+  heatSpots: defaultHeatSpots
 })
 
 export const getSettings = () => {

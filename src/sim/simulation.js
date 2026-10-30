@@ -34,54 +34,37 @@ const IDLE_HEAT = 0.6
 // neighbours drift apart in temperature and the hot ones tear out of a blob as droplets. It is
 // a setting because it has a cliff: at 1000 px with 250 particles, 0 gives globs of 58 particles
 // and 587 midline crossings a minute, 0.005 gives 67 and 399, 0.01 gives 112 and 36, and from
-// 0.02 up the lamp was one hovering mass. That was with a flat floor; with the heating rods the
-// pool can take in more heat than it sheds, and 0.02 is where Robert set the default ("maximum
-// lava gloopiness").
+// 0.02 up the lamp was one hovering mass. That was with contact heating at the floor only; with
+// heating elements that warm the pool in depth it can take in more heat than it sheds, and 0.02
+// is where Robert set the default ("maximum lava gloopiness").
 const CONDUCTION = 0.02
-// Heat spots (params.heatSpots is the mean seconds between one and the next, 0 for a steady
-// heater). Robert: "it'd be cool if sometimes like 1/2 of the stuff formed one big glob" and
-// "what if we did waves of heating to heat bigger groups of particles at the same time?" A
-// steady heater lifts lava as soon as its bottom layer is warm, so nothing big ever builds; a
-// uniform on/off cycle in time made globs smaller (every floor particle still heats at the same
-// rate from the same place). A Gaussian hot spot sweeping along the floor took the biggest
-// detached glob at 2560 x 1294 from 21% of the lava to 51%. Then: "instead of sweeping the
-// bottom, we should apply heat in normal distribution random into random spots along the
-// bottom, generally focusing the middle more. the radius of the heat, the temp, and application
-// time should all vary." So: each spot lands at a floor position drawn from a bell curve centred
-// on the middle (SPOT_SPREAD of the width as its standard deviation), with its own radius, peak
-// power and life from these ranges, fading in and out on a sine. The floor away from any spot
-// runs at SPOT_BASE of normal power, and overlapping spots add up to SPOT_CAP.
+// Heating elements. Robert: "what I actually want is actually like a random point heat source
+// just like the touch heat ... little donut shaped heating elements at random intervals on the
+// bottom of the glass that we randomly turn on at different heats", "randomly distributed donut
+// heating elements of different sizes across the bottom", "probably randomly generated once on
+// start". So: once, at start, ring elements are laid along the floor about ELEMENT_GAP px apart
+// (jittered), each with its own radius in ELEMENT_RADIUS of the lamp's shorter side. Every
+// params.heatSpots seconds or so (0 for a steady floor heater) one lights, chosen with a bell
+// curve favouring the middle (SPOT_SPREAD of the width), at a heat drawn from ELEMENT_HEAT
+// (temperature per step at its centre, the finger on Heat gives 12) for ELEMENT_LIFE seconds,
+// fading in and out on a sine. A lit element warms the lava in a half disc around it, like a
+// finger, so a lump of the pool heats at once and lifts as one. The floor itself stays a contact
+// heater at SPOT_BASE of normal power, brighter under a lit element, up to SPOT_CAP.
+//
+// Before this the heater went through: a steady floor (small globs), a hot spot sweeping the
+// floor, random Gaussian spots along the floor (biggest detached glob 48% of the lava, but only
+// the bottom row ever warmed and the cold pool above quenched it), a heated layer across the
+// floor (streams or lifts entire), and heating rods as a heat battery with a base to tip
+// gradient (half the lava rose as one dome at max conduction, but the pool floated on the rod
+// tips until the tips were cooled, and Robert still had to push max temp to the top to get
+// blobs: "It does kind of work, but ..."). The record is in docs/decisions.md.
+const ELEMENT_GAP = 250 // px between elements, before jitter
+const ELEMENT_RADIUS = [0.08, 0.2] // of the shorter side
+const ELEMENT_HEAT = [2, 6] // temperature per step at the centre; the finger gives 12, and at 4 to 12 an element fired a stream of small globs
+const ELEMENT_LIFE = [5, 15] // seconds
 const SPOT_SPREAD = 0.2
-const SPOT_RADIUS = [0.08, 0.3] // of the width
-const SPOT_PEAK = [1.2, 2.5] // times normal power, above the base
-const SPOT_LIFE = [10, 40] // seconds
 const SPOT_BASE = 0.2
 const SPOT_CAP = 3
-// Heating rods: the coil in a real lamp, as a row of elements standing up from the floor
-// (Robert: "heating element rods that stuck up from the bottom and heated the globs around it
-// ... spaced every 1/4 to half inch, then multiple contiguous elements could be lit up at a time
-// to heat larger areas", and on the coil: "It's a heat battery to heat bigger globs at a time").
-// Each rod stores heat: it charges toward ROD_HEAT times gravity times the heater power under
-// it, at ROD_CHARGE of the gap per second, and lava touching it exchanges heat with it at
-// ROD_TRANSFER of the difference a step, scaled by how close it is. The rod holds ROD_MASS
-// particles' worth of heat, so when cold lava settles on a hot run of rods it gets a fast dump
-// that lifts a lump at once, and the rods then take a few seconds to recharge. A rod is hottest
-// where it meets the floor and ROD_TIP of that at its tip (Robert: "maybe the rods need a
-// vertical gradient? i.e. cooler as it gets further away from the bottom? would mimic like
-// metal pins embedded in the glass"); with a uniform rod the pool floated on a cushion of lava
-// made buoyant at the tips, with a gap of 31 to 36 px under it ("it floats right above the
-// heating rods"), and a tip at a quarter of twice gravity is well below neutral, so the lava
-// has to sink down among the rods to warm up. Heat only flows out of a rod, never into it:
-// with two way flow the cool tips drew heat out of hot lava leaving the pool and the lamp went
-// quiet (115 to 268 midline crossings a minute against 886 for the flat floor; one way, 846).
-// Contact heating
-// at the floor alone adds less heat than the pool sheds, so at high conduction, where the pool
-// is one thermal body, nothing ever lifted (1 to 6 midline crossings a minute at 0.02).
-const ROD_HEAT = 2
-const ROD_CHARGE = 0.3
-const ROD_TRANSFER = 0.1
-const ROD_MASS = 10
-const ROD_TIP = 0.25
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
 // across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
 // gathers it, spin is a tornado under the finger, heat and cool change temperature.
@@ -119,7 +102,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, rodHeight, rodSpacing
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -130,9 +113,10 @@ export function createSimulation ({ width, height, params }) {
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
-  const spots = []
-  let nextSpot = 0
-  const rods = [] // heating elements: { x, temp, height }
+  // The heating elements, laid out once: { fx, fr } as fractions of the width and shorter side,
+  // plus their lit state { heat, start, life } while lit.
+  const elements = []
+  let nextLight = 0
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -346,7 +330,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, rodHeight = 0, rodSpacing = 40 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0 } = params
     ensureCapacity(particleCount)
     fill(particleCount)
     stirEddies(dt, turbulence, drifters)
@@ -354,31 +338,43 @@ export function createSimulation ({ width, height, params }) {
     heaterTime += dt
     const progress = Math.min(1, heaterTime / WARMUP)
     const halfWidth = width / 2
-    // Heat spots: once warmed up, the heater is a few hot spots at random places along the
-    // floor, each with its own size, power and life, so one big stretch of the pool heats
-    // together and lifts as one glob instead of the whole floor shedding small ones at the same
-    // rate from the same place.
+    if (elements.length === 0) layoutElements()
+    const shorter = Math.min(width, height)
+    // Once warmed up, elements light at random (see ELEMENT_GAP).
     if (progress >= 1 && heatSpots > 0) {
-      if (heaterTime >= nextSpot) {
-        const sigma = SPOT_SPREAD * width
-        let sx = halfWidth + randomNormal() * sigma
-        if (sx < width * 0.05) sx = width * 0.05
-        if (sx > width * 0.95) sx = width * 0.95
-        spots.push({ x: sx, radius: randomRange(...SPOT_RADIUS) * width, peak: randomRange(...SPOT_PEAK), start: heaterTime, life: randomRange(...SPOT_LIFE) })
-        nextSpot = heaterTime + randomRange(0.5, 1.5) * heatSpots
+      if (heaterTime >= nextLight) {
+        let fx = 0.5 + randomNormal() * SPOT_SPREAD
+        if (fx < 0.05) fx = 0.05
+        if (fx > 0.95) fx = 0.95
+        let best = null
+        for (const el of elements) if (best === null || Math.abs(el.fx - fx) < Math.abs(best.fx - fx)) best = el
+        if (best.heat === 0) {
+          best.heat = randomRange(...ELEMENT_HEAT)
+          best.start = heaterTime
+          best.life = randomRange(...ELEMENT_LIFE)
+        }
+        nextLight = heaterTime + randomRange(0.5, 1.5) * heatSpots
       }
-      for (let k = spots.length - 1; k >= 0; k--) if (heaterTime - spots[k].start > spots[k].life) spots.splice(k, 1)
-    } else if (spots.length) {
-      spots.length = 0
+      for (const el of elements) if (el.heat > 0 && heaterTime - el.start > el.life) el.heat = 0
+    } else {
+      for (const el of elements) el.heat = 0
+    }
+    // Each lit element's glow, 0 to 1, and its reach in px, for this step.
+    let maxReach = 0
+    for (const el of elements) {
+      el.x = el.fx * width
+      el.radius = el.fr * shorter
+      el.glow = el.heat > 0 ? Math.sin(Math.PI * (heaterTime - el.start) / el.life) : 0
+      if (el.glow > 0 && el.radius * 2 > maxReach) maxReach = el.radius * 2
     }
     const powerAt = x => {
       if (progress >= 1) {
         if (heatSpots <= 0) return 1
         let power = SPOT_BASE
-        for (let k = 0; k < spots.length; k++) {
-          const sp = spots[k]
-          const d = (x - sp.x) / sp.radius
-          power += sp.peak * Math.sin(Math.PI * (heaterTime - sp.start) / sp.life) * Math.exp(-d * d)
+        for (const el of elements) {
+          if (el.glow <= 0) continue
+          const d = (x - el.x) / el.radius
+          power += 2 * el.glow * Math.exp(-d * d)
         }
         return power > SPOT_CAP ? SPOT_CAP : power
       }
@@ -387,21 +383,19 @@ export function createSimulation ({ width, height, params }) {
       return p < IDLE_HEAT ? IDLE_HEAT : p > 1 ? 1 : p
     }
     heaterPower = powerAt
-    // Heating elements (see ROD_HEAT): rods rodHeight px tall standing up from the floor every
-    // rodSpacing px, each charging toward the heater power under it. rodHeight 0 is a flat floor.
-    const rodCount = rodHeight > 0 ? Math.max(1, Math.round(width / rodSpacing)) : 0
-    if (rods.length !== rodCount) {
-      rods.length = 0
-      const gap = width / rodCount
-      for (let k = 0; k < rodCount; k++) rods.push({ x: gap * (k + 0.5), temp: SPAWN_HEAT * gravity, height: rodHeight })
+    // The heat a lit element delivers to a point: its heat at the centre, Gaussian over its radius.
+    const elementHeat = (px, py) => {
+      let heat = 0
+      const dy = height - py
+      for (const el of elements) {
+        if (el.glow <= 0) continue
+        const dx = px - el.x
+        const d2 = (dx * dx + dy * dy) / (el.radius * el.radius)
+        if (d2 < 4) heat += el.heat * el.glow * Math.exp(-d2)
+      }
+      return heat
     }
-    const charge = Math.min(1, ROD_CHARGE * dt)
-    for (let k = 0; k < rodCount; k++) {
-      const rod = rods[k]
-      rod.height = rodHeight
-      rod.temp += (ROD_HEAT * gravity * powerAt(rod.x) - rod.temp) * charge
-    }
-    const rodTop = height - rodHeight
+    const elementReach = height - maxReach
     const { x, y, vx, vy, temp } = state
     const fx = impulse[0]
     const fy = impulse[1]
@@ -423,18 +417,9 @@ export function createSimulation ({ width, height, params }) {
     hash.clear()
     for (let i = 0; i < alive; i++) {
       temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, powerAt(x[i]))
-      if (rodCount > 0 && y[i] > rodTop - particleSize) {
-        const rod = rods[Math.max(0, Math.min(rodCount - 1, Math.floor(x[i] / width * rodCount)))]
-        const dx = Math.abs(x[i] - rod.x)
-        const distance = y[i] >= rodTop ? dx : Math.hypot(dx, rodTop - y[i])
-        if (distance < particleSize) {
-          const down = Math.max(0, Math.min(1, (y[i] - rodTop) / rodHeight)) // 1 at the base, 0 at the tip
-          const local = rod.temp * (ROD_TIP + (1 - ROD_TIP) * down)
-          let flow = Math.max(0, ROD_TRANSFER * (1 - distance / particleSize) * (local - temp[i]))
-          if (temp[i] + flow > maxTemp) flow = maxTemp - temp[i]
-          temp[i] += flow
-          rod.temp -= flow / ROD_MASS
-        }
+      if (maxReach > 0 && y[i] > elementReach) {
+        const heat = elementHeat(x[i], y[i])
+        if (heat > 0) temp[i] = Math.min(maxTemp, temp[i] + heat)
       }
       if (touching) {
         const heat = touchAt(x[i], y[i], dt, maxTemp, finger)
@@ -479,9 +464,19 @@ export function createSimulation ({ width, height, params }) {
     return heaterPower(px)
   }
 
-  // The heating rods, { x, temp, height }, for drawing the heat map.
-  function heaterRods () {
-    return rods
+  // Lay the elements along the floor once: about ELEMENT_GAP px apart, jittered by up to 40% of
+  // the gap, each with its own radius. Positions are fractions so a resize keeps the same lamp.
+  function layoutElements () {
+    const count = Math.max(2, Math.round(width / ELEMENT_GAP))
+    for (let k = 0; k < count; k++) {
+      const fx = (k + 0.5 + randomRange(-0.4, 0.4)) / count
+      elements.push({ fx, fr: randomRange(...ELEMENT_RADIUS), heat: 0, start: 0, life: 0, x: 0, radius: 0, glow: 0 })
+    }
+  }
+
+  // The heating elements, { x, radius, glow } in px and 0 to 1, for drawing the heat map.
+  function heaterElements () {
+    return elements
   }
 
   // The stirring velocity (convection roll, eddies and fingers) at a point, for drawing the flow
@@ -519,7 +514,7 @@ export function createSimulation ({ width, height, params }) {
     transform,
     flowAt,
     heaterAt,
-    heaterRods,
+    heaterElements,
     get state () { return state },
     get count () { return alive },
     get width () { return width },

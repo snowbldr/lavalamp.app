@@ -16,8 +16,8 @@ export const HEAT_ZONE = 0.8
 // `power` scales the heater at the floor, 0 to 1 normally, up to 3 under a heat spot; on load it
 // is a front spreading from the centre of the floor. Heating is contact heating: a 1/distance
 // term that cooling swamps everywhere except within a few pixels of the floor, where the squared
-// bonus for touching takes over. That only ever warms the bottom row; the heating rods in the
-// simulation are what reach up into the pool.
+// bonus for touching takes over. That only ever warms the bottom row; the heating elements in
+// the simulation are what reach up into the pool.
 export function nextTemperature (temp, y, height, maxTemp, particleSize, power = 1) {
   if (temp > 0) {
     temp -= randomNormalDistribution(0.25, 2.75, 1.8) * (height / REFERENCE_HEIGHT)
