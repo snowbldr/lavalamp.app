@@ -112,6 +112,21 @@ const FLOOR_CUP_SHARE = 0.35 // was 0.25; Robert: "make the reserves underneath 
 // cup goes below it, lit on the same clocks, and heating the lava hidden in the cup as well as
 // the lava above it, so a whole cup's worth warms together.
 const ELEMENTS_ARE_CUPS = true
+// A lit cup heats a core at its centre ELEMENT_CORE of the shorter side wide (half width), the
+// same in every cup, not the whole cup: heating the whole width made a big cup's middle go
+// buoyant all at once and blast, with two streams following at the sides where the heat was
+// weaker (Robert: "The big cups always present as two streams shooting up at the sides of the
+// cup because the whole center blasts up immediately ... give the impression that it's got like
+// a limitless supply of lava and keeps streaming up in a single spout"). The core reaches to
+// the bottom of the cup, lava rises from it as fast as it warms, the cup's reserve flows in to
+// replace it, and a bigger cup burns for longer (life scaled by its area over the smallest
+// cup's, up to ELEMENT_LIFE_SCALE times) because it has more to drain. But not always narrow
+// ("we also don't want a thin spout all the time either, I like the variance in spout size"):
+// each lighting draws its core width between ELEMENT_CORE and the whole cup, leaning narrow
+// (a uniform draw squared), and trades life for width, so a wide burn is short and a narrow
+// one runs long.
+const ELEMENT_CORE = 0.1
+const ELEMENT_LIFE_SCALE = 4
 // The ceiling and floor are sampled into tables every CUP_STEP px and smoothed over CUP_ROUND px
 // either side, which rounds off the cusp where two cups meet (Robert: "there's a jiggle on the
 // top at the point where the cups meet. when two cups next to each other get full, a bit of
@@ -436,7 +451,14 @@ export function createSimulation ({ width, height, params }) {
         if (heaterTime >= el.next) {
           el.heat = randomRange(...ELEMENT_HEAT)
           el.start = heaterTime
-          el.life = randomRange(...ELEMENT_LIFE)
+          let lifeScale = el.lifeScale || 1
+          if (ELEMENTS_ARE_CUPS) {
+            // This lighting's core: narrow to the whole cup, leaning narrow; wider burns shorter.
+            const u = random()
+            el.coreFraction = el.coreMin + (el.cupHalf - el.coreMin) * u * u
+            lifeScale = Math.max(1, lifeScale * el.coreMin / el.coreFraction)
+          }
+          el.life = randomRange(...ELEMENT_LIFE) * lifeScale
           el.next = 0
         }
       }
@@ -451,7 +473,7 @@ export function createSimulation ({ width, height, params }) {
     for (const el of elements) {
       el.x = el.fx * width
       el.radius = el.fr * shorter
-      el.halfWidth = ELEMENTS_ARE_CUPS ? el.cupHalf * width : el.radius * ELEMENT_ASPECT
+      el.halfWidth = ELEMENTS_ARE_CUPS ? el.coreFraction * width : el.radius * ELEMENT_ASPECT
       el.glow = el.heat > 0 ? Math.sin(Math.PI * (heaterTime - el.start) / el.life) : 0
       if (el.glow > 0 && el.radius * 2 > maxReach) maxReach = el.radius * 2
     }
@@ -558,13 +580,17 @@ export function createSimulation ({ width, height, params }) {
     if (ELEMENTS_ARE_CUPS) {
       if (floorCups.length === 0) layoutCups(floorCups, true)
       const shorter = Math.min(width, height)
+      const smallest = CUP_WIDTH_RANGE[0] * shorter
       for (const cup of floorCups) {
         const fx = Math.max(0.02, Math.min(0.98, cup.fx))
         // Vertical reach as a fraction of the shorter side: the cup's depth.
         const fr = Math.max(0.03, FLOOR_CUP_SHARE * cup.fw * width / shorter)
         const d = (fx - 0.5) / SPOT_SPREAD
         const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / Math.max(ELEMENT_RADIUS[0], fr)
-        elements.push({ fx, fr, weight, cupHalf: cup.fw / 2, heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
+        const cupWidth = cup.fw * width
+        const core = Math.min(cupWidth / 2, ELEMENT_CORE * shorter)
+        const lifeScale = Math.min(ELEMENT_LIFE_SCALE, (cupWidth * cupWidth) / (smallest * smallest))
+        elements.push({ fx, fr, weight, cupHalf: cup.fw / 2, coreMin: core / width, coreFraction: core / width, lifeScale, heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
       }
       return
     }
