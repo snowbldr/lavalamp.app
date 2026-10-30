@@ -33,22 +33,23 @@ disc around it, the way a finger on Heat does, so a lump of the pool warms at on
 wind on a weather map, and Heat Map colours the lava by temperature like a weather map, with a
 a Heater switch shows the heater strip and its elements along the floor in either view.
 
-The ceiling is a row of bottles hanging above the screen, like the cap on a real lamp: each cup is a
-mouth in a flat lip line just below the top edge, a neck of its own random length, and a bulb above, so
-a glob that reaches the top rises through the mouth, gathers in the bulb while it is hot, cools as a
-glob and falls back out whole instead of spreading into a sheet and falling as a strip (Bottles, in
-Physics, scales the bulbs; 0 is a flat ceiling). The floor has smaller bottles too, hanging below the
-screen, holding a cold reserve of lava under the visible pool; each one is a heating element whose
-core runs from its mouth down into its bulb, so its neck is the spout. Bottles are laid out from the seed
-in sizes from a wide bell curve, a few tiny and the odd giant, side by side without overlapping and
-with gaps that are mostly slivers and now and then wide; the floor's have no necks, so neighbours
-interact through the pool. Bulbs come in shapes drawn from the seed, round, star, cloud, ooze or
-splat, stretched into ellipses at random angles, shaped only on the side away from the mouth so
-nothing can trap lava; necks meet their bulbs on tangent fillets; lava never passes from one bottle to
-another, and heat conducts between neighbouring bottles at a third of the usual rate, as through glass.
+The ceiling is a row of bottles hanging above the screen, like the cap on a real lamp: each is a mouth
+in the top edge, a neck of its own random length, and a bulb above, so a glob that reaches the top
+rises through the mouth, gathers in the bulb while it is hot, cools as a glob and falls back out whole
+instead of spreading into a sheet and falling as a strip (Bottles, in Physics, scales them; 0 is a flat
+ceiling). The floor has pots: open bulbs hanging below the screen with no necks, holding a cool reserve
+of lava under the visible pool (the glass base keeps it from cooling fast), each one a heating element
+whose core runs from its mouth down into its bulb. Bottles above, pots below, reservoirs together. They
+are laid out from the seed in sizes from a wide bell curve, a few small and the odd giant, with gaps
+that are mostly slivers and now and then wide, their mouths kept apart while their bulbs may overlap,
+as if they stood at different depths. Bulbs come in shapes drawn from the seed, round, star, cloud,
+ooze or splat, stretched into ellipses at random angles, shaped only on the side away from the mouth
+so nothing can trap lava; necks meet their bulbs on tangent fillets; lava never passes from one
+reservoir to another, and heat conducts between neighbours at a third of the usual rate, as through
+glass. The Count knob is the visible lava; the pots fill themselves on top of it.
 The Reservoirs switch in the menu
-pulls the whole lamp into frame, hidden bottles and all, with their outlines and the screen edge drawn
-over it; with Heater on as well, the floor bottles light up in their heater's colour.
+pulls the whole lamp into frame, bottles and pots and all, with their outlines and the screen edge
+drawn over it; with Heater on as well, the pots light up in their heater's colour.
 
 Rendering is the metaball trick, on the GPU: soft discs composited into a texture, then one WebGL pass
 thresholds the alpha so nearby discs fuse and lights the underside of each blob. The same picture

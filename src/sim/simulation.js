@@ -99,11 +99,15 @@ const SPOT_CAP = 3
 // since we have the bottle locking mechanism and conduction resolved between bottles. This
 // should allow for more variance in placement too since we can put a few bottles right next to
 // each other and occasionally have largish gaps". Widths from a wide bell curve, bottles laid
-// side by side without overlap (each bottle's exclusion is its bulb's largest radius, shape and
-// stretch included), with gaps drawn from an exponential: mostly a sliver, now and then wide.
-const CUP_WIDTH = [0.22, 0.12] // mean, deviation, of the shorter side
-const CUP_WIDTH_RANGE = [0.06, 0.6]
-const CUP_GAP = 0.04 // mean gap, of the shorter side
+// side by side, with gaps drawn from an exponential: mostly a sliver, now and then wide. Only the
+// mouths are kept apart; the bulbs may overlap, since each particle is locked to its own bottle
+// and conduction between bottles is through glass (Robert: "we need just generally more pots,
+// don't forget they can overlap. Imagine they're on a diagonal line in 3 dimensions, that would
+// allow for the overlap in a real one"). The smallest were too small ("the small ones are too
+// small"): the range starts at 0.14 of the shorter side.
+const CUP_WIDTH = [0.2, 0.1] // mean, deviation, of the shorter side
+const CUP_WIDTH_RANGE = [0.14, 0.6]
+const CUP_GAP = 0.02 // mean gap between mouths, of the shorter side
 // The lip was 4% of the shorter side below the top edge, which left a black bar above the lava
 // (Robert: "The bottles at the top should be exactly at the top of the screen instead of
 // protruding so they don't cause this black bar"); the mouths are in the top edge itself now.
@@ -151,6 +155,7 @@ const BOTTLE_ROUND = 0.6
 // so lava always funnels to the exit, and one of these shapes on the far side, faded in between
 // SHAPE_SMOOTH and SHAPE_FULL degrees from the mouth direction. Drawn per bottle from the seed.
 const BULB_SHAPES = ['round', 'star', 'cloud', 'ooze', 'splat']
+const OUTLINE_POINTS = 120 // the bulb outline as a polygon, for nearest point projection
 const SHAPE_SMOOTH = 60
 const SHAPE_FULL = 120
 // How well heat conducts between lava in two different bottles, as a share of the usual.
@@ -389,15 +394,19 @@ export function createSimulation ({ width, height, params }) {
     }
   }
 
+  // How many particles the floor's reservoirs hold between them.
+  function reserveFill () {
+    let area = 0
+    for (const b of floorBottleList()) area += bottleArea(b) * (b.cx <= 0 || b.cx >= width ? 0.5 : 1)
+    return Math.round(area / SPAWN_AREA)
+  }
+
   // Bring the live count to the target, all at once: the floor bottles' worth inside them and
   // the rest as a slab lying on the floor.
   function fill (target) {
     if (alive > target) alive = target
     if (alive === target) return
-    if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
-    let area = 0
-    for (const b of floorBottleList()) area += bottleArea(b) * (b.cx <= 0 || b.cx >= width ? 0.5 : 1)
-    const hidden = Math.min(target, Math.round(area / SPAWN_AREA))
+    const hidden = Math.min(target, reserveFill())
     const depth = Math.max(0, SPAWN_AREA * (target - hidden) / width)
     const start = alive
     while (alive < target) {
@@ -491,8 +500,13 @@ export function createSimulation ({ width, height, params }) {
     cupDepthNow = cupDepth
     if (cups.length === 0) layoutCups()
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
-    ensureCapacity(particleCount)
-    fill(particleCount)
+    // params.particleCount is the visible lava; the floor's reservoirs fill themselves on top of
+    // it, a particle per SPAWN_AREA of their area, so the pool stays the same depth whatever the
+    // seed lays out below it (bottle rows vary from 670 to 930 particles' worth at a full window).
+    if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
+    const target = particleCount + reserveFill()
+    ensureCapacity(target)
+    fill(target)
     stirEddies(dt, turbulence, drifters)
     // Warm up: the heater power is a front spreading from the middle of the floor (see WARMUP).
     heaterTime += dt
@@ -739,15 +753,14 @@ export function createSimulation ({ width, height, params }) {
   // wall, and with gaps in the row a flat corner is just another stretch of floor.
   function layoutCups (into = cups, onWalls = false, bulbShare = 1) {
     const shorter = Math.min(width, height)
-    const mouth = onWalls ? -Math.PI / 2 : Math.PI / 2
-    // A candidate bottle: its width, its shape, and the half width its bulb can reach at Bottles 1.
+    // A candidate bottle: its width, its shape, and the half width of its mouth with its fillet,
+    // which is what must not overlap the next bottle's.
     const draw = () => {
       let w = (CUP_WIDTH[0] + randomNormal() * CUP_WIDTH[1]) * shorter
       w = Math.max(CUP_WIDTH_RANGE[0] * shorter, Math.min(CUP_WIDTH_RANGE[1] * shorter, w))
       const shape = drawShape()
-      let factor = 1
-      for (let k = 0; k < 72; k++) factor = Math.max(factor, shapeFactor(shape, k / 72 * Math.PI * 2, mouth))
-      return { w, shape, reach: Math.max(w / 2, w / 2 * bulbShare * factor) + 2 }
+      const mouthHalf = BOTTLE_MOUTH * Math.min(w / 2, w / 2 * bulbShare)
+      return { w, shape, reach: mouthHalf * (1 + BOTTLE_ROUND) + 2 }
     }
     const drawGap = () => Math.min(0.4 * shorter, -Math.log(1 - random()) * CUP_GAP * shorter)
     let edge = 0 // the right edge of the last bottle's reach
@@ -854,10 +867,18 @@ export function createSimulation ({ width, height, params }) {
       const mouth = dir < 0 ? Math.PI / 2 : -Math.PI / 2
       const shape = cup.shape || { kind: 'round' }
       const radiusAt = theta => R * shapeFactor(shape, theta, mouth)
-      // The outline's largest radius, for the lamp's extent and for quick "could it be inside" tests.
+      // The outline's largest radius, for the lamp's extent and for quick "could it be inside" tests,
+      // and the outline itself as a polygon, for putting a stray particle back on its nearest point.
       let reach = R
-      for (let k = 0; k < 72; k++) reach = Math.max(reach, radiusAt(k / 72 * Math.PI * 2))
-      out.push({ cx: cup.fx * width, lineY, dir, w, rm, rs, yf, neckEnd, cy, R, joinAngle, reach: reach + 1, radiusAt, kind: shape.kind })
+      const outline = new Float32Array(OUTLINE_POINTS * 2)
+      for (let k = 0; k < OUTLINE_POINTS; k++) {
+        const theta = k / OUTLINE_POINTS * Math.PI * 2
+        const rr = radiusAt(theta)
+        reach = Math.max(reach, rr)
+        outline[k * 2] = cup.fx * width + Math.cos(theta) * rr
+        outline[k * 2 + 1] = cy + Math.sin(theta) * rr
+      }
+      out.push({ cx: cup.fx * width, lineY, dir, w, rm, rs, yf, neckEnd, cy, R, joinAngle, reach: reach + 1, radiusAt, outline, kind: shape.kind })
     }
     return out
   }
@@ -932,8 +953,6 @@ export function createSimulation ({ width, height, params }) {
     if (insideBottle(b, x[i], y[i])) return
     const dx = x[i] - b.cx
     const dy = y[i] - b.cy
-    const dist = Math.sqrt(dx * dx + dy * dy)
-    const rim = b.radiusAt(Math.atan2(dy, dx)) // the outline along this ray
     let bestD = Math.abs(y[i] - lineY)
     let bestX = x[i]
     let bestY = lineY
@@ -962,7 +981,11 @@ export function createSimulation ({ width, height, params }) {
         nx = ccx + ex / e * rc
         ny = ccy + ey / e * rc
         if (Math.abs(nx - b.cx) > b.w + rc + 0.01 || (ny - lineY) * dir < -0.01 || (ny - b.neckEnd) * dir > 0.01) valid = false
-      } else if (Math.abs(dx) > b.w + rc) {
+      } else if (rc > 0 && Math.abs(dx) > b.w + rc) {
+        // Past a fillet's square: in the lip, so the line or the bulb is the way back. Along the
+        // straight wall (rc 0) any distance outside is just a sideways push; treating it as
+        // invalid sent neck particles to the line or the bulb instead ("they also teleport a
+        // smaller distance when falling out of the skinny bottles").
         valid = false
       }
       if (valid) {
@@ -970,7 +993,27 @@ export function createSimulation ({ width, height, params }) {
         if (d < bestD) { bestD = d; bestX = nx; bestY = ny }
       }
     }
-    if (dist > 0 && dist - rim < bestD) { bestD = dist - rim; bestX = b.cx + dx / dist * rim; bestY = b.cy + dy / dist * rim }
+    // The nearest point on the bulb's outline. Pushing back along the ray from the centre
+    // instead landed a particle beside a narrow spike on the valley next to it, tens of pixels
+    // away ("I noticed some teleporting in the bottles on the top ... jumping up higher or lower
+    // by ~1/2 inch").
+    const o = b.outline
+    const n = OUTLINE_POINTS
+    for (let k = 0; k < n; k++) {
+      const ax = o[k * 2]
+      const ay = o[k * 2 + 1]
+      const bx = o[((k + 1) % n) * 2]
+      const by = o[((k + 1) % n) * 2 + 1]
+      const ex = bx - ax
+      const ey = by - ay
+      const len2 = ex * ex + ey * ey || 1
+      let t = ((x[i] - ax) * ex + (y[i] - ay) * ey) / len2
+      t = t < 0 ? 0 : t > 1 ? 1 : t
+      const qx = ax + ex * t
+      const qy = ay + ey * t
+      const d = Math.hypot(qx - x[i], qy - y[i])
+      if (d < bestD) { bestD = d; bestX = qx; bestY = qy }
+    }
     x[i] = bestX
     y[i] = bestY
     // A particle held at the line keeps its bottle; it only loses it once it is up in the pool
