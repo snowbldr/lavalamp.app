@@ -10,7 +10,7 @@ const ALPHA_THRESHOLD = 70
 const PIXEL_BUDGET = 1_000_000
 // The heat map: lava coloured by temperature on a five stop gradient from `look` (heatCold,
 // heatCool, heatWarm, heatHot, heatPeak), neutral buoyancy in the middle, so with the default
-// infrared palette purple is sinking and yellow is rising. The heater strip and the flow arrows
+// palette blue and green are sinking and red is rising. The heater strip and the flow arrows
 // are drawn by overlays.js.
 const HEAT_STEPS = 48
 

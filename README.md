@@ -30,7 +30,7 @@ the heater is a set of small football shaped elements, three times wider than ta
 the floor once, each its own size; every so often one lights at its own heat for a few seconds and warms the lava in a half
 disc around it, the way a finger on Heat does, so a lump of the pool warms at once and lifts as one
 (Heat Spots is the seconds between lightings, 0 for a steady floor heater). Pace runs the whole lamp in slow motion, and two buttons in the menu are ways of looking: Flow Field draws the stirring as arrows, like
-wind on a weather map, and Heat Map colours the lava by temperature like an infrared camera, with a
+wind on a weather map, and Heat Map colours the lava by temperature like a weather map, with a
 a Heater switch shows the heater strip and its elements along the floor in either view.
 
 The ceiling is a row of tall oval cups, laid out once in random sizes and sitting above the screen with

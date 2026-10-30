@@ -24,11 +24,13 @@ export const defaultLavaHighlight = { r: 182, g: 124, b: 254 }
 // different versions of color. One for heatmap to pick the gradient and one for no heat map to
 // pick the static colors. the color would auto switch based on the heat map setting. could we
 // also color the flow field with a gradient as well?"
+// Robert picked these in the lamp and asked for them as the defaults: a weather map rather than
+// the infrared it started with (cold sky blue, cool green, warm orange, hot red, peak cream).
 export const defaultHeatColors = {
-  heatCold: { r: 20, g: 0, b: 60 },
-  heatCool: { r: 110, g: 0, b: 170 },
-  heatWarm: { r: 220, g: 40, b: 40 },
-  heatHot: { r: 255, g: 170, b: 0 },
+  heatCold: { r: 0, g: 191, b: 255 },
+  heatCool: { r: 68, g: 255, b: 0 },
+  heatWarm: { r: 255, g: 126, b: 20 },
+  heatHot: { r: 255, g: 0, b: 0 },
   heatPeak: { r: 255, g: 255, b: 230 }
 }
 export const defaultFlowSlow = { r: 70, g: 110, b: 255 }
