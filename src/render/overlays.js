@@ -95,51 +95,65 @@ export function drawFlow (context, width, height, scale, look, flowAt) {
   }
 }
 
-// The Cups view's outlines: the ceiling and floor surfaces, and the edge of the screen as a dashed
-// box, drawn in lamp coordinates (the caller has set the transform).
+// The Cups view's outlines: the ceiling and floor bottles (a line with a mouth per bottle, each
+// bottle's flared neck and its bulb) and the edge of the screen as a dashed box, drawn in lamp
+// coordinates (the caller has set the transform). The neck's flare is the simulation's: a
+// quarter circle of radius r at the mouth and at the bulb.
 export function drawCups (context, lampWidth, lampHeight, view, lineWidth) {
   context.lineWidth = lineWidth
   context.strokeStyle = 'rgba(236, 236, 236, 0.55)'
-  // The floor.
-  context.beginPath()
-  for (let px = 0; px <= lampWidth; px += 4) {
-    const py = view.floorAt(px)
-    if (px === 0) context.moveTo(px, py)
-    else context.lineTo(px, py)
-  }
-  context.stroke()
-  // The ceiling: the lip line with a mouth per bottle, and each bottle's neck and bulb.
-  const bottles = view.bottles || []
-  if (bottles.length) {
-    const lipY = bottles[0].lipY
+  for (const [bottles, fallbackY] of [[view.bottles || [], 0], [view.floorBottles || [], lampHeight]]) {
+    if (!bottles.length) {
+      context.beginPath()
+      context.moveTo(0, fallbackY)
+      context.lineTo(lampWidth, fallbackY)
+      context.stroke()
+      continue
+    }
+    const lineY = bottles[0].lineY
     const sorted = [...bottles].sort((p, q) => p.cx - q.cx)
     context.beginPath()
     let at = 0
     for (const b of sorted) {
-      context.moveTo(at, lipY)
-      context.lineTo(b.cx - b.w, lipY)
-      at = b.cx + b.w
+      const w = neckHalf(b, lineY)
+      context.moveTo(at, lineY)
+      context.lineTo(b.cx - w, lineY)
+      at = b.cx + w
     }
-    context.moveTo(at, lipY)
-    context.lineTo(lampWidth, lipY)
+    context.moveTo(at, lineY)
+    context.lineTo(lampWidth, lineY)
     context.stroke()
     for (const b of sorted) {
-      const angle = Math.asin(Math.min(1, b.w / b.R)) // from straight down to the neck junction
+      const steps = 12
       context.beginPath()
-      context.moveTo(b.cx - b.w, lipY)
-      context.lineTo(b.cx - b.w, b.neckTop)
-      context.arc(b.cx, b.cy, b.R, Math.PI / 2 + angle, Math.PI / 2 - angle, false)
-      context.lineTo(b.cx + b.w, lipY)
+      // Left wall of the neck from the line to the bulb, then around the bulb, then the right wall back.
+      for (let k = 0; k <= steps; k++) {
+        const py = lineY + (b.neckEnd - lineY) * k / steps
+        const px = b.cx - neckHalf(b, py)
+        if (k === 0) context.moveTo(px, py)
+        else context.lineTo(px, py)
+      }
+      const angle = Math.asin(Math.min(1, b.w / b.R))
+      // The bulb's arc away from the neck: for a ceiling bottle (dir -1) the neck joins at the
+      // bottom of the circle, for a floor bottle (dir 1) at the top.
+      // Canvas angles run clockwise (y down): sweeping from join + angle to join - angle the long
+      // way round is clockwise for a bulb above its neck and anticlockwise for one below.
+      const join = b.dir < 0 ? Math.PI / 2 : -Math.PI / 2
+      context.arc(b.cx, b.cy, b.R, join + angle, join - angle, b.dir > 0)
+      for (let k = steps; k >= 0; k--) {
+        const py = lineY + (b.neckEnd - lineY) * k / steps
+        context.lineTo(b.cx + neckHalf(b, py), py)
+      }
       context.stroke()
     }
-  } else {
-    context.beginPath()
-    context.moveTo(0, view.ceilingAt(0))
-    context.lineTo(lampWidth, view.ceilingAt(lampWidth))
-    context.stroke()
   }
   context.setLineDash([6 * lineWidth, 6 * lineWidth])
   context.strokeStyle = 'rgba(236, 236, 236, 0.3)'
   context.strokeRect(0, 0, lampWidth, lampHeight)
   context.setLineDash([])
+}
+
+function neckHalf (b, py) {
+  const flare = t => (t < b.r ? b.r - Math.sqrt(Math.max(0, b.r * b.r - (b.r - t) * (b.r - t))) : 0)
+  return b.w + flare(Math.abs(py - b.lineY)) + flare(Math.abs(b.neckEnd - py))
 }

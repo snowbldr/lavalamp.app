@@ -103,21 +103,31 @@ const CUP_LIP = 0.04
 // out", and "we could also make the spouts varying length, so then we could actually overlap
 // big bottles with small bottles"). Each cup is a mouth in the flat lip line, BOTTLE_MOUTH of
 // the cup's half width either side, a neck BOTTLE_NECK of the shorter side long (drawn per
-// bottle), and a round bulb above it as wide as the cup (radius = half width x cupDepth). A
+// bottle, as a fraction of the shorter side), and a round bulb above it as wide as the cup
+// (radius = half width x cupDepth). A
 // glob rises through the mouth, gathers in the bulb while it is hot, cools as a glob and falls
 // back out through the mouth. Containment is "inside some bottle, or below the lip", so bulbs
 // at different heights may overlap.
 const BOTTLE_MOUTH = 0.6
 const BOTTLE_NECK = [0.05, 0.4]
-// Cups in the floor too, hidden below the screen like the base of the lamp (Robert: "what if,
-// we have hidden cups on the bottom too? that would fix the sheets shooting up. we would want
-// enough lava to fill all the cups and still leave a visible layer on the bottom that's
-// slightly smaller than what we see today"). Their own random row, rims at the bottom edge,
-// each FLOOR_CUP_SHARE of the ceiling cups' depth factor times its width deep; fill() adds
-// the cups' volume below the visible layer and the default particle count (settings.js) pays
-// for it. The hidden lava is a cold reserve the pool draws on as it lifts: heating it as well
-// put about twice the lava in reach of the heater and the whole pool hovered as one mass.
-const FLOOR_CUP_SHARE = 0.35 // was 0.25; Robert: "make the reserves underneath a little bigger"
+// Bottles in the floor too, hidden below the screen like the base of the lamp (Robert: "what
+// if, we have hidden cups on the bottom too? ... enough lava to fill all the cups and still
+// leave a visible layer on the bottom that's slightly smaller", then, once the ceiling had
+// bottles, "let's test them on the bottom too. we might need more lava to fill them again").
+// Their own random row with the end bottles centred on the walls (with rims at the walls the
+// corner was the floor's high point under the down-the-wall flow and lava piled there: "we got
+// significant wall climbing back"), mouths in the bottom edge, short necks down, bulbs
+// FLOOR_BULB of the ceiling's radius. The hidden lava is a cold reserve the pool draws on as it
+// lifts: heating it as well put about twice the lava in reach of the heater and the whole pool
+// hovered as one mass. Each floor bottle is a heating element whose core runs from the mouth
+// down into the bulb, so the neck is the spout. The default particle count (settings.js) pays
+// for the bottles' volume.
+const FLOOR_BULB = 0.55
+const FLOOR_NECK = [0.02, 0.1] // of the shorter side
+// Every neck flares into its mouth and into its bulb on a quarter circle BOTTLE_ROUND of the
+// mouth's half width (Robert: "let's also round out the edges of the bottles instead of these
+// square ends").
+const BOTTLE_ROUND = 0.6
 // Robert: "the heater... should it like, be the cup? Like should there just be one heater that
 // heats the whole cup?" With this on, the heating elements are the floor cups themselves: one
 // per cup, centred on it, as wide as the cup and reaching as far above the bottom edge as the
@@ -139,13 +149,7 @@ const ELEMENTS_ARE_CUPS = true
 // one runs long.
 const ELEMENT_CORE = 0.1
 const ELEMENT_LIFE_SCALE = 4
-// The ceiling and floor are sampled into tables every CUP_STEP px and smoothed over CUP_ROUND px
-// either side, which rounds off the cusp where two cups meet (Robert: "there's a jiggle on the
-// top at the point where the cups meet. when two cups next to each other get full, a bit of
-// lava sits there and jiggles. probably we need to round that point off to smooth that").
-const CUP_STEP = 2
-const CUP_ROUND = 40
-// Whether lava hidden in the floor cups is heated (see FLOOR_CUP_SHARE: heated, the pool hovered).
+// Whether lava hidden in the floor bottles gets the floor's contact heating as well (heated, the pool hovered).
 const HEAT_IN_CUPS = false
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
 // across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
@@ -218,15 +222,43 @@ export function createSimulation ({ width, height, params }) {
       p: new Float32Array(count), // pressure
       pNear: new Float32Array(count), // near pressure
       g: new Float32Array(count), // kernel weight scratch space, indexed by neighbour
-      shared: new Float32Array(count) // neighbour mean temperature scratch space
+      shared: new Float32Array(count), // neighbour mean temperature scratch space
+      home: new Int16Array(count).fill(-1) // the bottle a hidden particle is in, -1 for none
     }
   }
 
-  // `depth` is the visible layer above the bottom edge; below it the lava also fills the floor cups.
-  function spawn (i, depth) {
+  // In the visible slab `depth` px above the bottom edge, or, with `hidden`, inside a floor
+  // bottle (one picked by area, a point picked uniformly inside its bulb or neck).
+  function spawn (i, depth, hidden = false) {
+    const list = hidden ? floorBottleList() : []
+    state.home[i] = -1
     state.x[i] = randomBetween(0, width)
-    const floor = floorCups.length ? floorAt(state.x[i]) : height
-    state.y[i] = randomRange(height - depth, floor)
+    state.y[i] = randomRange(height - depth, height)
+    if (list.length) {
+      let total = 0
+      for (const b of list) total += bottleArea(b)
+      let pick = random() * total
+      let k = list.length - 1
+      for (let j = 0; j < list.length; j++) { pick -= bottleArea(list[j]); if (pick <= 0) { k = j; break } }
+      const b = list[k]
+      const bulb = Math.PI * b.R * b.R
+      for (let tries = 0; tries < 50; tries++) {
+        let px, py
+        if (random() * bottleArea(b) < bulb) {
+          px = b.cx + randomRange(-b.R, b.R)
+          py = b.cy + randomRange(-b.R, b.R)
+          if ((px - b.cx) ** 2 + (py - b.cy) ** 2 > b.R * b.R) continue
+        } else {
+          px = b.cx + randomRange(-b.w, b.w)
+          py = b.dir > 0 ? randomRange(b.lineY, b.neckEnd) : randomRange(b.neckEnd, b.lineY)
+        }
+        if (px < 0 || px > width) continue
+        state.x[i] = px
+        state.y[i] = py
+        state.home[i] = k
+        break
+      }
+    }
     state.vx[i] = 0
     state.vy[i] = 0
     state.temp[i] = SPAWN_HEAT * params.gravity
@@ -329,13 +361,21 @@ export function createSimulation ({ width, height, params }) {
     }
   }
 
-  // Bring the live count to the target, all at once, as a slab lying on the floor.
+  // Bring the live count to the target, all at once: the floor bottles' worth inside them and
+  // the rest as a slab lying on the floor.
   function fill (target) {
     if (alive > target) alive = target
     if (alive === target) return
     if (floorCups.length === 0) layoutCups(floorCups, true)
-    const depth = Math.max(0, (SPAWN_AREA * target - floorCupArea()) / width)
-    while (alive < target) spawn(alive++, depth)
+    let area = 0
+    for (const b of floorBottleList()) area += bottleArea(b) * (b.cx <= 0 || b.cx >= width ? 0.5 : 1)
+    const hidden = Math.min(target, Math.round(area / SPAWN_AREA))
+    const depth = Math.max(0, SPAWN_AREA * (target - hidden) / width)
+    const start = alive
+    while (alive < target) {
+      const i = alive++
+      spawn(i, depth, i - start < hidden)
+    }
   }
 
   function resize (newWidth, newHeight) {
@@ -595,8 +635,8 @@ export function createSimulation ({ width, height, params }) {
       const smallest = CUP_WIDTH_RANGE[0] * shorter
       for (const cup of floorCups) {
         const fx = Math.max(0.02, Math.min(0.98, cup.fx))
-        // Vertical reach as a fraction of the shorter side: the cup's depth.
-        const fr = Math.max(0.03, FLOOR_CUP_SHARE * cup.fw * width / shorter)
+        // Vertical reach as a fraction of the shorter side: the bottle's neck and bulb.
+        const fr = Math.max(0.03, ((FLOOR_NECK[0] + (FLOOR_NECK[1] - FLOOR_NECK[0]) * cup.fn) * shorter + FLOOR_BULB * cup.fw * width) / shorter)
         const d = (fx - 0.5) / SPOT_SPREAD
         const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / Math.max(ELEMENT_RADIUS[0], fr)
         const cupWidth = cup.fw * width
@@ -646,10 +686,14 @@ export function createSimulation ({ width, height, params }) {
     const { x, y } = state
     if (x[i] < 0) x[i] = 0
     else if (x[i] > width) x[i] = width
-    const bottom = cupDepthNow > 0 ? floorAt(x[i]) : height
-    if (y[i] > bottom) y[i] = bottom
-    else if (cupDepthNow > 0) containCeiling(i)
-    else if (y[i] < 0) y[i] = 0
+    if (cupDepthNow > 0) {
+      if (y[i] > height) containIn(floorBottleList(), i)
+      else if (y[i] < CUP_LIP * Math.min(width, height)) containIn(ceilingBottleList(), i)
+      else state.home[i] = -1
+    } else {
+      if (y[i] < 0) y[i] = 0
+      else if (y[i] > height) y[i] = height
+    }
   }
 
   // Lay the cups across the ceiling once (see CUP_WIDTH): bell curve widths, then all scaled so
@@ -679,102 +723,104 @@ export function createSimulation ({ width, height, params }) {
       for (let i = 0; i < widths.length; i++) {
         const w = widths[i] * k
         if (i > 0) centre += widths[i - 1] * k / 2 + w / 2
-        into.push({ fx: centre / width, fw: w / width })
+        into.push({ fx: centre / width, fw: w / width, fn: random() })
       }
       return
     }
     let at = 0
     for (const w of widths) {
       const fw = w / total
-      into.push({ fx: at + fw / 2, fw, fn: randomRange(...BOTTLE_NECK) })
+      into.push({ fx: at + fw / 2, fw, fn: random() })
       at += fw
     }
   }
 
-  // The ceiling bottles in px for this lamp: mouth half width w at the lip line, neck up to
-  // neckTop, bulb of radius R centred at cy. The bulb meets the neck where its width is the mouth's.
-  function bottles () {
+  // A bottle, in px: a mouth of half width w in the line at lineY (the lip for the ceiling, the
+  // bottom edge for the floor), a neck to neckEnd in direction dir (-1 up, +1 down), and a bulb
+  // of radius R centred at cy that meets the neck where its width is the mouth's. The neck flares
+  // into the mouth and into the bulb on quarter circles of radius r (see BOTTLE_ROUND).
+  function bottlesFor (row, lineY, dir, bulbShare, neckRange) {
     const shorter = Math.min(width, height)
-    const lipY = CUP_LIP * shorter
     const out = []
     if (cupDepthNow <= 0) return out
-    for (const cup of cups) {
+    for (const cup of row) {
       const a = cup.fw * width / 2
-      const R = a * cupDepthNow
+      const R = a * cupDepthNow * bulbShare
       const w = Math.min(BOTTLE_MOUTH * a, R * 0.95)
-      const neckTop = lipY - cup.fn * shorter
-      const cy = neckTop - Math.sqrt(Math.max(0, R * R - w * w))
-      out.push({ cx: cup.fx * width, lipY, w, neckTop, cy, R })
+      const neck = (neckRange[0] + (neckRange[1] - neckRange[0]) * cup.fn) * shorter
+      const neckEnd = lineY + dir * neck
+      const cy = neckEnd + dir * Math.sqrt(Math.max(0, R * R - w * w))
+      const r = Math.min(BOTTLE_ROUND * w, neck / 2)
+      out.push({ cx: cup.fx * width, lineY, dir, w, neckEnd, cy, R, r })
     }
     return out
   }
-  let bottleCache = null
+  const bottleArea = b => Math.PI * b.R * b.R + 2 * b.w * Math.abs(b.neckEnd - b.lineY)
+  // The neck's half width at a height: the mouth's, flaring near the line and near the bulb.
+  function neckHalf (b, py) {
+    const flare = t => (t < b.r ? b.r - Math.sqrt(Math.max(0, b.r * b.r - (b.r - t) * (b.r - t))) : 0)
+    return b.w + flare(Math.abs(py - b.lineY)) + flare(Math.abs(b.neckEnd - py))
+  }
+  let ceilingCache = null
+  let floorCache = null
   let bottleKey = ''
-  function currentBottles () {
-    const key = `${width}/${height}/${cupDepthNow}/${cups.length}`
-    if (key !== bottleKey) { bottleKey = key; bottleCache = bottles() }
-    return bottleCache
+  function refreshBottles () {
+    const key = `${width}/${height}/${cupDepthNow}/${cups.length}/${floorCups.length}`
+    if (key === bottleKey) return
+    bottleKey = key
+    ceilingCache = bottlesFor(cups, CUP_LIP * Math.min(width, height), -1, 1, BOTTLE_NECK)
+    floorCache = bottlesFor(floorCups, height, 1, FLOOR_BULB, FLOOR_NECK)
+  }
+  function ceilingBottleList () { refreshBottles(); return ceilingCache }
+  function floorBottleList () { refreshBottles(); return floorCache }
+
+  // Is the point inside this bottle's neck or bulb?
+  function insideBottle (b, px, py) {
+    const dx = px - b.cx
+    if ((py - b.neckEnd) * b.dir <= 0 && (py - b.lineY) * b.dir >= 0 && Math.abs(dx) <= neckHalf(b, py)) return true
+    const dy = py - b.cy
+    return dx * dx + dy * dy <= b.R * b.R
   }
 
-  // Keep a particle above the lip line inside some bottle: if it is in none, move it the shortest
-  // way into one (sideways into a neck, in to a bulb's rim) or down to the lip, whichever is nearer.
-  function containCeiling (i) {
-    const { x, y } = state
-    const list = currentBottles()
-    const lipY = list.length ? list[0].lipY : 0
-    if (y[i] >= lipY) return
-    let bestD = lipY - y[i]
-    let bestX = x[i]
-    let bestY = lipY
-    for (const b of list) {
-      const dx = x[i] - b.cx
-      if (Math.abs(dx) > b.R + 1) continue
-      // Inside the neck or the bulb: nothing to do.
-      if (y[i] >= b.neckTop && Math.abs(dx) <= b.w) return
-      const dy = y[i] - b.cy
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      if (dist <= b.R) return
-      // Candidate: sideways into the neck.
-      if (y[i] >= b.neckTop) {
-        const nx = b.cx + Math.sign(dx) * b.w
-        const d = Math.abs(nx - x[i])
-        if (d < bestD) { bestD = d; bestX = nx; bestY = y[i] }
-      }
-      // Candidate: in to the bulb's rim.
-      const d = dist - b.R
-      if (d < bestD) { bestD = d; bestX = b.cx + dx / dist * b.R; bestY = b.cy + dy / dist * b.R }
+  // Keep a particle that has crossed a line inside one bottle of that row: the one it entered
+  // through the mouth, remembered in state.home, so lava never passes from bottle to bottle even
+  // where two bulbs overlap on the drawing ("one bottle got a lot of filling and the lava
+  // quantum tunnels to another bottle" was the nearest-surface rule moving a particle nudged
+  // out of its bottle into a neighbour whose rim was closer). A particle arriving at the line
+  // under no mouth is held at the line; one in its bottle but out of place is moved the shortest
+  // way back in, sideways into the neck or in to the bulb's rim.
+  function containIn (list, i) {
+    const { x, y, home } = state
+    if (!list.length) return
+    const lineY = list[0].lineY
+    const dir = list[0].dir
+    if ((y[i] - lineY) * dir <= 0) { home[i] = -1; return }
+    let k = home[i]
+    if (k < 0 || k >= list.length) {
+      // Entering: which mouth is it under?
+      k = -1
+      for (let j = 0; j < list.length; j++) if (Math.abs(x[i] - list[j].cx) <= neckHalf(list[j], lineY)) { k = j; break }
+      if (k < 0) { y[i] = lineY; return }
+      home[i] = k
     }
+    const b = list[k]
+    if (insideBottle(b, x[i], y[i])) return
+    const dx = x[i] - b.cx
+    const dy = y[i] - b.cy
+    const dist = Math.sqrt(dx * dx + dy * dy)
+    let bestD = Math.abs(y[i] - lineY)
+    let bestX = x[i]
+    let bestY = lineY
+    if ((y[i] - b.neckEnd) * dir <= 0) {
+      const half = neckHalf(b, y[i])
+      const nx = b.cx + Math.sign(dx || 1) * half
+      const d = Math.abs(nx - x[i])
+      if (d < bestD) { bestD = d; bestX = nx; bestY = y[i] }
+    }
+    if (dist > 0 && dist - b.R < bestD) { bestD = dist - b.R; bestX = b.cx + dx / dist * b.R; bestY = b.cy + dy / dist * b.R }
     x[i] = bestX
     y[i] = bestY
-  }
-
-  // Smoothed height tables for the ceiling and floor, rebuilt when the lamp or the depth changes.
-  let floorTable = null
-  let tableKey = ''
-  function buildTables () {
-    const key = `${width}/${height}/${cupDepthNow}`
-    if (key === tableKey) return
-    tableKey = key
-    const n = Math.ceil(width / CUP_STEP) + 1
-    const raw = (fn) => { const t = new Float32Array(n); for (let k = 0; k < n; k++) t[k] = fn(Math.min(width, k * CUP_STEP)); return t }
-    const smooth = (t) => {
-      const half = Math.round(CUP_ROUND / CUP_STEP)
-      const out = new Float32Array(n)
-      for (let k = 0; k < n; k++) {
-        let sum = 0
-        let count = 0
-        for (let j = Math.max(0, k - half); j <= Math.min(n - 1, k + half); j++) { sum += t[j]; count++ }
-        out[k] = sum / count
-      }
-      return out
-    }
-    floorTable = smooth(raw(rawFloorAt))
-  }
-  const lookup = (table, px) => {
-    const f = Math.max(0, Math.min(width, px)) / CUP_STEP
-    const k = Math.min(table.length - 2, Math.floor(f))
-    const t = f - k
-    return table[k] + (table[k + 1] - table[k]) * t
+    if (bestY === lineY && bestX === x[i]) home[i] = -1
   }
 
   const cupAt = (row, px) => {
@@ -783,67 +829,20 @@ export function createSimulation ({ width, height, params }) {
     return row[row.length - 1]
   }
 
-  // The floor's height at a point: the bottom edge at a cup's rim, deeper (below the screen) on
-  // a half ellipse to FLOOR_CUP_SHARE of cupDepth of the cup's width at its centre.
-  function rawFloorAt (px) {
-    const cup = cupAt(floorCups, px)
-    const a = cup.fw * width / 2
-    const depth = FLOOR_CUP_SHARE * cupDepthNow * cup.fw * width
-    const u = (px - cup.fx * width) / a
-    return height + depth * Math.sqrt(Math.max(0, 1 - u * u))
-  }
-
-  // The ceiling's height above a point for the Cups view: the top of the highest bottle whose
-  // bulb spans it, else the lip. Positive is down.
+  // The lamp's extent above and below the screen at a point, for the Cups view: the far side of
+  // any bottle whose bulb spans it, else the line. Positive is down.
   function ceilingAt (px) {
-    const list = currentBottles()
-    let top = list.length ? list[0].lipY : 0
+    const list = ceilingBottleList()
+    let top = list.length ? list[0].lineY : 0
     for (const b of list) if (Math.abs(px - b.cx) <= b.R) top = Math.min(top, b.cy - b.R)
     return top
   }
 
-  // The smoothed floor (see CUP_ROUND). Positive is down.
   function floorAt (px) {
-    buildTables()
-    return lookup(floorTable, px)
-  }
-
-  // The area of all the floor cups together, in square px: half ellipses.
-  function floorCupArea () {
-    let area = 0
-    for (const cup of floorCups) {
-      const a = cup.fw * width / 2
-      const depth = FLOOR_CUP_SHARE * cupDepthNow * cup.fw * width
-      const inside = cup.fx <= 0 || cup.fx >= 1 ? 0.5 : 1 // the end cups straddle the walls
-      area += inside * Math.PI * a * depth / 2
-    }
-    return area
-  }
-
-  // The ceiling's height at a point: the cup lips at CUP_LIP of the shorter side below the top
-  // edge, rising (to negative y, above the screen) on a half ellipse to cupDepth of the cup's
-  // width above the lip at the centre. Positive is down.
-  // The area of all the floor cups together, in square px: half ellipses.
-  function floorCupArea () {
-    let area = 0
-    for (const cup of floorCups) {
-      const a = cup.fw * width / 2
-      const depth = FLOOR_CUP_SHARE * cupDepthNow * cup.fw * width
-      const inside = cup.fx <= 0 || cup.fx >= 1 ? 0.5 : 1 // the end cups straddle the walls
-      area += inside * Math.PI * a * depth / 2
-    }
-    return area
-  }
-
-  // The ceiling's height at a point: the cup lips at CUP_LIP of the shorter side below the top
-  // edge, rising (to negative y, above the screen) on a half ellipse to cupDepth of the cup's
-  // width above the lip at the centre. Positive is down.
-  function rawCeilingAt (px) {
-    const cup = cupAt(cups, px)
-    const a = cup.fw * width / 2
-    const depth = cupDepthNow * cup.fw * width
-    const u = (px - cup.fx * width) / a
-    return CUP_LIP * Math.min(width, height) - depth * Math.sqrt(Math.max(0, 1 - u * u))
+    const list = floorBottleList()
+    let bottom = height
+    for (const b of list) if (Math.abs(px - b.cx) <= b.R) bottom = Math.max(bottom, b.cy + b.R)
+    return bottom
   }
 
   return {
@@ -857,7 +856,8 @@ export function createSimulation ({ width, height, params }) {
     heaterElements,
     ceilingAt,
     floorAt,
-    bottles: currentBottles,
+    bottles: ceilingBottleList,
+    floorBottles: floorBottleList,
     get state () { return state },
     get count () { return alive },
     get width () { return width },

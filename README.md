@@ -37,8 +37,10 @@ The ceiling is a row of bottles hanging above the screen, like the cap on a real
 mouth in a flat lip line just below the top edge, a neck of its own random length, and a round bulb
 above, so a glob that reaches the top rises through the mouth, gathers in the bulb while it is hot,
 cools as a glob and falls back out whole instead of spreading into a sheet and falling as a strip
-(Cups, in Physics, scales the bulbs; 0 is a flat ceiling). The floor has shallow hidden cups too,
-holding a cold reserve of lava under the visible pool, and each one is a heating element.
+(Cups, in Physics, scales the bulbs; 0 is a flat ceiling). The floor has smaller bottles too, hanging
+below the screen, holding a cold reserve of lava under the visible pool; each one is a heating element
+whose core runs from its mouth down into its bulb, so its neck is the spout. Every neck flares into its
+mouth and its bulb on rounded corners, and lava never passes from one bottle to another.
 The Cups switch in the menu pulls the
 whole lamp into frame, hidden parts and all, with the cup outlines and the screen edge drawn over it.
 
