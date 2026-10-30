@@ -26,8 +26,8 @@ stirs that spot (Turbulence), while a couple of others drift about, bounce off t
 warm up and lift as one piece instead of shedding droplets; the Conduction slider sets how much, and
 high conduction is where the lava gets gloopy. On load the lava appears warm and settled on the floor and the heat spreads from
 the centre of the base outward, so the first thing to lift is one big glob from the middle. Once warm,
-the heater is a set of small ring elements laid at random along the floor once, each its
-own size; every so often one lights at its own heat for a few seconds and warms the lava in a half
+the heater is a set of small football shaped elements, three times wider than tall, laid at random along
+the floor once, each its own size; every so often one lights at its own heat for a few seconds and warms the lava in a half
 disc around it, the way a finger on Heat does, so a lump of the pool warms at once and lifts as one
 (Heat Spots is the seconds between lightings, 0 for a steady floor heater). Pace runs the whole lamp in slow motion, and two buttons in the menu are ways of looking: Flow Field draws the stirring as arrows, like
 wind on a weather map, and Heat Map colours the lava by temperature like an infrared camera, with a
@@ -38,8 +38,11 @@ only their bottom lips showing, like the cap on a real lamp, so a glob that reac
 a cup and keeps its shape while it cools instead of spreading into a sheet and falling as a strip
 (Cups, in Physics, is their depth as a fraction of their width; 0 is a flat ceiling).
 
-Rendering is the 2D canvas metaball trick: soft discs, an alpha threshold so nearby discs fuse, then a
-highlight along the underside of each blob.
+Rendering is the metaball trick, on the GPU: soft discs composited into a texture, then one WebGL pass
+thresholds the alpha so nearby discs fuse and lights the underside of each blob. The same picture
+drawn with the 2D canvas (soft discs, getImageData, a threshold pass and a highlight pass in
+JavaScript) is kept as the fallback where WebGL is missing, and `?canvas` in the URL forces it.
+`?profile` prints frame, simulation and drawing times to the console every two seconds.
 
 ### Touch and tilt
 
@@ -59,7 +62,10 @@ the lava, so it behaves like the liquid in a real lamp.
       heat.js                  heating, cooling, buoyancy
       spatialHash.js           neighbour lookup grid
       random.js
-    src/render/canvasRenderer.js
+    src/render/renderer.js     picks WebGL, or the 2D canvas as the fallback
+      glRenderer.js            the metaball pass as shaders
+      canvasRenderer.js        the same pass in JavaScript
+      overlays.js              heater strip and flow arrows
     src/input/motion.js        device motion: shakes, and which edge is down
     src/input/pointer.js       fingers and the mouse
     src/input/frame.js         the lamp's quarter turns inside the page

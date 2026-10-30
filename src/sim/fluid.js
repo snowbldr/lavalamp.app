@@ -6,13 +6,16 @@
 
 // Collect the particles within `radius` of particle i and store each one's kernel weight
 // g = 1 - r/h in state.g, indexed by the neighbour. The weights are scratch space, valid only
-// until the next particle is processed.
+// until the next particle is processed, and so is the array returned: it is the same array
+// every call, emptied and refilled, which spares the garbage collector one array per particle
+// per step (a measurable share of the step on a phone).
+const neighbours = []
 export function findNeighbours (state, hash, i, radius) {
   const candidates = hash.query(state.x[i], state.y[i], radius)
   const radiusSq = radius * radius
   const xi = state.x[i]
   const yi = state.y[i]
-  const neighbours = []
+  neighbours.length = 0
   for (let k = 0; k < candidates.length; k++) {
     const n = candidates[k]
     if (n === i) continue
@@ -56,9 +59,9 @@ export function relax (state, i, neighbours, dt) {
     const n = neighbours[k]
     const g = state.g[n]
     const magnitude = (state.p[i] * g + state.pNear[i] * g * g) * dtSq
-    const [ux, uy] = unitApprox(state.x[n] - xi, state.y[n] - yi)
-    const dx = ux * magnitude
-    const dy = uy * magnitude
+    unitApprox(state.x[n] - xi, state.y[n] - yi)
+    const dx = unit[0] * magnitude
+    const dy = unit[1] * magnitude
     state.x[i] -= dx
     state.y[i] -= dy
     state.x[n] += dx * 0.1
@@ -68,11 +71,18 @@ export function relax (state, i, neighbours, dt) {
 
 // Fast approximate unit vector, from Nick Vogt:
 // https://www.h3xed.com/programming/fast-unit-vector-calculation-for-2d-games
+// Written into `unit` rather than returned, to avoid an array per neighbour per step.
+const unit = [0, 0]
 function unitApprox (x, y) {
-  if (x === 0 && y === 0) return [0, 0]
+  if (x === 0 && y === 0) {
+    unit[0] = 0
+    unit[1] = 0
+    return
+  }
   const ax = Math.abs(x)
   const ay = Math.abs(y)
   let ratio = 1 / Math.max(ax, ay)
   ratio *= 1.29289 - (ax + ay) * ratio * 0.29289
-  return [x * ratio, y * ratio]
+  unit[0] = x * ratio
+  unit[1] = y * ratio
 }

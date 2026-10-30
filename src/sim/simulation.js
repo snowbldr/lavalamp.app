@@ -64,6 +64,10 @@ const ELEMENT_GAP = 200 // px between elements, before jitter
 const ELEMENT_RADIUS = [0.08, 0.2] // of the shorter side
 const ELEMENT_HEAT = [2, 6] // temperature per step at the centre; the finger gives 12, and at 4 to 12 an element fired a stream of small globs
 const ELEMENT_LIFE = [5, 15] // seconds
+// Elements are footballs, ELEMENT_ASPECT times as wide as they are tall (Robert: "perhaps we
+// should make them wider? like football shaped? that might get bigger blobs"); the radius above
+// is the half height.
+const ELEMENT_ASPECT = 3
 // Robert: "more smaller ones ... or probably better is of varying size smaller ones more
 // frequent". Sizes skew small (ELEMENT_SIZE_SKEW on a uniform draw, above 1 for more small
 // ones), and each element runs its own clock: its mean interval is params.heatSpots times the
@@ -411,7 +415,7 @@ export function createSimulation ({ width, height, params }) {
         let power = SPOT_BASE
         for (const el of elements) {
           if (el.glow <= 0) continue
-          const d = (x - el.x) / el.radius
+          const d = (x - el.x) / (el.radius * ELEMENT_ASPECT)
           power += 2 * el.glow * Math.exp(-d * d)
         }
         return power > SPOT_CAP ? SPOT_CAP : power
@@ -427,7 +431,7 @@ export function createSimulation ({ width, height, params }) {
       const dy = height - py
       for (const el of elements) {
         if (el.glow <= 0) continue
-        const dx = px - el.x
+        const dx = (px - el.x) / ELEMENT_ASPECT
         const d2 = (dx * dx + dy * dy) / (el.radius * el.radius)
         if (d2 < 4) heat += el.heat * el.glow * Math.exp(-d2)
       }

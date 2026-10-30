@@ -1,3 +1,5 @@
+import { drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
+
 const HIGHLIGHT_HEIGHT = 15
 const ALPHA_THRESHOLD = 70
 // The threshold and highlight passes touch every pixel in JavaScript, so the canvas has at most
@@ -6,18 +8,11 @@ const ALPHA_THRESHOLD = 70
 // resolution took 108 ms a frame. The stretch softens the blob edges by a pixel or two, which
 // lava can afford.
 const PIXEL_BUDGET = 1_000_000
-// The flow overlay: arrows on a grid this many window pixels apart. Length saturates: the
-// typical (median) speed on screen draws at half the cell, and the fastest tends toward most of
-// it, so a tornado reads as the strongest thing without shrinking the roll around it to dots.
-const FLOW_SPACING = 40
 // The heat map: lava coloured by temperature on a five stop gradient from `look` (heatCold,
 // heatCool, heatWarm, heatHot, heatPeak), neutral buoyancy in the middle, so with the default
-// infrared palette purple is sinking and yellow is rising, with a strip along the floor for the
-// heater. The flow field's arrows run from look.flowSlow to look.flowFast with speed.
+// infrared palette purple is sinking and yellow is rising. The heater strip and the flow arrows
+// are drawn by overlays.js.
 const HEAT_STEPS = 48
-const HEAT_STRIP = 10 // window px
-const HEAT_STOPS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
-const FLOW_ALPHA = 0.75
 
 // Draws the particles as soft discs, thresholds the alpha channel so that overlapping discs fuse
 // into one blob (the classic metaball trick), then lights the underside of every blob with a short
@@ -92,24 +87,15 @@ export function createCanvasRenderer (canvas, look) {
     t1 = now(); profile.write = t1 - t; t = t1
     // The heater is its own view (Robert: "hide the heating elements by default, but add a switch to
     // show the heating element. should work independently of heat map").
-    if (look.showHeater && overlays.heaterAt) drawHeater(overlays.heaterAt, overlays.elements ? overlays.elements() : [])
-    if (look.showFlow && overlays.flowAt) drawFlow(overlays.flowAt)
+    if (look.showHeater && overlays.heaterAt) drawHeater(context, width, height, scale, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+    if (look.showFlow && overlays.flowAt) drawFlow(context, width, height, scale, look, overlays.flowAt)
     profile.overlays = now() - t
   }
 
-  const paletteKey = () => HEAT_STOPS.map(stop => rgbKey(look[stop])).join('/')
-  const rgbKey = c => c ? `${c.r},${c.g},${c.b}` : ''
-  const mix = (a, b, f) => [a.r + (b.r - a.r) * f, a.g + (b.g - a.g) * f, a.b + (b.b - a.b) * f].map(Math.round)
-
-  // The heat colour for t in [0, 1], interpolated along the five stops in `look`.
-  function heatColor (t) {
-    const pos = Math.max(0, Math.min(1, t)) * (HEAT_STOPS.length - 1)
-    const k = Math.min(HEAT_STOPS.length - 2, Math.floor(pos))
-    return mix(look[HEAT_STOPS[k]], look[HEAT_STOPS[k + 1]], pos - k)
-  }
+  const heatColor = t => paletteColor(look, t)
 
   function prepareHeatDiscs (size) {
-    const key = `${size}/${paletteKey()}`
+    const key = `${size}/${paletteKey(look)}`
     if (key === heatKey) return
     heatKey = key
     const span = Math.max(2, Math.ceil(size * 2))
@@ -125,78 +111,6 @@ export function createCanvasRenderer (canvas, look) {
 
   // A strip along the floor coloured by the heater power under each column: dark where the
   // heater is off, white hot at the peak of the wave. Normal power sits at the middle of the palette.
-  // The heating elements sit on the strip as domes, dark when off and up to white hot when lit.
-  function drawHeater (heaterAt, elements) {
-    const strip = Math.max(2, Math.round(HEAT_STRIP * scale))
-    const cell = Math.max(1, Math.round(4 * scale))
-    for (let x = 0; x < width; x += cell) {
-      const power = heaterAt((x + cell / 2) / scale)
-      const [r, g, b] = heatColor(power / 2)
-      context.fillStyle = `rgb(${r},${g},${b})`
-      context.fillRect(x, height - strip, cell, strip)
-    }
-    for (const el of elements) {
-      const [r, g, b] = heatColor(0.1 + 0.9 * el.glow)
-      const dome = Math.max(4, Math.min(el.radius * 0.3, 24) * scale)
-      context.fillStyle = `rgb(${r},${g},${b})`
-      context.beginPath()
-      context.arc(el.x * scale, height - strip, dome, Math.PI, 0)
-      context.fill()
-    }
-  }
-
-  // Wind map arrows: one per grid cell, pointing with the flow, as long as the flow is fast.
-  function drawFlow (flowAt) {
-    const step = FLOW_SPACING * scale
-    const reach = step * 0.8
-    const samples = []
-    const speeds = []
-    for (let y = step / 2; y < height; y += step) {
-      for (let x = step / 2; x < width; x += step) {
-        const [vx, vy] = flowAt(x / scale, y / scale)
-        const speed = Math.hypot(vx, vy)
-        samples.push(x, y, vx, vy, speed)
-        speeds.push(speed)
-      }
-    }
-    speeds.sort((a, b) => a - b)
-    const typical = speeds[speeds.length >> 1]
-    const fastest = speeds[speeds.length - 1]
-    if (fastest < 0.5) return
-    const slow = look.flowSlow || { r: 255, g: 255, b: 255 }
-    const fast = look.flowFast || slow
-    context.lineWidth = 1
-    for (let k = 0; k < samples.length; k += 5) {
-      const x = samples[k]
-      const y = samples[k + 1]
-      const vx = samples[k + 2]
-      const vy = samples[k + 3]
-      const speed = samples[k + 4]
-      {
-        if (speed < fastest * 0.02) continue
-        const share = speed / (speed + typical) // 0 to 1, half at the typical speed
-        const length = reach * share
-        const [r, g, b] = mix(slow, fast, share)
-        context.strokeStyle = context.fillStyle = `rgba(${r},${g},${b},${FLOW_ALPHA})`
-        const ux = vx / speed
-        const uy = vy / speed
-        const tipX = x + ux * length / 2
-        const tipY = y + uy * length / 2
-        context.beginPath()
-        context.moveTo(x - ux * length / 2, y - uy * length / 2)
-        context.lineTo(tipX, tipY)
-        context.stroke()
-        const head = Math.min(5 * scale, length / 2)
-        context.beginPath()
-        context.moveTo(tipX, tipY)
-        context.lineTo(tipX - ux * head - uy * head / 2, tipY - uy * head + ux * head / 2)
-        context.lineTo(tipX - ux * head + uy * head / 2, tipY - uy * head - ux * head / 2)
-        context.closePath()
-        context.fill()
-      }
-    }
-  }
-
   // Redraw the disc when the size or colour changes: a radial gradient from solid at the centre
   // to transparent at the edge.
   function prepareDisc (size, r, g, b) {

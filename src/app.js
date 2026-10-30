@@ -1,6 +1,6 @@
 import { a, canvas, div, sub } from '@srfnstack/fntags'
 import { createSimulation } from './sim/simulation.js'
-import { createCanvasRenderer } from './render/canvasRenderer.js'
+import { createRenderer } from './render/renderer.js'
 import { createMotionInput } from './input/motion.js'
 import { createPointerInput } from './input/pointer.js'
 import { TURNS, lampSizeFor, lampToPage, pageToLamp, pageVectorToLamp } from './input/frame.js'
@@ -113,7 +113,7 @@ export function start () {
   let [width, height] = lampSizeFor(turns, pageWidth, pageHeight)
   const lamp = canvas({ id: 'lavalamp', style: { transition: 'transform 0.4s' } })
   const sim = createSimulation({ width, height, params })
-  const renderer = createCanvasRenderer(lamp, look)
+  const renderer = createRenderer(lamp, look)
   const motion = createMotionInput()
   const toLamp = (px, py) => pageToLamp(turns, pageWidth, pageHeight, width, height, px, py)
   const pointer = createPointerInput(lamp, toLamp)
@@ -224,7 +224,8 @@ export function start () {
       stepsPerFrame: (tally.steps / tally.frames).toFixed(2),
       renderMs: (tally.render / tally.frames).toFixed(2),
       pixels: renderer.pixels(),
-      particles: sim.count
+      particles: sim.count,
+      renderer: renderer.kind || 'canvas'
     }
     for (const k in tally.phases) out[k] = (tally.phases[k] / tally.frames).toFixed(2)
     window.lavaProfile = out
@@ -250,7 +251,10 @@ export function start () {
     const t0 = profiling ? performance.now() : 0
     while (due >= 1) {
       due -= 1
-      previous = { x: sim.state.x.slice(0, sim.count), y: sim.state.y.slice(0, sim.count) }
+      // Keep the last positions for the interpolation, copying into a reused buffer.
+      if (previous.x.length !== sim.count) previous = { x: new Float32Array(sim.count), y: new Float32Array(sim.count) }
+      previous.x.set(sim.state.x.subarray(0, sim.count))
+      previous.y.set(sim.state.y.subarray(0, sim.count))
       sim.step(FRAME)
       tally.steps++
     }

@@ -3,9 +3,12 @@ import { notify } from './components.js'
 
 // Defaults that depend on the window. They take the raw window size, not the capped lamp size,
 // because that is what the lamp was tuned against.
-// One particle per 4000 square px of window. The cap used to be 300, from when the lamp itself stopped
-// at 1000 px square; a full 2560 x 1300 window at 300 particles is a 50 px film of lava.
-export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 4000), 1000)
+// One particle per 3000 square px of window, at most 1500. It was one per 4000 and at most 1000
+// while the 2D canvas renderer spent most of the frame reading pixels back; with the metaball pass
+// on the GPU the step is the only cost that grows with lava (1.1 ms at 1000 particles, 1.9 at 1500,
+// on Robert's Mac), and Robert asked for "a bit more lava by default after we improve the
+// performance". The cap used to be 300, from when the lamp itself stopped at 1000 px square.
+export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 3000), 1500)
 // Max temp was min(height, 1000) with the slider running to twice that. With heating in depth and
 // conduction at 0.02 Robert had to run it at the top to get blobs at all ("I think I need to make
 // max temp the new mid same way as conduction"): with heating in depth a cap at the window height

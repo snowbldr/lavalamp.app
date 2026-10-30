@@ -13,6 +13,7 @@ export class SpatialHash {
     this.cols = Math.max(1, Math.ceil(width / cellSize))
     this.rows = Math.max(1, Math.ceil(height / cellSize))
     this.cells = Array.from({ length: this.cols * this.rows }, () => [])
+    this.result = [] // query's answer, reused: valid until the next query
   }
 
   clear () {
@@ -24,13 +25,15 @@ export class SpatialHash {
   }
 
   // Every index stored in a cell that overlaps the square of half-width `radius` around (x, y).
-  // A superset of the true neighbours; callers filter by real distance.
+  // A superset of the true neighbours; callers filter by real distance. The array returned is
+  // the same one every time, reused to spare the garbage collector a thousand arrays a step.
   query (x, y, radius) {
     const left = this.cellX(x - radius)
     const right = this.cellX(x + radius)
     const top = this.cellY(y - radius)
     const bottom = this.cellY(y + radius)
-    const result = []
+    const result = this.result
+    result.length = 0
     for (let i = left; i <= right; i++) {
       for (let j = top; j <= bottom; j++) {
         const cell = this.cells[i + j * this.cols]
