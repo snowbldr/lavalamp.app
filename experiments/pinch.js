@@ -9,8 +9,8 @@ import { seedRandom } from '../src/sim/random.js'
 import { createRenderer } from '../src/render/renderer.js'
 import { knob, knobs, pair, toggle } from '../src/ui/components.js'
 
-const W = 480
-const H = 600
+const W = 360
+const H = 900
 const FRAME = 1 / 60
 const SEED = 1
 
@@ -26,11 +26,12 @@ export function start () {
   const radius = fnstate(60)
   const size = fnstate(30)
   // The experiment.
-  const count = fnstate(260)
-  const pulse = fnstate(2.5) // seconds of finger heat
+  const count = fnstate(160)
+  const pulse = fnstate(2) // seconds of finger heat
   const heat = fnstate(12) // finger heat per step
-  const interval = fnstate(0.5) // seconds between filmstrip frames
-  const frames = fnstate(10)
+  const interval = fnstate(0.6) // seconds between filmstrip frames
+  const frames = fnstate(12)
+  const from = fnstate(3) // the filmstrip starts itself at this time after a Replay
   const slow = fnstate(false)
   const silhouette = fnstate(true) // black on orange like the video, or the lamp's own colours and lighting
 
@@ -58,6 +59,8 @@ export function start () {
   let live = null
   let sim = null
   let time = 0
+  let lastReal = performance.now()
+  let owed = 0 // simulation time owed to real time
   let captured = 0
   let nextCapture = Infinity
   let capturing = false
@@ -76,8 +79,10 @@ export function start () {
     sim = createSimulation({ width: W, height: H, params: live })
     time = 0
     captured = 0
-    capturing = false
-    nextCapture = Infinity
+    capturing = true
+    nextCapture = from()
+    owed = 0
+    lastReal = performance.now()
     strip.replaceChildren()
   }
 
@@ -91,7 +96,13 @@ export function start () {
   function frame () {
     look.particleSize = size()
     dress()
-    const steps = slow() ? (Math.floor(time * 60) % 4 === 0 ? 1 : 0) : 1
+    // Step by real time (a 120 Hz display otherwise runs the lab at double speed), a quarter of it
+    // in slow motion, in whole frames.
+    const nowReal = performance.now()
+    owed += Math.min(0.1, (nowReal - lastReal) / 1000) * (slow() ? 0.25 : 1)
+    lastReal = nowReal
+    let steps = 0
+    while (owed >= FRAME && steps < 4) { owed -= FRAME; steps++ }
     for (let k = 0; k < steps; k++) {
       // The pulse: a heat finger on the floor's middle from 1 s to 1 s + pulse.
       const on = time >= 1 && time < 1 + pulse()
@@ -132,19 +143,20 @@ export function start () {
       )),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
       knobs(
-        knob('Lava', 'count', count, { min: 50, max: 600, step: 10 }, () => 260),
-        knob('Pulse', 'pulse', pulse, { min: 0.5, max: 8, step: 0.1 }, () => 2.5, v => `${v} s`),
+        knob('Lava', 'count', count, { min: 50, max: 600, step: 10 }, () => 160),
+        knob('Pulse', 'pulse', pulse, { min: 0.5, max: 8, step: 0.1 }, () => 2, v => `${v} s`),
         knob('Heat', 'heat', heat, { min: 2, max: 30, step: 1 }, () => 12),
         knob('Size', 'size', size, { min: 5, max: 50, step: 1 }, () => 30)
       ),
       knobs(
-        knob('Every', 'interval', interval, { min: 0.1, max: 2, step: 0.1 }, () => 0.5, v => `${v} s`),
-        knob('Frames', 'frames', frames, { min: 4, max: 24, step: 1 }, () => 10)
+        knob('From', 'from', from, { min: 0, max: 20, step: 0.5 }, () => 3, v => `${v} s`),
+        knob('Every', 'interval', interval, { min: 0.1, max: 2, step: 0.1 }, () => 0.6, v => `${v} s`),
+        knob('Frames', 'frames', frames, { min: 4, max: 24, step: 1 }, () => 12)
       ),
       pair('Slow motion', toggle('slow', slow), 'Silhouette', toggle('silhouette', silhouette))),
     div({ class: 'actions' },
       button({ id: 'replay', onclick: reset }, 'Replay'),
-      button({ id: 'film', class: 'primary', onclick: film }, 'Filmstrip'),
+      button({ id: 'film', class: 'primary', onclick: film }, 'Filmstrip now'),
       clock)
   )
 
