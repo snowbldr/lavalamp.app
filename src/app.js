@@ -22,7 +22,8 @@ import {
   particleSize,
   restDensity,
   stiffness,
-  stiffnessNear
+  stiffnessNear,
+  stir
 } from './ui/settings.js'
 
 // The lamp never grows past this in either direction; the simulation was tuned at this size.
@@ -61,6 +62,7 @@ export function start () {
   mirror(maxTemp, params, 'maxTemp')
   mirror(gravityStrength, params, 'gravity')
   mirror(particleSize, params, 'particleSize')
+  mirror(stir, params, 'stir')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')

@@ -15,6 +15,8 @@ export const defaultStiffness = 4000
 export const defaultStiffnessNear = 25000
 export const defaultRestDensity = 4.25
 export const defaultParticleSize = 30
+// Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
+export const defaultStir = 20
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -31,10 +33,13 @@ export const restDensity = fnstate(defaultRestDensity)
 export const maxTemp = fnstate(defaultMaxTemp())
 export const particleCount = fnstate(defaultParticleCount())
 export const particleSize = fnstate(defaultParticleSize)
+export const stir = fnstate(defaultStir)
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir }
+// Settings that may be zero or negative. Everything else has to be positive to make sense.
+const signedSettings = new Set(['stir'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -47,7 +52,8 @@ const defaults = () => ({
   restDensity: defaultRestDensity,
   maxTemp: defaultMaxTemp(),
   particleCount: defaultParticleCount(),
-  particleSize: defaultParticleSize
+  particleSize: defaultParticleSize,
+  stir: defaultStir
 })
 
 export const getSettings = () => {
@@ -64,7 +70,7 @@ export const applySettings = saved => {
   }
   for (const [key, state] of Object.entries(numberSettings)) {
     const value = Number(saved[key])
-    if (Number.isFinite(value) && value > 0) state(value)
+    if (Number.isFinite(value) && (value > 0 || signedSettings.has(key))) state(value)
   }
 }
 

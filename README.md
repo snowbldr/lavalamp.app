@@ -18,6 +18,11 @@ The lava lamp part is a temperature per particle: it rises on contact with the f
 constant rate everywhere, and a particle rises exactly as fast as it is hot. Blobs form, stick together
 and rise as a unit because of the surface tension that falls out of the relaxation step.
 
+Left alone, that model has nothing sideways in it, so blobs rise and fall in the same lane forever.
+A slow convection roll (up the middle, down the walls, in along the floor) stirs the lava the way the
+circulation in a real lamp does. On load the lava oozes up out of the floor instead of appearing all
+at once.
+
 Rendering is the 2D canvas metaball trick: soft discs, an alpha threshold so nearby discs fuse, then a
 highlight along the underside of each blob.
 

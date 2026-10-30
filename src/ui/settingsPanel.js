@@ -12,6 +12,7 @@ import {
   defaultRestDensity,
   defaultStiffness,
   defaultStiffnessNear,
+  defaultStir,
   gravityStrength,
   highlightColor,
   interactionRadius,
@@ -24,7 +25,8 @@ import {
   saveSettings,
   shareLink,
   stiffness,
-  stiffnessNear
+  stiffnessNear,
+  stir
 } from './settings.js'
 
 const colorPicker = (title, id, state) => formInput(
@@ -118,6 +120,7 @@ export function createSettingsPanel () {
       max: defaultGravityStrength.bindAttr(() => defaultGravityStrength() * 2),
       step: 1
     }, defaultGravityStrength),
+    slider('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir),
     actionButton('Share', 'share', 'Share', copyShareLink),
     actionButton('Save', 'save', 'Save and Close', () => {
       saveSettings()
