@@ -82,10 +82,15 @@ const SPOT_CAP = 3
 // cups". The ceiling is a row of half ellipse arches laid once at start: widths drawn from a
 // bell curve (CUP_WIDTH mean and deviation, clipped to CUP_WIDTH_RANGE, all as fractions of the
 // shorter side) and scaled to tile the width exactly; each cup is params.cupDepth of its width
-// deep at the centre (0 for the flat ceiling). Lava rising into a cup pools in it and keeps a
-// glob's outline while it cools.
-const CUP_WIDTH = [0.4, 0.1] // mean, deviation
-const CUP_WIDTH_RANGE = [0.25, 0.6]
+// deep (0 for the flat ceiling). Lava rising into a cup pools in it and keeps a glob's outline
+// while it cools. The cups sit above the screen with only their bottom lips showing, CUP_LIP of
+// the shorter side below the top edge, like the cap on a real lamp (Robert: "need to be a little
+// narrower, like elongated vertically ... hide the cups above the screen except for just the
+// bottom edge of the cups, they're kinda ugly and ruin the effect, and it's the same as the cap
+// on the lava lamp"); lava that rises into a cup goes out of sight and comes back as it cools.
+const CUP_WIDTH = [0.3, 0.08] // mean, deviation
+const CUP_WIDTH_RANGE = [0.2, 0.45]
+const CUP_LIP = 0.04
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
 // across (never under TOUCH_MIN px): push shoves lava outward and carries it with a drag, pull
 // gathers it, spin is a tornado under the finger, heat and cool change temperature.
@@ -563,8 +568,9 @@ export function createSimulation ({ width, height, params }) {
     }
   }
 
-  // The ceiling's height at a point: 0 at the centre of a cup, cupDepth of the cup's width at its
-  // edges, a half ellipse between. Also used to draw the cups.
+  // The ceiling's height at a point: the cup lips at CUP_LIP of the shorter side below the top
+  // edge, rising (to negative y, above the screen) on a half ellipse to cupDepth of the cup's
+  // width above the lip at the centre. Positive is down.
   function ceilingAt (px) {
     const f = Math.max(0, Math.min(1, px / width))
     let cup = cups[cups.length - 1]
@@ -572,7 +578,7 @@ export function createSimulation ({ width, height, params }) {
     const a = cup.fw * width / 2
     const depth = cupDepthNow * cup.fw * width
     const u = (px - cup.fx * width) / a
-    return depth * (1 - Math.sqrt(Math.max(0, 1 - u * u)))
+    return CUP_LIP * Math.min(width, height) - depth * Math.sqrt(Math.max(0, 1 - u * u))
   }
 
   return {

@@ -33,9 +33,10 @@ disc around it, the way a finger on Heat does, so a lump of the pool warms at on
 wind on a weather map, and Heat Map colours the lava by temperature like an infrared camera, with a
 a Heater switch shows the heater strip and its elements along the floor in either view.
 
-The ceiling is a row of shallow oval cups, laid out once in random sizes, so a glob that reaches the
-top pools in a cup and keeps its shape while it cools instead of spreading into a sheet and falling as
-a strip (Cups, in Physics, is their depth as a fraction of their width; 0 is a flat ceiling).
+The ceiling is a row of tall oval cups, laid out once in random sizes and sitting above the screen with
+only their bottom lips showing, like the cap on a real lamp, so a glob that reaches the top rises into
+a cup and keeps its shape while it cools instead of spreading into a sheet and falling as a strip
+(Cups, in Physics, is their depth as a fraction of their width; 0 is a flat ceiling).
 
 Rendering is the 2D canvas metaball trick: soft discs, an alpha threshold so nearby discs fuse, then a
 highlight along the underside of each blob.

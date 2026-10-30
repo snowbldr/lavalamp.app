@@ -46,7 +46,7 @@ export const defaultTurbulence = 45
 export const defaultDrifters = 2
 export const defaultHeatSpots = 15
 // How deep the ceiling cups are, as a fraction of each cup's width. 0 is a flat ceiling.
-export const defaultCupDepth = 0.4
+export const defaultCupDepth = 1
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
