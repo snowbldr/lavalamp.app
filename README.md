@@ -20,11 +20,13 @@ and rise as a unit because of the surface tension that falls out of the relaxati
 
 Left alone, that model has nothing sideways in it, so blobs rise and fall in the same lane forever.
 A slow convection roll (up the middle, down the walls, in along the floor) stirs the lava the way the
-circulation in a real lamp does. Heat also conducts between touching particles, which is what lets a blob
+circulation in a real lamp does, and now and then a slow eddy appears somewhere for a few seconds and
+stirs that spot (Turbulence). Heat also conducts between touching particles, which is what lets a blob
 warm up and lift as one piece instead of shedding droplets; the Conduction slider sets how much, and a
 little goes a long way. On load the lava appears warm and settled on the floor and the heat spreads from
 the centre of the base outward, so the first thing to lift is one big glob from the middle. Pace runs the
-whole lamp in slow motion.
+whole lamp in slow motion, and Flow Field in the menu draws the stirring as arrows, like wind on a
+weather map.
 
 Rendering is the 2D canvas metaball trick: soft discs, an alpha threshold so nearby discs fuse, then a
 highlight along the underside of each blob.

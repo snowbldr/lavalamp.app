@@ -1,7 +1,7 @@
 import { SpatialHash } from './spatialHash.js'
 import { findNeighbours, relax, updatePressure } from './fluid.js'
 import { nextTemperature } from './heat.js'
-import { randomBetween } from './random.js'
+import { randomBetween, randomRange } from './random.js'
 
 const CELL_SIZE = 50
 // How the lava arrives on load: all at once, as a warm slab already lying on the floor.
@@ -16,15 +16,19 @@ const SPAWN_HEAT = 0.8
 const SPAWN_AREA = 400
 // On load the heat starts in the middle of the floor and spreads to the walls over WARMUP
 // seconds, like a coil warming the base from the centre out. The floor outside the front still
-// gets IDLE_HEAT, enough to hold the lava warm (heating roughly balances cooling near 0.3) but
-// not enough to lift it. A flat warm up only delayed the explosion: every floor particle heats
-// at the same rate from the same place, so they all cross buoyancy within the same second.
+// gets IDLE_HEAT. A flat warm up only delayed the explosion: every floor particle heats at the
+// same rate from the same place, so they all cross buoyancy within the same second. Idle heat
+// was 0.35 with a 45 s front, and that left the lava by the walls sinking at a fifth of gravity
+// for forty seconds: it spread along the floor and the walls were the only way left, so it
+// climbed them (37 particles within 20 px of the walls in the first half minute against 13 for
+// a flat slab; "we got climbing on the side again for a minute at the start"). At 0.6 and 20 s
+// the walls hold 12 and 78% of the first forty lifted particles still come from the middle half.
 // An earlier version heated the whole depth of the slab during warm up and switched to contact
 // heating when the front reached the walls; the switch read as a phase change ("it explodes into
 // a bunch of small pieces"). Now there is one heat model from the first frame: contact heating at
 // the floor, and conduction to carry it up into the blob.
-const WARMUP = 45
-const IDLE_HEAT = 0.35
+const WARMUP = 20
+const IDLE_HEAT = 0.6
 // Conduction: each step a particle's temperature moves this fraction of the way toward the
 // weighted mean of its neighbours. Without it every particle heats and cools on its own noise,
 // neighbours drift apart in temperature and the hot ones tear out of a blob as droplets. It is
@@ -32,10 +36,18 @@ const IDLE_HEAT = 0.35
 // and 587 midline crossings a minute, 0.005 gives 67 and 399, 0.01 gives 112 and 36, and from
 // 0.02 up the lamp is one hovering mass. Where to sit on that slope is a matter of taste.
 const CONDUCTION = 0.005
+// Turbulence: now and then an eddy appears at a random spot, a slow vortex that fades in and out
+// over a few seconds, spinning either way. Each is a Gaussian vortex, so it is divergence free
+// and moves the lava around without squashing it. The gap between eddies, their size and their
+// life are drawn from these ranges; `turbulence` in params is the peak speed in px/s.
+const EDDY_GAP = [6, 18] // seconds between one eddy starting and the next
+const EDDY_RADIUS = [0.15, 0.3] // of the shorter side of the lamp
+const EDDY_LIFE = [4, 10] // seconds
+const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated speed
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -43,6 +55,9 @@ export function createSimulation ({ width, height, params }) {
   // The live count follows params.particleCount; particles added later appear in the slab too.
   let alive = 0
   let heaterTime = 0
+  let time = 0
+  const eddies = []
+  let nextEddy = randomRange(...EDDY_GAP)
 
   function allocate (count) {
     return {
@@ -75,6 +90,42 @@ export function createSimulation ({ width, height, params }) {
     state = grown
   }
 
+  // Start a new eddy when one is due and drop the ones that have faded out.
+  function stirEddies (dt) {
+    time += dt
+    if (time >= nextEddy) {
+      const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
+      eddies.push({
+        x: randomRange(radius / 2, width - radius / 2),
+        y: randomRange(radius / 2, height - radius / 2),
+        radius,
+        spin: Math.random() < 0.5 ? -1 : 1,
+        start: time,
+        life: randomRange(...EDDY_LIFE)
+      })
+      nextEddy = time + randomRange(...EDDY_GAP)
+    }
+    for (let k = eddies.length - 1; k >= 0; k--) {
+      if (time - eddies[k].start > eddies[k].life) eddies.splice(k, 1)
+    }
+  }
+
+  // The eddies' velocity at a point, written into `out`.
+  function eddyVelocity (px, py, strength, out) {
+    out[0] = 0
+    out[1] = 0
+    if (strength === 0) return
+    for (let k = 0; k < eddies.length; k++) {
+      const e = eddies[k]
+      const dx = (px - e.x) / e.radius
+      const dy = (py - e.y) / e.radius
+      const envelope = Math.sin(Math.PI * (time - e.start) / e.life)
+      const f = e.spin * strength / EDDY_PEAK * envelope * Math.exp(-(dx * dx + dy * dy))
+      out[0] += -dy * f
+      out[1] += dx * f
+    }
+  }
+
   // Bring the live count to the target, all at once, as a slab lying on the floor.
   function fill (target) {
     if (alive > target) alive = target
@@ -96,9 +147,10 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0 } = params
     ensureCapacity(particleCount)
     fill(particleCount)
+    stirEddies(dt)
     // Warm up: the heater power is a front spreading from the middle of the floor (see WARMUP).
     heaterTime += dt
     const progress = Math.min(1, heaterTime / WARMUP)
@@ -123,6 +175,7 @@ export function createSimulation ({ width, height, params }) {
     const kx = 2 * Math.PI / width
     const ky = Math.PI / height
     const vertical = 2 * stir * height / width
+    const eddy = [0, 0]
 
     hash.clear()
     for (let i = 0; i < alive; i++) {
@@ -130,8 +183,9 @@ export function createSimulation ({ width, height, params }) {
       // Velocity is rebuilt from scratch every frame instead of carried over, which makes the fluid
       // fully overdamped. The paper recomputes velocity from the previous position (Algorithm 1,
       // line 20); dropping that is what turns splashing water into wax.
-      vx[i] = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i])
-      vy[i] = gravity + fy - temp[i] + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i])
+      eddyVelocity(x[i], y[i], turbulence, eddy)
+      vx[i] = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0]
+      vy[i] = gravity + fy - temp[i] + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1]
       x[i] += vx[i] * dt
       y[i] += vy[i] * dt
       hash.add(x[i], y[i], i)
@@ -156,6 +210,18 @@ export function createSimulation ({ width, height, params }) {
     for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i])
   }
 
+  // The stirring velocity (convection roll plus eddies) at a point, for drawing the flow field.
+  function flowAt (px, py) {
+    const { stir = 0, turbulence = 0 } = params
+    const kx = 2 * Math.PI / width
+    const ky = Math.PI / height
+    const out = [0, 0]
+    eddyVelocity(px, py, turbulence, out)
+    out[0] -= stir * Math.sin(kx * px) * Math.cos(ky * py)
+    out[1] += 2 * stir * height / width * Math.cos(kx * px) * Math.sin(ky * py)
+    return out
+  }
+
   function contain (i) {
     const { x, y } = state
     if (x[i] < 0) x[i] = 0
@@ -168,6 +234,7 @@ export function createSimulation ({ width, height, params }) {
     step,
     resize,
     push,
+    flowAt,
     get state () { return state },
     get count () { return alive },
     get width () { return width },

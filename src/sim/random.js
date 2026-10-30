@@ -1,6 +1,9 @@
 // Integer in [min, max).
 export const randomBetween = (min, max) => Math.trunc(Math.random() * (max - min) + min)
 
+// Real number in [min, max).
+export const randomRange = (min, max) => Math.random() * (max - min) + min
+
 // Integer drawn from a bell curve squeezed into [min, max). skew > 1 leans the curve toward min,
 // skew < 1 toward max. Box-Muller, resampled when it lands outside the range.
 // The result is truncated to a whole number, so a call like (0.25, 2.75) really yields 0, 1 or 2.

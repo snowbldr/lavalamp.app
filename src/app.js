@@ -23,9 +23,11 @@ import {
   particleCount,
   particleSize,
   restDensity,
+  showFlow,
   stiffness,
   stiffnessNear,
-  stir
+  stir,
+  turbulence
 } from './ui/settings.js'
 
 // Fixed step. The sim does not track real frame time, and the tuning assumes it does not.
@@ -66,11 +68,13 @@ export function start () {
   mirror(particleSize, params, 'particleSize')
   mirror(stir, params, 'stir')
   mirror(conduction, params, 'conduction')
+  mirror(turbulence, params, 'turbulence')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
   mirror(highlightColor, look, 'highlightColor')
   mirror(particleSize, look, 'particleSize')
+  mirror(showFlow, look, 'showFlow')
 
   let [width, height] = lampSize()
   const lamp = canvas({ id: 'lavalamp' })
@@ -170,7 +174,7 @@ export function start () {
       shown.x[i] = previous.x[i] + (x[i] - previous.x[i]) * due
       shown.y[i] = previous.y[i] + (y[i] - previous.y[i]) * due
     }
-    renderer.render(shown, count)
+    renderer.render(shown, count, sim.flowAt)
     requestAnimationFrame(frame)
   }
 
