@@ -160,6 +160,11 @@ const SHAPE_SMOOTH = 60
 const SHAPE_FULL = 120
 // How well heat conducts between lava in two different bottles, as a share of the usual.
 const GLASS_CONDUCTION = 0.3
+// How much of the pressure step's displacement, as a velocity, a particle keeps when Wobble is on,
+// and the most speed it may carry, in gravities: kicks of several px a step add up to thousands
+// of px a second otherwise (90th percentile 2900 px/s at a kick of 1).
+const WOBBLE_KICK = 0.3
+const WOBBLE_MAX = 1
 // Robert: "the heater... should it like, be the cup? Like should there just be one heater that
 // heats the whole cup?" With this on, the heating elements are the floor cups themselves: one
 // per cup, centred on it, as wide as the cup and reaching as far above the bottom edge as the
@@ -220,7 +225,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -255,6 +260,8 @@ export function createSimulation ({ width, height, params }) {
       pNear: new Float32Array(count), // near pressure
       g: new Float32Array(count), // kernel weight scratch space, indexed by neighbour
       shared: new Float32Array(count), // neighbour mean temperature scratch space
+      px: new Float32Array(count), // position after the drift move, before the pressure step (for the wobble kick)
+      py: new Float32Array(count),
       home: new Int16Array(count).fill(-1) // the bottle a hidden particle is in, -1 for none
     }
   }
@@ -496,7 +503,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0 } = params
     cupDepthNow = cupDepth
     if (cups.length === 0) layoutCups()
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
@@ -600,7 +607,7 @@ export function createSimulation ({ width, height, params }) {
       return heat
     }
     const elementReach = height - maxReach
-    const { x, y, vx, vy, temp } = state
+    const { x, y, vx, vy, temp, px, py } = state
     const fx = impulse[0]
     const fy = impulse[1]
     impulse[0] = 0
@@ -636,8 +643,24 @@ export function createSimulation ({ width, height, params }) {
       // fully overdamped. The paper recomputes velocity from the previous position (Algorithm 1,
       // line 20); dropping that is what turns splashing water into wax.
       eddyVelocity(x[i], y[i], turbulence, eddy)
-      vx[i] = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
-      vy[i] = gravity + fy - temp[i] + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
+      const driftX = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
+      const driftY = gravity + fy - temp[i] + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
+      if (wobble > 0) {
+        // Inertia (Robert, with a video of a real lamp: "it's that snap back effect. and the
+        // stretchiness and jiggle. we don't have those... This is a miss in our physics
+        // simulation"). The velocity is carried from frame to frame and eased toward the drift
+        // over `wobble` seconds, and the kick the pressure step gave it last frame (recorded
+        // below) comes along, so a pinched neck recoils and a freed blob rings. At 0 the velocity
+        // is rebuilt every frame, which is the overdamped wax the lamp was tuned as.
+        const ease = Math.min(1, dt / wobble)
+        vx[i] += (driftX - vx[i]) * ease
+        vy[i] += (driftY - vy[i]) * ease
+      } else {
+        vx[i] = driftX
+        vy[i] = driftY
+      }
+      px[i] = x[i] + vx[i] * dt
+      py[i] = y[i] + vy[i] * dt
       x[i] += vx[i] * dt
       y[i] += vy[i] * dt
       hash.add(x[i], y[i], i)
@@ -662,6 +685,18 @@ export function createSimulation ({ width, height, params }) {
       }
       shared[i] = weight > 0 ? heat / weight : temp[i]
       relax(state, i, neighbours, dt, home[i] >= 0 ? RELAX_CAP : Infinity)
+      if (wobble > 0 && state.p[i] < 0) {
+        // Only where the pressure is negative, which is a stretched neck or a blob's skin being
+        // pulled back toward its neighbours (surface tension), does the pressure step's kick become
+        // velocity, capped at WOBBLE_MAX gravities. Carrying the bulk pressure's kicks as well
+        // made the whole pool slosh like water even at a tenth of a second. Walls and glass never
+        // kick: contain comes after.
+        vx[i] += (x[i] - px[i]) / dt * WOBBLE_KICK
+        vy[i] += (y[i] - py[i]) / dt * WOBBLE_KICK
+        const speed = Math.hypot(vx[i], vy[i])
+        const limit = WOBBLE_MAX * gravity
+        if (speed > limit) { vx[i] *= limit / speed; vy[i] *= limit / speed }
+      }
       contain(i)
     }
     // Applied after the pass so every particle saw the same temperatures.

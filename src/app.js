@@ -11,6 +11,7 @@ import {
   computeDefaultGravity,
   conduction,
   cupDepth,
+  wobble,
   drifters,
   computeDefaultMaxTemp,
   computeDefaultParticleCount,
@@ -91,6 +92,7 @@ export function start () {
   mirror(drifters, params, 'drifters')
   mirror(heatSpots, params, 'heatSpots')
   mirror(cupDepth, params, 'cupDepth')
+  mirror(wobble, params, 'wobble')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')

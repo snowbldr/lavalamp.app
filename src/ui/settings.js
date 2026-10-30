@@ -59,6 +59,9 @@ export const defaultDrifters = 2
 export const defaultHeatSpots = 15
 // How deep the ceiling cups are, as a fraction of each cup's width. 0 is a flat ceiling.
 export const defaultCupDepth = 1
+// Inertia: seconds for a particle's velocity to ease toward its drift. 0 is the overdamped wax the
+// lamp was tuned as; above it, pinched necks snap back and freed blobs wobble.
+export const defaultWobble = 0
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -89,6 +92,7 @@ export const turbulence = fnstate(defaultTurbulence)
 export const drifters = fnstate(defaultDrifters)
 export const heatSpots = fnstate(defaultHeatSpots)
 export const cupDepth = fnstate(defaultCupDepth)
+export const wobble = fnstate(defaultWobble)
 // The random seed: every random number in the lamp comes from it, so the same seed on the same
 // window gives the same lamp. Drawn fresh on each load unless saved, shared or given as ?seed=.
 // Shown in the panel so a lamp worth keeping can be saved. Changing it reloads the page, since
@@ -109,9 +113,9 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -139,6 +143,7 @@ const defaults = () => ({
   drifters: defaultDrifters,
   heatSpots: defaultHeatSpots,
   cupDepth: defaultCupDepth,
+  wobble: defaultWobble,
   seed: randomSeed()
 })
 

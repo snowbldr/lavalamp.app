@@ -6,6 +6,7 @@ import {
   cupDepth,
   defaultConduction,
   defaultCupDepth,
+  defaultWobble,
   defaultDrifters,
   defaultHeatSpots,
   defaultPace,
@@ -52,7 +53,8 @@ import {
   stiffness,
   stiffnessNear,
   stir,
-  turbulence
+  turbulence,
+  wobble
 } from './settings.js'
 
 // Two sections: Lamp, for anyone (colours, how often it heats, how gloopy, how fast, what a
@@ -172,7 +174,8 @@ export function createSettingsPanel () {
         knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
         knob('Turb', 'turbulence', turbulence, { min: 0, max: 150, step: 1 }, () => defaultTurbulence),
         knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters),
-        knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2))
+        knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
+        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02 }, () => defaultWobble, seconds)
       ),
       hint(help, [
         ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
@@ -185,7 +188,8 @@ export function createSettingsPanel () {
         ['Gravity', 'How fast cold lava sinks; a particle at this temperature hovers.'],
         ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
         ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
-        ['Bottles', 'How big the bottles above and the pots below are, as a fraction of their width; 0 is a flat ceiling and floor.']
+        ['Bottles', 'How big the bottles above and the pots below are, as a fraction of their width; 0 is a flat ceiling and floor.'],
+        ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.']
       ])
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),

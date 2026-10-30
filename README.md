@@ -18,6 +18,11 @@ The lava lamp part is a temperature per particle: it rises on contact with the f
 constant rate everywhere, and a particle rises exactly as fast as it is hot. Blobs form, stick together
 and rise as a unit because of the surface tension that falls out of the relaxation step.
 
+Velocity is rebuilt every frame, so the lava has no inertia; the Wobble knob in Physics gives it
+some, easing each particle toward its drift over that many seconds and letting the pull of surface
+tension on a stretched neck or a blob's skin carry on as motion, so necks snap back and freed blobs
+ring. 0, the default, is the thick wax.
+
 Left alone, that model has nothing sideways in it, so blobs rise and fall in the same lane forever.
 A slow convection roll (up the middle, down the walls, in along the floor) stirs the lava the way the
 circulation in a real lamp does, and now and then a slow eddy appears somewhere for a few seconds and
