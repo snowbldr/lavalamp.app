@@ -150,6 +150,7 @@ export function createSimulation ({ width, height, params }) {
   const elements = []
   // The ceiling cups, laid out once: { fx, fw } centre and width as fractions of the width.
   const cups = []
+  let kicked = false // whether the kick-off lighting has happened
   let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
@@ -380,14 +381,30 @@ export function createSimulation ({ width, height, params }) {
     if (progress >= 1 && heatSpots > 0) {
       let weight = 0
       for (const el of elements) weight += el.weight
+      // Kick off: the first time the warm-up is done, the heaviest element (small, near the
+      // middle) lights at once, so the lamp never waits on the clocks for its first glob.
+      if (!kicked) {
+        kicked = true
+        let best = elements[0]
+        for (const el of elements) if (el.weight > best.weight) best = el
+        best.next = heaterTime
+        best.fresh = false
+      }
       for (const el of elements) {
         if (el.heat > 0) {
           if (heaterTime - el.start > el.life) el.heat = 0
           continue
         }
         // Each element's share of ELEMENT_RATE lightings per heatSpots seconds is its weight over
-        // the total, so the lightings add up to that rate whatever the sizes and positions.
-        if (el.next === 0) el.next = heaterTime + heatSpots / ELEMENT_RATE * weight / el.weight * randomRange(0.5, 1.5)
+        // the total, so the lightings add up to that rate whatever the sizes and positions. The
+        // first wait is a random fraction of the usual one, as if the lamp had been running: with
+        // every clock starting full the first lighting was the shortest of a dozen long waits
+        // ("still taking forever before the first heater fires").
+        if (el.next === 0) {
+          const wait = heatSpots / ELEMENT_RATE * weight / el.weight
+          el.next = heaterTime + wait * (el.fresh ? randomRange(0, 1) : randomRange(0.5, 1.5))
+          el.fresh = false
+        }
         if (heaterTime >= el.next) {
           el.heat = randomRange(...ELEMENT_HEAT)
           el.start = heaterTime
@@ -518,7 +535,7 @@ export function createSimulation ({ width, height, params }) {
       // the middle more than ones by the walls (the same lean as the old heat spots).
       const d = (fx - 0.5) / SPOT_SPREAD
       const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / fr
-      elements.push({ fx, fr, weight, heat: 0, start: 0, life: 0, next: 0, x: 0, radius: 0, halfWidth: 0, glow: 0 })
+      elements.push({ fx, fr, weight, heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
     }
   }
 
