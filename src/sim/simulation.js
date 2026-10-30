@@ -58,14 +58,20 @@ const CONDUCTION = 0.02
 // gradient (half the lava rose as one dome at max conduction, but the pool floated on the rod
 // tips until the tips were cooled, and Robert still had to push max temp to the top to get
 // blobs: "It does kind of work, but ..."). The record is in docs/decisions.md.
-const ELEMENT_GAP = 250 // px between elements, before jitter
+const ELEMENT_GAP = 200 // px between elements, before jitter
 const ELEMENT_RADIUS = [0.08, 0.2] // of the shorter side
 const ELEMENT_HEAT = [2, 6] // temperature per step at the centre; the finger gives 12, and at 4 to 12 an element fired a stream of small globs
 const ELEMENT_LIFE = [5, 15] // seconds
-// How many elements light together at one lighting. Robert: "we should allow multiple to fire at
-// once. maybe like randomly between 1-5 of them, leaning toward an average of like 1.6". The
-// chances of 1, 2, 3, 4 and 5 at once; the mean is 1.6.
-const ELEMENT_CHORUS = [0.6, 0.25, 0.1, 0.035, 0.015]
+// Robert: "more smaller ones ... or probably better is of varying size smaller ones more
+// frequent". Sizes skew small (ELEMENT_SIZE_SKEW on a uniform draw, above 1 for more small
+// ones), and each element runs its own clock: its mean interval is params.heatSpots times the
+// element count divided by ELEMENT_RATE (so about ELEMENT_RATE elements light per heatSpots
+// seconds in all), shared out so that small rings light often and big ones rarely, and ones
+// near the middle more than ones by the walls, with a spread of 0.5 to 1.5 on every wait.
+// Several lit at once falls out of that on its own; a first version lit 1 to 5 together from one
+// shared clock with a mean of 1.6, at Robert's request, and this replaced it the same hour.
+const ELEMENT_SIZE_SKEW = 1.6
+const ELEMENT_RATE = 3
 const SPOT_SPREAD = 0.2
 const SPOT_BASE = 0.2
 const SPOT_CAP = 3
@@ -120,7 +126,6 @@ export function createSimulation ({ width, height, params }) {
   // The heating elements, laid out once: { fx, fr } as fractions of the width and shorter side,
   // plus their lit state { heat, start, life } while lit.
   const elements = []
-  let nextLight = 0
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -344,28 +349,30 @@ export function createSimulation ({ width, height, params }) {
     const halfWidth = width / 2
     if (elements.length === 0) layoutElements()
     const shorter = Math.min(width, height)
-    // Once warmed up, elements light at random (see ELEMENT_GAP).
+    // Once warmed up, elements light on their own clocks (see ELEMENT_GAP and ELEMENT_RATE).
     if (progress >= 1 && heatSpots > 0) {
-      if (heaterTime >= nextLight) {
-        let count = 1
-        for (let roll = Math.random() - ELEMENT_CHORUS[0]; roll > 0 && count < ELEMENT_CHORUS.length; count++) roll -= ELEMENT_CHORUS[count]
-        for (let n = 0; n < count; n++) {
-          let fx = 0.5 + randomNormal() * SPOT_SPREAD
-          if (fx < 0.05) fx = 0.05
-          if (fx > 0.95) fx = 0.95
-          let best = null
-          for (const el of elements) if (best === null || Math.abs(el.fx - fx) < Math.abs(best.fx - fx)) best = el
-          if (best.heat === 0) {
-            best.heat = randomRange(...ELEMENT_HEAT)
-            best.start = heaterTime
-            best.life = randomRange(...ELEMENT_LIFE)
-          }
+      let weight = 0
+      for (const el of elements) weight += el.weight
+      for (const el of elements) {
+        if (el.heat > 0) {
+          if (heaterTime - el.start > el.life) el.heat = 0
+          continue
         }
-        nextLight = heaterTime + randomRange(0.5, 1.5) * heatSpots
+        // Each element's share of ELEMENT_RATE lightings per heatSpots seconds is its weight over
+        // the total, so the lightings add up to that rate whatever the sizes and positions.
+        if (el.next === 0) el.next = heaterTime + heatSpots / ELEMENT_RATE * weight / el.weight * randomRange(0.5, 1.5)
+        if (heaterTime >= el.next) {
+          el.heat = randomRange(...ELEMENT_HEAT)
+          el.start = heaterTime
+          el.life = randomRange(...ELEMENT_LIFE)
+          el.next = 0
+        }
       }
-      for (const el of elements) if (el.heat > 0 && heaterTime - el.start > el.life) el.heat = 0
     } else {
-      for (const el of elements) el.heat = 0
+      for (const el of elements) {
+        el.heat = 0
+        el.next = 0
+      }
     }
     // Each lit element's glow, 0 to 1, and its reach in px, for this step.
     let maxReach = 0
@@ -478,7 +485,12 @@ export function createSimulation ({ width, height, params }) {
     const count = Math.max(2, Math.round(width / ELEMENT_GAP))
     for (let k = 0; k < count; k++) {
       const fx = (k + 0.5 + randomRange(-0.4, 0.4)) / count
-      elements.push({ fx, fr: randomRange(...ELEMENT_RADIUS), heat: 0, start: 0, life: 0, x: 0, radius: 0, glow: 0 })
+      const fr = ELEMENT_RADIUS[0] + (ELEMENT_RADIUS[1] - ELEMENT_RADIUS[0]) * Math.pow(Math.random(), ELEMENT_SIZE_SKEW)
+      // How often it lights, relative to the others: small rings more than big ones, and ones near
+      // the middle more than ones by the walls (the same lean as the old heat spots).
+      const d = (fx - 0.5) / SPOT_SPREAD
+      const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / fr
+      elements.push({ fx, fr, weight, heat: 0, start: 0, life: 0, next: 0, x: 0, radius: 0, glow: 0 })
     }
   }
 
