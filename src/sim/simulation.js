@@ -163,8 +163,8 @@ const GLASS_CONDUCTION = 0.3
 // How much of the pressure step's displacement, as a velocity, a particle keeps when Wobble is on,
 // and the most speed it may carry, in gravities: kicks of several px a step add up to thousands
 // of px a second otherwise (90th percentile 2900 px/s at a kick of 1).
-const WOBBLE_KICK = 0.3
-const WOBBLE_MAX = 1
+const WOBBLE_KICK = 1 // was 0.3: "a bit subtle. I'd expect more snapping especially when big blobs interact"
+const WOBBLE_MAX = 2 // was 1
 // Robert: "the heater... should it like, be the cup? Like should there just be one heater that
 // heats the whole cup?" With this on, the heating elements are the floor cups themselves: one
 // per cup, centred on it, as wide as the cup and reaching as far above the bottom edge as the
