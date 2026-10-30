@@ -122,8 +122,8 @@ const BOTTLE_NECK = [0.05, 0.4]
 // hovered as one mass. Each floor bottle is a heating element whose core runs from the mouth
 // down into the bulb, so the neck is the spout. The default particle count (settings.js) pays
 // for the bottles' volume.
-const FLOOR_BULB = 0.55
-const FLOOR_NECK = [0.02, 0.1] // of the shorter side
+const FLOOR_BULB = 0.7 // was 0.55; Robert: "make the bottles on the bottom a little deeper"
+const FLOOR_NECK = [0.05, 0.18] // of the shorter side, was 0.02 to 0.1
 // Every neck flares into its mouth and into its bulb on a quarter circle BOTTLE_ROUND of the
 // mouth's half width (Robert: "let's also round out the edges of the bottles instead of these
 // square ends").
@@ -746,7 +746,11 @@ export function createSimulation ({ width, height, params }) {
     for (const cup of row) {
       const a = cup.fw * width / 2
       const R = a * cupDepthNow * bulbShare
-      const w = Math.min(BOTTLE_MOUTH * a, R * 0.95)
+      // The mouth is BOTTLE_MOUTH of the bulb's radius (for the ceiling that is the cup's half
+      // width); measured against the cup it came out wider than the floor's smaller bulbs, the
+      // neck joined near the bulb's equator and the circle poked up through the floor line
+      // (Robert: "bottles on the bottom look a bit fucked up").
+      const w = BOTTLE_MOUTH * Math.min(a, R)
       const neck = (neckRange[0] + (neckRange[1] - neckRange[0]) * cup.fn) * shorter
       const neckEnd = lineY + dir * neck
       const cy = neckEnd + dir * Math.sqrt(Math.max(0, R * R - w * w))
@@ -812,10 +816,29 @@ export function createSimulation ({ width, height, params }) {
     let bestX = x[i]
     let bestY = lineY
     if ((y[i] - b.neckEnd) * dir <= 0) {
-      const half = neckHalf(b, y[i])
-      const nx = b.cx + Math.sign(dx || 1) * half
-      const d = Math.abs(nx - x[i])
-      if (d < bestD) { bestD = d; bestX = nx; bestY = y[i] }
+      // In the neck's span but outside its walls. In a flared corner, the wall is a quarter
+      // circle: push out from that circle's centre along its radius, which is the wall's normal.
+      // Pushing sideways there made a particle in the corner flip between "sideways into the
+      // neck" and "back to the line" from step to step (Robert: "they do this anxious jiggle
+      // thing at the bottle tops").
+      const side = Math.sign(dx || 1)
+      const fromLine = Math.abs(y[i] - lineY)
+      const fromEnd = Math.abs(b.neckEnd - y[i])
+      let nx, ny
+      if (fromLine < b.r || fromEnd < b.r) {
+        const ccx = b.cx + side * (b.w + b.r)
+        const ccy = fromLine < fromEnd ? lineY + dir * b.r : b.neckEnd - dir * b.r
+        const ex = x[i] - ccx
+        const ey = y[i] - ccy
+        const e = Math.sqrt(ex * ex + ey * ey) || 1
+        nx = ccx + ex / e * b.r
+        ny = ccy + ey / e * b.r
+      } else {
+        nx = b.cx + side * b.w
+        ny = y[i]
+      }
+      const d = Math.hypot(nx - x[i], ny - y[i])
+      if (d < bestD) { bestD = d; bestX = nx; bestY = ny }
     }
     if (dist > 0 && dist - b.R < bestD) { bestD = dist - b.R; bestX = b.cx + dx / dist * b.R; bestY = b.cy + dy / dist * b.R }
     x[i] = bestX

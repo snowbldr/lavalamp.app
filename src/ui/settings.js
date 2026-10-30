@@ -9,11 +9,12 @@ import { seedRandom } from '../sim/random.js'
 // on the GPU the step is the only cost that grows with lava (1.1 ms at 1000 particles, 1.9 at 1500,
 // on Robert's Mac), and Robert asked for "a bit more lava by default after we improve the
 // performance". The cap used to be 300, from when the lamp itself stopped at 1000 px square.
-// The second term is the lava that fills the hidden bottles in the floor (a bulb 0.55 of the cup's
-// half width in radius plus a short neck, about shorter x width / 10 of area across the row, at 400
-// square px a particle); the first is the visible layer, a little thinner than the one per 3000 it
-// replaced, as Robert asked ("a visible layer on the bottom that's slightly smaller").
-export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 3200 + Math.min(width, height) * width / 3900), 2000)
+// The second term is the lava that fills the hidden bottles in the floor (a bulb 0.7 of the cup's
+// half width in radius plus a neck, about shorter x width / 6 of area across the row, at 400 square
+// px a particle; Robert: "make the bottles on the bottom a little deeper though and add a bit more
+// lava"); the first is the visible layer, a little thinner than the one per 3000 it replaced, as
+// Robert asked ("a visible layer on the bottom that's slightly smaller").
+export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / 3200 + Math.min(width, height) * width / 2440), 2400)
 // Max temp was min(height, 1000) with the slider running to twice that. With heating in depth and
 // conduction at 0.02 Robert had to run it at the top to get blobs at all ("I think I need to make
 // max temp the new mid same way as conduction"): with heating in depth a cap at the window height
