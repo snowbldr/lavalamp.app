@@ -76,8 +76,10 @@ export const defaultStir = 20
 // Conduction was 0.005 with a flat floor, where 0.02 was the top of the slider and a lamp that never
 // lifted. With heating in depth the top became the lamp Robert wanted ("max needs to be the new mid
 // and default. This is the mechanism we were missing for maximum lava gloopiness").
-// 0.55 in the new liquid (was 0.02): a lump warms as one almost at once.
-export const defaultConduction = 0.55
+// 0.55 in the new liquid (was 0.02): a lump warms as one almost at once. Then 0.07 (Robert,
+// 2026-10-31, "gloop at 0.07 is really nice"): at 0.55 a rising blob heated the pool under it
+// through its neck, that lava rose after it and fed a long thin strand.
+export const defaultConduction = 0.07
 // Robert, with the lamp beside the video: "default pace needs ot be ~0.45 or so".
 export const defaultPace = 0.45
 export const defaultTurbulence = 45
