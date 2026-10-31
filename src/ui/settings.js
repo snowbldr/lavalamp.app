@@ -24,8 +24,9 @@ import { seedRandom } from '../sim/random.js'
 // grow by the square root of the excess, so the lava fills the same share of the lamp with the
 // same motion, at a bigger grain. A phone window is the lab's size and gets the lab's liquid as is.
 // Max heat and gravity scale with the height, as the lab's 6200 and 500 at 900 px; the lamp's max
-// heat sits a smidge under the lab's (Robert: "we need to bring the max temp down just a smidge, I
-// think that's the whole reason we get too aggressive rises"), 5500 at 900 px.
+// heat sits under the lab's (Robert: "we need to bring the max temp down just a smidge, I think
+// that's the whole reason we get too aggressive rises", then his share link at 7233 for a 1294 px
+// window), 5030 at 900 px.
 export const LAB_AREA_PER_PARTICLE = 360 * 900 / 3050
 export const CPU_PARTICLES = 6000
 // On the GPU backend the budget is ten times the CPU's: 60000 particles is about 12 ms a step
@@ -36,9 +37,11 @@ export const setParticleBudget = n => { budget = n }
 const liquidScale = (width, height) => Math.sqrt(Math.max(1, width * height / LAB_AREA_PER_PARTICLE / budget))
 export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / LAB_AREA_PER_PARTICLE), budget)
 export const computeDefaultInteractionRadius = (width, height) => Math.round(20 * liquidScale(width, height))
-export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height))
-export const computeDefaultSmooth = (width, height) => Math.round(3 * liquidScale(width, height))
-export const computeDefaultMaxTemp = height => Math.round(5500 * height / 900)
+// Size 6 and Smooth 4 at radius 20 are Robert's lamp defaults of 2026-10-31 ("let's make these the
+// new defaults", a share link); the lab draws its own at 3 and 3.
+export const computeDefaultParticleSize = (width, height) => Math.round(6 * liquidScale(width, height))
+export const computeDefaultSmooth = (width, height) => Math.round(4 * liquidScale(width, height))
+export const computeDefaultMaxTemp = height => Math.round(5030 * height / 900)
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
 export const defaultBgColor = { r: 0, g: 0, b: 0 }
