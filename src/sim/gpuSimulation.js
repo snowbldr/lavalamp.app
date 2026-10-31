@@ -296,8 +296,12 @@ fn kick(@builtin(global_invocation_id) id: vec3u) {
   let mean = f32(atomicLoad(&A[MEAN()])) / ${FIXED}.0 / f32(P.n);
   var skin = false;
   if (P.kickBelow > 0.0) { skin = F[DENS(i)] < P.kickBelow * mean; } else { skin = F[PRESS(i)] < 0.0; }
+  // The sequential solver computes a particle's move after half its neighbours have already
+  // moved toward it, so its move, and the kick made from it, is about half the move computed from
+  // one snapshot: the kick is scaled by the Jacobi factor (GPU Kick 3 measured as the CPU's Kick 6:
+  // lamp area 17% against 16%, fastest particle 189 against 208 px/s, mean 62 against 77).
   if (P.wobble > 0.0 && skin && !onWall) {
-    v += (p - V[PX(i)]) / P.dt * P.kick;
+    v += (p - V[PX(i)]) / P.dt * P.kick * P.jacobi;
     let speed = length(v);
     let limit = P.cap * P.gravity;
     if (speed > limit) { v *= limit / speed; }
@@ -323,6 +327,14 @@ fn viscosity(@builtin(global_invocation_id) id: vec3u) {
   if (P.viscosity > 0.0 && P.wobble > 0.0) {
     let cx = cellX(p.x);
     let cy = cellY(p.y);
+    // The CPU applies the pairs one after another, each on the velocity the pairs before it left,
+    // so a particle with a hundred approaching neighbours loses its approach once, not a hundred
+    // times. Summed from one snapshot the impulses add up and the pool explodes (Viscosity 64:
+    // 7500 px/s; 100: four hundred thousand). What a run of fractions w1, w2, ... leaves of the
+    // approach is their product of (1 - w), about exp(-sum w), so the sum of impulses is scaled
+    // to take away (1 - exp(-sum w)) of it in all.
+    var impulse = vec2f(0.0, 0.0);
+    var total = 0.0;
     for (var yy = max(cy - 1, 0); yy <= min(cy + 1, i32(P.rows) - 1); yy++) {
       for (var xx = max(cx - 1, 0); xx <= min(cx + 1, i32(P.cols) - 1); xx++) {
         let c = u32(xx) + u32(yy) * P.cols;
@@ -337,11 +349,13 @@ fn viscosity(@builtin(global_invocation_id) id: vec3u) {
           let u = d / r;
           let approach = dot(vi - V[VEL(j)], u);
           if (approach <= 0.0) { continue; }
-          let impulse = min(1.0, P.dt * g * P.viscosity) * approach * 0.5;
-          v -= impulse * u;
+          let w = min(1.0, P.dt * g * P.viscosity) * 0.5;
+          impulse += w * approach * u;
+          total += w;
         }
       }
     }
+    if (total > 0.0) { v -= impulse * ((1.0 - exp(-total)) / total); }
   }
   V[VELOUT(i)] = v;
 }
