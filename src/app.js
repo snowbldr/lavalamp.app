@@ -117,11 +117,6 @@ export function start () {
   // The floor area a settled particle takes up, for the spawn slab: 7 px² at radius 20 in the lab,
   // scaling with the radius squared; the old liquid's 400 px² at radius 60.
   mirror(interactionRadius, params, 'spawnArea', r => 7 * (r / 20) * (r / 20))
-  // The drawn disc never goes under the particle spacing (the square root of that area, times a
-  // little), or the metaball field has holes between particles and the lava turns to sand
-  // (Robert, with Size 3 carried from the lab into a radius 32 lamp: "all kinds of weird heating
-  // defects").
-  mirror(interactionRadius, look, 'minDisc', r => 1.2 * Math.sqrt(7 * (r / 20) * (r / 20)))
   // Finger heat per step, the lab's 48 (the lamp's old 12 was for Max heat 2000).
   params.touchHeat = 48
 
@@ -141,6 +136,11 @@ export function start () {
   mirror(showHeater, look, 'showHeater')
   mirror(showCups, look, 'showCups')
   mirror(smooth, look, 'smooth')
+  // The drawn disc never goes under the particle spacing (the square root of that area, times a
+  // little), or the metaball field has holes between particles and the lava turns to sand
+  // (Robert, with Size 3 carried from the lab into a radius 32 lamp: "all kinds of weird heating
+  // defects").
+  mirror(interactionRadius, look, 'minDisc', r => 1.2 * Math.sqrt(7 * (r / 20) * (r / 20)))
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
   let edge = 'bottom' // the page edge the lamp's floor sits on
