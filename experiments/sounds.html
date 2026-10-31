@@ -7,6 +7,7 @@
     <style>
       body { margin: 0; background: #1c1c1e; color: #ececec; font: 15px system-ui, sans-serif; padding: 24px; }
       h1 { font-size: 16px; font-weight: 600; margin: 0 0 16px; opacity: 0.8; }
+      h2 { font-size: 13px; font-weight: 600; margin: 20px 0 8px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em; }
       .pads { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; max-width: 900px; }
       button { min-height: 64px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.08); color: #ececec; font: inherit; cursor: pointer; padding: 8px; text-align: center; }
       button:active, button.playing { background: #f0a030; color: #1c1c1e; }
@@ -16,14 +17,17 @@
 </head>
 <body>
 <h1>Sounds found for the lamp</h1>
-<p>Plain buttons: tap one to hear it. Twelve liquid recordings from Pixabay (Pixabay Content License, freesound_community uploads), the files in experiments/samples. The tuning and the lava are on the sound board.</p>
-<div class="pads" id="pads"></div>
+<p>Plain buttons: tap one to hear it, tap again to stop. Liquid recordings from Pixabay (Pixabay Content License), the files in experiments/samples. The tuning and the lava are on the sound board.</p>
+<h2>Beds, bubbling and flowing</h2>
+<div class="pads" id="beds"></div>
+<h2>Plops, single gooey events</h2>
+<div class="pads" id="plops"></div>
 <script type="module">
   // The simplest board there is (Robert: "I just meant like plain buttons to play the different
   // sounds that you can find"): one audio element per recording, a button each.
   const list = await (await fetch('./samples/manifest.json', { cache: 'no-cache' })).json()
-  const pads = document.getElementById('pads')
   for (const item of list) {
+    const pads = document.getElementById(item.kind === 'plop' ? 'plops' : 'beds')
     const audio = new Audio(`./samples/${item.file}`)
     const button = document.createElement('button')
     button.innerHTML = `${item.name}<small>${item.license}</small>`

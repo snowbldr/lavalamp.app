@@ -1,86 +1,202 @@
 [
   {
-    "name": "viscous liquid fall in",
-    "file": "viscous-liquid-fall-in.mp3",
-    "source": "https://pixabay.com/sound-effects/film-special-effects-viscous-liquid-fall-in-83980/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "soft plop",
-    "file": "soft-plop.mp3",
-    "source": "https://pixabay.com/sound-effects/film-special-effects-soft-plop-97691/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "pop or bloop",
-    "file": "pop-or-bloop.mp3",
-    "source": "https://pixabay.com/sound-effects/film-special-effects-pop-or-bloop-7008/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "mouth plops",
-    "file": "mouth-plops.mp3",
-    "source": "https://pixabay.com/sound-effects/people-mouth-plops-6688/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "plopping plop popping",
-    "file": "plopping-plop-popping.mp3",
-    "source": "https://pixabay.com/sound-effects/film-special-effects-plopping-plop-popping-41836/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "squishy oobleck goo",
-    "file": "squishy-oobleck-goo.mp3",
-    "source": "https://pixabay.com/sound-effects/people-squishy-oobleck-goo-105001/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "soup slopping",
-    "file": "soup-slopping.mp3",
-    "source": "https://pixabay.com/sound-effects/film-special-effects-soup-slopping-43006/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "water gloops and glops",
-    "file": "water-gloops-and-glops.mp3",
-    "source": "https://pixabay.com/sound-effects/nature-022962-water-gloops-amp-glopswav-69143/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
     "name": "hot bubbling mud",
     "file": "hot-bubbling-mud.mp3",
     "source": "https://pixabay.com/sound-effects/nature-hot-bubbling-mud-99785/",
     "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
-  },
-  {
-    "name": "bubbling sauce",
-    "file": "bubbling-sauce.mp3",
-    "source": "https://pixabay.com/sound-effects/film-special-effects-bubbling-sauce-82030/",
-    "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
+    "author": "freesound_community",
+    "kind": "bed"
   },
   {
     "name": "ambient bubbling liquid",
     "file": "ambient-bubbling-liquid.mp3",
     "source": "https://pixabay.com/sound-effects/film-special-effects-ambient-bubbling-liquid-61254/",
     "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
+    "author": "freesound_community",
+    "kind": "bed"
   },
   {
-    "name": "gunk bubbling in cave",
-    "file": "gunk-bubbling-in-cave.mp3",
-    "source": "https://pixabay.com/sound-effects/nature-gunk-bubbling-in-cave-18880/",
+    "name": "water gloops and glops",
+    "file": "water-gloops-and-glops.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-022962-water-gloops-amp-glopswav-69143/",
     "license": "Pixabay Content License",
-    "author": "freesound_community via Pixabay"
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "bubbling mud with steam",
+    "file": "bubbling-mud-with-steam.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-bubbling-mud-with-steam-31592/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "geysers and mud pots",
+    "file": "geysers-and-mud-pots.mp3",
+    "source": "https://pixabay.com/sound-effects/household-sound-of-geysers-and-bubbling-mud-pots-hd-263161/",
+    "license": "Pixabay Content License",
+    "author": "MIGHTUSER",
+    "kind": "bed"
+  },
+  {
+    "name": "air bubbles in mud",
+    "file": "air-bubbles-in-mud.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-air-bubbles-in-mud-414435/",
+    "license": "Pixabay Content License",
+    "author": "Wolff-SFX",
+    "kind": "bed"
+  },
+  {
+    "name": "heavy bubbles",
+    "file": "heavy-bubbles.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-heavy-bubbles-35889/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "lava loop 1",
+    "file": "lava-loop-1.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-lava-loop-1-67307/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "lava loop 3",
+    "file": "lava-loop-3.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-lava-loop-3-28887/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "lava steam with bubbles",
+    "file": "lava-steam-with-bubbles.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-lava-steam-with-bubbles-312339/",
+    "license": "Pixabay Content License",
+    "author": "u_5iteaickfa",
+    "kind": "bed"
+  },
+  {
+    "name": "lava flow",
+    "file": "lava-flow.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-lava-flow-202282/",
+    "license": "Pixabay Content License",
+    "author": "SoundReality",
+    "kind": "bed"
+  },
+  {
+    "name": "lava ambience",
+    "file": "lava-ambience.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-013351-lava-ambiencewav-57865/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "viscous liquid gurgling",
+    "file": "viscous-liquid-gurgling.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-viscious-liquid-gurgling-54710/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "bleach thick liquid",
+    "file": "bleach-thick-liquid.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-bleach-thick-liquid-60916/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "cauldron boiling",
+    "file": "cauldron-boiling.mp3",
+    "source": "https://pixabay.com/sound-effects/household-cauldron-boiling-173607/",
+    "license": "Pixabay Content License",
+    "author": "Irhouen",
+    "kind": "bed"
+  },
+  {
+    "name": "syrup hands slop",
+    "file": "syrup-hands-slop.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-syrup-hands-slop-73218/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "bed"
+  },
+  {
+    "name": "viscous liquid fall in",
+    "file": "viscous-liquid-fall-in.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-viscous-liquid-fall-in-83980/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "plop"
+  },
+  {
+    "name": "goopy slime 20",
+    "file": "goopy-slime-20.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-goopy-slime-20-229635/",
+    "license": "Pixabay Content License",
+    "author": "floraphonic",
+    "kind": "plop"
+  },
+  {
+    "name": "goopy slime 28",
+    "file": "goopy-slime-28.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-goopy-slime-28-229644/",
+    "license": "Pixabay Content License",
+    "author": "floraphonic",
+    "kind": "plop"
+  },
+  {
+    "name": "goopy slime 30",
+    "file": "goopy-slime-30.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-goopy-slime-30-229642/",
+    "license": "Pixabay Content License",
+    "author": "floraphonic",
+    "kind": "plop"
+  },
+  {
+    "name": "slime splat with drips 3",
+    "file": "slime-splat-with-drips-3.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-slime-splat-with-drips-3-219263/",
+    "license": "Pixabay Content License",
+    "author": "floraphonic",
+    "kind": "plop"
+  },
+  {
+    "name": "slime splat with drips 5",
+    "file": "slime-splat-with-drips-5.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-slime-splat-with-drips-5-219260/",
+    "license": "Pixabay Content License",
+    "author": "floraphonic",
+    "kind": "plop"
+  },
+  {
+    "name": "gross slimy goo foley 13",
+    "file": "gross-slimy-goo-foley-13.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-gross-slimy-goo-foley-13-202952/",
+    "license": "Pixabay Content License",
+    "author": "floraphonic",
+    "kind": "plop"
+  },
+  {
+    "name": "viscous liquid detergent bottle",
+    "file": "viscous-liquid-detergent-bottle.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-viscous-liquid-detergentbottle-92462/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "plop"
+  },
+  {
+    "name": "gretzos2 goo blobs",
+    "file": "gretzos2.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-gretzos2-87919/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community",
+    "kind": "plop"
   }
 ]
