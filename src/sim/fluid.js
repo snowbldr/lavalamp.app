@@ -91,7 +91,7 @@ export function updatePressure (state, i, neighbours, stiffness, stiffnessNear, 
 // The direction is measured from where i was when its turn started, not where it has drifted to
 // mid-loop, which is also how it was tuned.
 // Particle i's own displacement is summed and, when `cap` is given, limited to that many px a
-// step. The caller caps lava hidden in a reservoir (RELAX_CAP): packed deep under the weight of
+// step; returns true when it was limited, so the caller knows the move was a clamp, not physics. The caller caps lava hidden in a reservoir (RELAX_CAP): packed deep under the weight of
 // the pool and held in by the glass, it now and then crowds past its rest density and the
 // pressure throws particles 40 to 70 px in one step (1.0% of hidden steps with the bottles,
 // 0.5% with the shallow cups before them, none on a flat floor), which read as "huge jitter
@@ -118,13 +118,15 @@ export function relax (state, i, neighbours, dt, cap = Infinity) {
     state.y[n] += dy * 0.1
   }
   const shift = Math.sqrt(sx * sx + sy * sy)
-  if (shift > cap) {
+  const capped = shift > cap
+  if (capped) {
     const scale = cap / shift
     sx *= scale
     sy *= scale
   }
   state.x[i] -= sx
   state.y[i] -= sy
+  return capped
 }
 
 // Section 5.3, the viscosity impulse: for each pair of neighbours approaching each other, an

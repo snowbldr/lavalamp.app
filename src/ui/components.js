@@ -1,4 +1,4 @@
-import { button, div, input, label, span } from '@srfnstack/fntags'
+import { button, div, fnstate, input, label, span } from '@srfnstack/fntags'
 import { hexToRgb, rgbToHex } from '../color.js'
 
 // Building blocks for the settings panel. Styles live in panel.css.
@@ -19,18 +19,30 @@ export const row = (title, control, { value, reset, forId } = {}) => div(
 // turns with a straight drag, sideways or up, not a circular one: KNOB_SWEEP px of drag runs
 // the whole range, a tenth of that with shift held, and the wheel and the arrow keys step it.
 // Double click resets. `max` may be a number or a function, for ranges that follow the window.
+// With `scales` (the pinch lab), the knob's range is one of those decades, 1, 10, 100 and so on,
+// each stepping at a hundredth of itself, and a command or control click moves to the next one
+// (Robert, wanting Density past 15 for a big radius: "something like scaling from 10-100-1000-etc
+// would be enough... maybe control click or command click changes the scale?... we probably need
+// a 0-1 scale too with .01 steps... all of the controls should use this same control mode"). It
+// starts on the smallest decade that holds both the given max and the current value, and the
+// decade shows under the value.
 const KNOB_SWEEP = 160 // px of drag for the whole range
 const KNOB_ANGLE = 135 // degrees either side of straight up
-export const knob = (title, id, state, { min, max, step }, resetTo, format = v => String(v)) => {
-  const maxOf = () => typeof max === 'function' ? max() : max
+export const DECADES = [1, 10, 100, 1000, 10000, 100000]
+export const knob = (title, id, state, { min, max, step, scales }, resetTo, format = v => String(v)) => {
+  const scale = scales ? fnstate(scales.find(s => s >= Math.max(typeof max === 'function' ? max() : max, state())) || scales[scales.length - 1]) : null
+  const maxOf = () => scale ? scale() : typeof max === 'function' ? max() : max
+  const stepOf = () => scale ? scale() / 100 : step
   const fraction = () => Math.max(0, Math.min(1, (state() - min) / (maxOf() - min)))
   const clamp = v => {
     const top = maxOf()
-    v = Math.round((v - min) / step) * step + min
+    const st = stepOf()
+    v = Math.round((v - min) / st) * st + min
     v = Math.max(min, Math.min(top, v))
     return Number(v.toFixed(6))
   }
-  const nudge = steps => state(clamp(state() + steps * step))
+  const nudge = steps => state(clamp(state() + steps * stepOf()))
+  const nextScale = () => { const i = scales.indexOf(scale()); scale(scales[(i + 1) % scales.length]) }
   let drag = null
   const dial = div(
     {
@@ -40,10 +52,11 @@ export const knob = (title, id, state, { min, max, step }, resetTo, format = v =
       role: 'slider',
       'aria-label': title,
       'aria-valuemin': min,
-      'aria-valuemax': state.bindAttr(() => maxOf()),
+      'aria-valuemax': scale ? scale.bindAttr(() => maxOf()) : state.bindAttr(() => maxOf()),
       'aria-valuenow': state.bindAttr(),
       'aria-valuetext': state.bindAttr(() => format(state())),
       onpointerdown: e => {
+        if (scale && (e.metaKey || e.ctrlKey)) { nextScale(); e.preventDefault(); return }
         drag = { x: e.clientX, y: e.clientY, value: state() }
         dial.classList.add('turning')
         try { dial.setPointerCapture(e.pointerId) } catch (err) {}
@@ -94,7 +107,8 @@ export const knob = (title, id, state, { min, max, step }, resetTo, format = v =
     span(
       { class: 'knob-value', title: resetTo ? 'Reset to default' : '', onclick: () => resetTo && state(resetTo()) },
       state.bindAs(() => format(state()))
-    )
+    ),
+    scale ? span({ class: 'knob-scale', title: 'Command or control click the knob for the next scale' }, scale.bindAs(() => `to ${scale()}`)) : ''
   )
 }
 

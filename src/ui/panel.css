@@ -95,6 +95,7 @@
 .knob-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(236, 236, 236, 0.7); text-align: center; }
 .knob-value { font-size: 11px; font-variant-numeric: tabular-nums; color: rgba(236, 236, 236, 0.9); cursor: pointer; }
 .knob-value:hover { color: var(--accent); }
+.knob-scale { font-size: 9px; color: rgba(236, 236, 236, 0.45); letter-spacing: 0.02em; }
 
 /* Colour swatches: the native input sits invisibly over a round swatch */
 .swatch-row { padding: 4px 0 8px; }
