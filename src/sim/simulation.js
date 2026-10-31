@@ -9,6 +9,7 @@ import { random, randomBetween, randomNormal, randomRange } from './random.js'
 // hundreds of candidates for 35 neighbours, and findNeighbours was two thirds of a 52 ms step at
 // 6000 particles. Never below MIN_CELL, or the grid itself gets huge and clearing it is the cost.
 const MIN_CELL = 8
+const RELAX_REACH = Infinity // the most a relaxation step may move a particle, in interaction radii (params.reach); the lamp runs uncapped
 const CELL_FRACTION = 0.75 // cell size as a fraction of the radius: smaller cells mean fewer candidates but more cells to walk; 0.75 measured best for the lamp (6.7 ms against 7.8 at 1 and 7.5 at 0.5)
 // How the lava arrives on load: all at once, as a warm slab already lying on the floor.
 // SPAWN_HEAT is the fraction of gravity each particle starts at. Cold lava falls at full gravity
@@ -231,7 +232,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -578,7 +579,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
@@ -749,6 +750,18 @@ export function createSimulation ({ width, height, params }) {
     planVisit()
 
     const { g, shared, home } = state
+    // No particle moves more than one interaction radius in a relaxation step. Past that it has
+    // left every neighbour it was computed against and the step is meaningless; the pressure that
+    // threw it is still there next step. Robert, at Density 9.1 with radius 17, the pool a gas of
+    // specks: "increasing density too much completely destabilizes it... there's some kind of
+    // check condition that we're probably missing to prevent the complete breakdown". Measured:
+    // at 9.1, 16% of particle steps moved more than a radius; at his stable 3.3, 1.5%; in the
+    // lamp at its defaults, 0.05% (the odd jitter jump). At one radius 9.1 is still a third as
+    // scattered as before; at a third of a radius it holds together completely, but a third of a
+    // radius is the 20 px cap that extruded the lamp's pool up the walls when it was tried on the
+    // visible pool, and even one radius moved the wall lava numbers, so the lamp runs uncapped as
+    // tuned and the lab's Reach knob defaults to 0.33.
+    const reach = interactionRadius * reachRadii
     if (nbStart.length < alive) { nbStart = new Int32Array(alive); nbEnd = new Int32Array(alive) }
     let nbUsed = 0
     for (let s = 0; s < alive; s++) {
@@ -778,7 +791,7 @@ export function createSimulation ({ width, height, params }) {
         heat += w * temp[n]
       }
       shared[i] = weight > 0 ? heat / weight : temp[i]
-      relax(state, i, neighbours, dt, home[i] >= 0 ? RELAX_CAP : Infinity)
+      relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach)
       if (wobble > 0 && state.p[i] < 0) {
         // Only where the pressure is negative, which is a stretched neck or a blob's skin being
         // pulled back toward its neighbours (surface tension), does the pressure step's kick become
@@ -816,7 +829,7 @@ export function createSimulation ({ width, height, params }) {
         const i = visit[s]
         const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbEnd[i], i, interactionRadius)
         updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
-        relax(state, i, neighbours, dt, home[i] >= 0 ? RELAX_CAP : Infinity)
+        relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach)
         contain(i)
       }
     }
