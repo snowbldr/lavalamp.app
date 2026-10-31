@@ -1,5 +1,5 @@
 import { SpatialHash } from './spatialHash.js'
-import { RELAX_CAP, findNeighbours, relax, updatePressure } from './fluid.js'
+import { RELAX_CAP, findNeighbours, relax, updatePressure, viscosity } from './fluid.js'
 import { nextTemperature } from './heat.js'
 import { random, randomBetween, randomNormal, randomRange } from './random.js'
 
@@ -225,7 +225,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, settle
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, settle, viscosity
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, CELL_SIZE)
   const impulse = [0, 0]
@@ -504,7 +504,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, settle = 1 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, settle = 1, viscosity: sigma = 0 } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     if (cups.length === 0) layoutCups()
@@ -701,6 +701,17 @@ export function createSimulation ({ width, height, params }) {
         if (speed > limit) { vx[i] *= limit / speed; vy[i] *= limit / speed }
       }
       contain(i)
+    }
+    // Viscosity (section 5.3) on the carried velocity, so it damps the kicks just given as well as
+    // the drift: approaching neighbours slow each other, separating ones do not. Only meaningful
+    // when velocity is carried (wobble > 0); at 0 the velocity is rebuilt next frame anyway, so
+    // the pass is skipped. Neighbours come from the hash built before the relaxation shifts, which
+    // are small; the distance check in findNeighbours is exact.
+    if (sigma > 0 && wobble > 0) {
+      for (let i = 0; i < alive; i++) {
+        const neighbours = findNeighbours(state, hash, i, interactionRadius)
+        viscosity(state, i, neighbours, dt, sigma)
+      }
     }
     // Extra relaxation passes (settle > 1): the pressure solver is one sweep a frame, so particle
     // spacing is never quite even and the outline wears that as bumps. Each further pass evens it

@@ -10,7 +10,9 @@ import {
   defaultSmooth,
   smooth,
   defaultSettle,
+  defaultViscosity,
   settle,
+  viscosity,
   defaultDrifters,
   defaultHeatSpots,
   defaultPace,
@@ -183,7 +185,8 @@ export function createSettingsPanel () {
         knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth)
       ),
       knobs(
-        knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle)
+        knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),
+        knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity)
       ),
       hint(help, [
         ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
@@ -199,7 +202,8 @@ export function createSettingsPanel () {
         ['Bottles', 'How big the bottles above and the pots below are, as a fraction of their width; 0 is a flat ceiling and floor.'],
         ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.'],
         ['Smooth', 'Rounds off the bumps along every edge by blurring the lava field before it is cut, by this many pixels. 0 is the raw metaballs.'],
-        ['Settle', 'Pressure passes per frame. 2 spaces the particles more evenly so the surface is less bumpy, for most of a step\'s time again.']
+        ['Settle', 'Pressure passes per frame. 2 spaces the particles more evenly so the surface is less bumpy, for most of a step\'s time again.'],
+        ['Viscosity', 'How much neighbouring particles slow each other as they close in, so necks thin and tails pull in more slowly. Needs Wobble above 0.']
       ])
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),

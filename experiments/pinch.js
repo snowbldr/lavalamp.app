@@ -28,6 +28,7 @@ export function start () {
   // should be fine now that we have a much faster render". Same lava, four times the particles.
   const radius = fnstate(30)
   const settle = fnstate(2) // relaxation passes a frame
+  const viscosity = fnstate(0) // the paper's sigma; set after the sweep
   const size = fnstate(15)
   const smooth = fnstate(8) // edge smoothing radius, px
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
@@ -85,7 +86,7 @@ export function start () {
     return {
       particleCount: count(), interactionRadius: radius(), stiffness: stiffness(), stiffnessNear: near(), restDensity: density(),
       maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
-      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), settle: settle()
+      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), settle: settle(), viscosity: viscosity()
     }
   }
 
@@ -166,7 +167,8 @@ export function start () {
         knob('Radius', 'radius', radius, { min: 15, max: 100, step: 1 }, () => 30)
       ),
       knobs(
-        knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => 2)
+        knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => 2),
+        knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => 0)
       ),
       hint(help, [
         ['Stiff', 'pressure pushing particles apart when they crowd past the rest density.'],

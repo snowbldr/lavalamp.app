@@ -69,6 +69,9 @@ export const defaultSmooth = 0
 // Relaxation passes per frame. 1 is the lamp as tuned; 2 evens the particle spacing so the
 // outline is less bumpy, for most of a step's time again.
 export const defaultSettle = 1
+// Viscosity: how much of the approach between neighbouring particles is taken away per second
+// (the paper's sigma). Needs Wobble above 0 to do anything. 0 is the lamp as tuned.
+export const defaultViscosity = 0
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
@@ -102,6 +105,7 @@ export const cupDepth = fnstate(defaultCupDepth)
 export const wobble = fnstate(defaultWobble)
 export const smooth = fnstate(defaultSmooth)
 export const settle = fnstate(defaultSettle)
+export const viscosity = fnstate(defaultViscosity)
 // The random seed: every random number in the lamp comes from it, so the same seed on the same
 // window gives the same lamp. Drawn fresh on each load unless saved, shared or given as ?seed=.
 // Shown in the panel so a lamp worth keeping can be saved. Changing it reloads the page, since
@@ -122,7 +126,7 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, smooth, settle, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, smooth, settle, viscosity, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth'])
 
@@ -155,6 +159,7 @@ const defaults = () => ({
   wobble: defaultWobble,
   smooth: defaultSmooth,
   settle: defaultSettle,
+  viscosity: defaultViscosity,
   seed: randomSeed()
 })
 

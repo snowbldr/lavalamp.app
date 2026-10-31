@@ -1,8 +1,8 @@
 // Double density relaxation, from Clavet, Beaudoin and Poulin, "Particle-based Viscoelastic Fluid
 // Simulation" (SCA 2005), section 4, by way of Peeke Kuepers' JavaScript walkthrough at
-// peeke.nl/simulating-blobs-of-fluid. Only this part of the paper is used: no springs and no
-// viscosity impulses. The simulation never carries velocity between frames, so it is already as
-// viscous as it can get.
+// peeke.nl/simulating-blobs-of-fluid. Sections 4 (relaxation) and 5.3 (viscosity impulses) are
+// used; no springs. With Wobble at 0 the simulation never carries velocity between frames, so it
+// is already as viscous as it can get and the impulses are skipped.
 
 // Collect the particles within `radius` of particle i and store each one's kernel weight
 // g = 1 - r/h in state.g, indexed by the neighbour. The weights are scratch space, valid only
@@ -86,6 +86,39 @@ export function relax (state, i, neighbours, dt, cap = Infinity) {
   }
   state.x[i] -= sx
   state.y[i] -= sy
+}
+
+// Section 5.3, the viscosity impulse: for each pair of neighbours approaching each other, an
+// impulse along the line between them takes away part of that approach, `sigma` of it per
+// second scaled by the kernel weight (linear term; the paper's quadratic term, for splashes, is
+// left out). Only approach is damped, never separation, so a neck can be drawn out freely but
+// thins more slowly and a parted tail retracts into its head more slowly: the video of a real lamp
+// (docs/checkpoints/43b) has the neck thinning at 0.23 head widths per second and the tail taking
+// 1.5 s to pull in, where the lab at Wobble 0.3 pinched two and a half times faster. Each pair is
+// visited once (neighbours later in the array only), the factor is capped so a pair can at most
+// stop approaching, and the two halves are equal and opposite, so momentum is kept and it cannot
+// feed on itself the way easing velocities toward the neighbours' mean did (that blew up).
+export function viscosity (state, i, neighbours, dt, sigma) {
+  const xi = state.x[i]
+  const yi = state.y[i]
+  for (let k = 0; k < neighbours.length; k++) {
+    const n = neighbours[k]
+    if (n < i) continue
+    const rx = state.x[n] - xi
+    const ry = state.y[n] - yi
+    const r = Math.sqrt(rx * rx + ry * ry)
+    if (r === 0) continue
+    const ux = rx / r
+    const uy = ry / r
+    // Approach speed: positive when i moves toward n faster than n moves away.
+    const u = (state.vx[i] - state.vx[n]) * ux + (state.vy[i] - state.vy[n]) * uy
+    if (u <= 0) continue
+    const impulse = Math.min(1, dt * state.g[n] * sigma) * u * 0.5
+    state.vx[i] -= impulse * ux
+    state.vy[i] -= impulse * uy
+    state.vx[n] += impulse * ux
+    state.vy[n] += impulse * uy
+  }
 }
 
 // Fast approximate unit vector, from Nick Vogt:

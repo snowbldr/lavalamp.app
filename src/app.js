@@ -46,7 +46,8 @@ import {
   stiffnessNear,
   stir,
   touchMode,
-  turbulence
+  turbulence,
+  viscosity
 } from './ui/settings.js'
 
 // Fixed step. The sim does not track real frame time, and the tuning assumes it does not.
@@ -96,6 +97,7 @@ export function start () {
   mirror(cupDepth, params, 'cupDepth')
   mirror(wobble, params, 'wobble')
   mirror(settle, params, 'settle')
+  mirror(viscosity, params, 'viscosity')
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
