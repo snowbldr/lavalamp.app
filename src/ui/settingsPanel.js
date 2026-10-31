@@ -62,9 +62,7 @@ import {
   heatPeak,
   heatSpots,
   heatWarm,
-  highlightColor,
   interactionRadius,
-  lavaColor,
   maxTemp,
   particleCount,
   pace,
@@ -77,11 +75,15 @@ import {
   saveSettings,
   shareLink,
   showFlow,
-  showHeat,
   showCups,
   sound,
   themes,
   applyTheme,
+  gradientKinds,
+  gradientKind,
+  gradientFrom,
+  gradientTo,
+  gradientHue,
   soundPending,
   soundBed,
   soundBeds,
@@ -102,6 +104,11 @@ import {
 const seconds = v => `${v} s`
 const whole = v => String(Math.round(v))
 const fixed = digits => v => Number(v).toFixed(digits)
+const always = fnstate(true)
+const isPresets = fnstate(true)
+const isTwoTone = fnstate(false)
+const isLuminance = fnstate(false)
+gradientKind.subscribe(kind => { isPresets(kind === 'presets'); isTwoTone(kind === 'duotone'); isLuminance(kind === 'mono') })
 const times = v => `${Number(v).toFixed(2)}x`
 
 export function createSettingsPanel () {
@@ -154,7 +161,7 @@ export function createSettingsPanel () {
       null, null,
       // The colour rows follow the views: the heat gradient while the heat map is on, the lava
       // colours while it is off, and the flow gradient while the arrows are on.
-      swatchRow('Heat colours', showHeat, true,
+      swatchRow('Heat colours', always, true,
         swatch('Cold', 'heatCold', heatCold),
         swatch('Cool', 'heatCool', heatCool),
         swatch('Warm', 'heatWarm', heatWarm),
@@ -162,16 +169,19 @@ export function createSettingsPanel () {
         swatch('Peak', 'heatPeak', heatPeak),
         swatch('Back', 'bgColor', bgColor)
       ),
-      swatchRow('Lava colours', showHeat, false,
-        swatch('Lava', 'lavaColor', lavaColor),
-        swatch('Glow', 'highlightColor', highlightColor),
-        swatch('Back', 'bgColor2', bgColor)
-      ),
       swatchRow('Flow colours', showFlow, true,
         swatch('Slow', 'flowSlow', flowSlow),
         swatch('Fast', 'flowFast', flowFast)
       ),
-      div({ class: 'swatch-row' },
+      row('Gradient', segmented('gradient', gradientKind, gradientKinds)),
+      swatchRow('Duotone', isTwoTone, true,
+        swatch('From', 'gradientFrom', gradientFrom),
+        swatch('To', 'gradientTo', gradientTo)
+      ),
+      swatchRow('Mono', isLuminance, true,
+        swatch('Colour', 'gradientHue', gradientHue)
+      ),
+      div({ class: 'swatch-row', style: { display: isPresets.bindStyle(() => isPresets() ? 'block' : 'none') } },
         div({ class: 'swatch-caption' }, 'Themes'),
         div({ class: 'themes' }, ...themes.map(theme => button({
           class: 'theme',
@@ -180,7 +190,7 @@ export function createSettingsPanel () {
           onclick: () => applyTheme(theme)
         }, span(theme.name))))
       ),
-      hint(help, 'The colours follow the view: the heat map gradient from coldest, sinking lava to hottest while the heat map is on, the lava and its lit underside while it is off, and the slowest to fastest arrow while the flow field is on. A theme sets all of them at once; the swatches above still change any one.'),
+      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Duotone runs from one colour to another; Mono runs one colour from dark to light. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.'),
       knobs(
         knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
         knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction, fixed(2)),
@@ -195,13 +205,11 @@ export function createSettingsPanel () {
       ]),
       row('Touch', segmented('touch', touchMode, touchModes)),
       hint(help, 'What a finger or the mouse does to the lava under it: shove it away, gather it in, spin it, heat it or cool it.'),
-      pair('Heat Map', toggle('heat', showHeat), 'Flow Field', toggle('flow', showFlow)),
+      pair('Flow Field', toggle('flow', showFlow), 'Heater', toggle('heater', showHeater)),
       hint(help, [
-        ['Heat Map', 'Colour the lava by its temperature instead of the lava colour.'],
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.']
       ]),
-      pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
-      row('Sound', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
+      pair('Reservoirs', toggle('cups', showCups), 'Sound', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
       row('Bed', segmented('bed', soundBed, soundBeds)),
       hint(help, 'Gloops made up from the lava as it moves: a bloop where a neck snaps or a blob lands, pitched by how much lava moved, and a bed that follows how stirred up the lava is: Simmer is a scatter of tiny pops, Noise a low rumble, Hum a drone.'),
       hint(help, [

@@ -19,7 +19,7 @@ import {
   defaultRestDensity, defaultStir, defaultConduction, defaultPace, defaultTurbulence, defaultDrifters, defaultHeatSpots, defaultCupDepth,
   defaultWobble, defaultWobbleKick, defaultWobbleMax, defaultSettle, defaultViscosity, defaultSkin, defaultWall,
   defaultElementHeat, defaultElementLife, defaultElementRate, defaultElementLifeScale, defaultElementCore, defaultFloorHeat, defaultFloorGlow,
-  defaultLavaColor, defaultLavaHighlight, defaultHeatColors, defaultFlowSlow, defaultFlowFast
+  defaultHeatColors, defaultFlowSlow, defaultFlowFast
 } from '../src/ui/settings.js'
 
 const W = 600
@@ -78,7 +78,7 @@ export async function start () {
     spawnArea: 14 * (radius / 20) * (radius / 20), touchHeat: 48, capacity: GPU_PARTICLES
   }
   const look = {
-    lavaColor: defaultLavaColor, highlightColor: defaultLavaHighlight, ...defaultHeatColors, flowSlow: defaultFlowSlow, flowFast: defaultFlowFast,
+    lavaColor: { r: 133, g: 0, b: 204 }, ...defaultHeatColors, flowSlow: defaultFlowSlow, flowFast: defaultFlowFast,
     particleSize: params.particleSize, smooth: computeDefaultSmooth(W, H), blend: computeDefaultBlend(W, H), showHeat: true, showFlow: false, showHeater: false, showCups: false
   }
   const sim = device ? createGpuLamp({ device, width: W, height: H, params }) : createSimulation({ width: W, height: H, params })

@@ -1,8 +1,7 @@
 import { drawCups, drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
 
-const HIGHLIGHT_HEIGHT = 15
 const ALPHA_THRESHOLD = 70
-// The threshold and highlight passes touch every pixel in JavaScript, so the canvas has at most
+// The threshold pass touches every pixel in JavaScript, so the canvas has at most
 // this many pixels and CSS stretches it to the window; the compositor does that scaling for free.
 // One million is the 1000 x 1000 lamp the pass was written for. A 2560 x 1300 window at full
 // resolution took 108 ms a frame. The stretch softens the blob edges by a pixel or two, which
@@ -17,7 +16,7 @@ const HEAT_STEPS = 48
 // Draws the particles as soft discs, thresholds the alpha channel so that overlapping discs fuse
 // into one blob (the classic metaball trick), then lights the underside of every blob with a short
 // gradient, as if lit by the bulb below.
-// `look` is a plain object the caller keeps up to date: { lavaColor, highlightColor, particleSize,
+// `look` is a plain object the caller keeps up to date: { lavaColor, particleSize,
 // showFlow, showHeat, showHeater, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 export function createCanvasRenderer (canvas, look) {
   const context = canvas.getContext('2d', { willReadFrequently: true })
@@ -35,7 +34,6 @@ export function createCanvasRenderer (canvas, look) {
   let lampWidth = 0
   let lampHeight = 0
   let scale = 1 // bitmap pixels per window pixel, 1 or less
-  let highlightHeight = HIGHLIGHT_HEIGHT
 
   function resize (newWidth, newHeight) {
     lampWidth = newWidth
@@ -45,18 +43,17 @@ export function createCanvasRenderer (canvas, look) {
     height = canvas.height = Math.max(1, Math.round(newHeight * scale))
     canvas.style.width = `${newWidth}px`
     canvas.style.height = `${newHeight}px`
-    highlightHeight = Math.max(1, Math.round(HIGHLIGHT_HEIGHT * scale))
   }
 
   // `overlays` is { flowAt, heaterAt, elements, neutral }: the stirring velocity at a window point,
   // the heater power under a floor point, the heating elements, and the temperature of neutral buoyancy, for the flow field and heat
   // map when look.showFlow or look.showHeat is set. `state.temp` is needed for the heat map.
   // Per-phase timings of the last frame in ms, kept up to date when look.profile is set.
-  const profile = { discs: 0, read: 0, threshold: 0, highlight: 0, write: 0, overlays: 0 }
+  const profile = { discs: 0, read: 0, threshold: 0, write: 0, overlays: 0 }
   const now = () => (look.profile ? performance.now() : 0)
 
   function render (state, count, overlays = {}) {
-    const { r, g, b } = look.lavaColor
+    const { r, g, b } = look.lavaColor || { r: 0, g: 0, b: 0 }
     const view = overlays.view || { k: 1, ox: 0, oy: 0 }
     const size = look.particleSize * view.k * scale
     const heat = look.showHeat && state.temp && overlays.neutral > 0
@@ -86,8 +83,6 @@ export function createCanvasRenderer (canvas, look) {
     t1 = now(); profile.read = t1 - t; t = t1
     threshold(pix)
     t1 = now(); profile.threshold = t1 - t; t = t1
-    if (!heat) highlight(pix, look.highlightColor)
-    t1 = now(); profile.highlight = t1 - t; t = t1
     context.putImageData(imageData, 0, 0)
     t1 = now(); profile.write = t1 - t; t = t1
     // The heater is its own view (Robert: "hide the heating elements by default, but add a switch to
@@ -148,33 +143,6 @@ export function createCanvasRenderer (canvas, look) {
   function threshold (pix) {
     for (let i = 3; i < pix.length; i += 4) {
       pix[i] = pix[i] > ALPHA_THRESHOLD ? 255 : 0
-    }
-  }
-
-  // Blend the highlight colour into the solid pixels above every bottom edge (a solid pixel whose
-  // lower neighbour is transparent, or one sitting on the floor), strongest at the edge and fading
-  // out over HIGHLIGHT_HEIGHT window pixels. Written flat over the byte array because it runs on
-  // every pixel every frame.
-  function highlight (pix, color) {
-    const stride = width * 4
-    const floorRow = height - 2
-    const steps = highlightHeight
-    for (let row = 0; row < height; row++) {
-      const rowStart = row * stride
-      const below = rowStart + stride
-      const onFloor = row === floorRow
-      for (let i = rowStart + 3; i < rowStart + stride; i += 4) {
-        if (pix[i] !== 255) continue
-        if (!onFloor && (row + 1 >= height || pix[i - rowStart + below] === 255)) continue
-        for (let j = 0, k = i - 3; j < steps && k >= 0; j++, k -= stride) {
-          if (pix[k + 3] !== 255) continue
-          const keep = j / steps
-          const mix = 1 - keep
-          pix[k] = keep * pix[k] + mix * color.r
-          pix[k + 1] = keep * pix[k + 1] + mix * color.g
-          pix[k + 2] = keep * pix[k + 2] + mix * color.b
-        }
-      }
     }
   }
 

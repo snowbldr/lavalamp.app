@@ -62,8 +62,6 @@ export const computeDefaultMaxTemp = height => Math.round(5030 * height / 900)
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
 export const defaultBgColor = { r: 0, g: 0, b: 0 }
-export const defaultLavaColor = { r: 133, g: 0, b: 204 }
-export const defaultLavaHighlight = { r: 182, g: 124, b: 254 }
 // The heat map's gradient, cold (sinking) to peak (hottest), and the flow field's, slow to fast.
 // Robert: "the colors are now confusing with heat map as the default... Maybe we should show two
 // different versions of color. One for heatmap to pick the gradient and one for no heat map to
@@ -150,8 +148,6 @@ export const defaultMaxTemp = fnstate(computeDefaultMaxTemp(window.innerHeight))
 export const defaultGravityStrength = fnstate(computeDefaultGravity(window.innerHeight))
 
 export const bgColor = fnstate({ ...defaultBgColor })
-export const lavaColor = fnstate({ ...defaultLavaColor })
-export const highlightColor = fnstate({ ...defaultLavaHighlight })
 export const heatCold = fnstate({ ...defaultHeatColors.heatCold })
 export const heatCool = fnstate({ ...defaultHeatColors.heatCool })
 export const heatWarm = fnstate({ ...defaultHeatColors.heatWarm })
@@ -214,7 +210,6 @@ export const randomSeed = () => Math.floor(Math.random() * 1e9)
 export const seed = fnstate(randomSeed())
 // Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
 export const showFlow = fnstate(false)
-export const showHeat = fnstate(true)
 // Draw the heater strip and the heating elements along the floor, in either view. Not saved.
 export const showHeater = fnstate(false)
 // Pull the whole lamp into frame, hidden cups and all, scaled down, with the cup outlines drawn.
@@ -229,42 +224,64 @@ export const soundBed = fnstate('simmer')
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
 
-// Themes: a name and every colour at once, heat gradient, lava, glow, back and the flow arrows
-// (Robert: "themes that set all of the colors", six of them, one row of buttons under the
-// swatches). Weather is the defaults above; the rest are Claude's first draft for Robert to
-// repaint. Applying one just sets the colour states, so Save and Share carry the result.
+// Themes: a name and every colour at once, the heat gradient, the back and the flow arrows
+// (Robert: "themes that set all of the colors"). Six contrast presets, gradients that jump hue
+// like Weather (Robert: "we just have 6 preset contrast themes like weather"); the two colour
+// and luminance gradients are made from a swatch or two instead, below. Weather is the defaults
+// above; the rest are Claude's first draft for Robert to repaint. Applying one just sets the
+// colour states, so Save and Share carry the result.
 const rgb = (r, g, b) => ({ r, g, b })
 export const themes = [
-  { name: 'Weather', heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), lavaColor: rgb(133, 0, 204), lavaHighlight: rgb(182, 124, 254), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40) },
-  { name: 'Lava', heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(8, 4, 4), lavaColor: rgb(220, 60, 0), lavaHighlight: rgb(255, 180, 80), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120) },
-  { name: 'Ocean', heatCold: rgb(0, 10, 60), heatCool: rgb(0, 90, 140), heatWarm: rgb(0, 190, 200), heatHot: rgb(120, 240, 255), heatPeak: rgb(240, 255, 255), bgColor: rgb(0, 5, 20), lavaColor: rgb(0, 120, 200), lavaHighlight: rgb(140, 220, 255), flowSlow: rgb(0, 60, 120), flowFast: rgb(200, 255, 255) },
-  { name: 'Sunset', heatCold: rgb(40, 0, 80), heatCool: rgb(170, 30, 140), heatWarm: rgb(255, 100, 60), heatHot: rgb(255, 200, 60), heatPeak: rgb(255, 245, 200), bgColor: rgb(15, 0, 25), lavaColor: rgb(230, 70, 130), lavaHighlight: rgb(255, 200, 150), flowSlow: rgb(80, 0, 120), flowFast: rgb(255, 220, 120) },
-  { name: 'Acid', heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), lavaColor: rgb(90, 220, 0), lavaHighlight: rgb(220, 255, 120), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100) },
-  { name: 'Violet', heatCold: rgb(10, 0, 30), heatCool: rgb(60, 20, 120), heatWarm: rgb(150, 80, 220), heatHot: rgb(230, 160, 255), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), lavaColor: rgb(150, 90, 255), lavaHighlight: rgb(230, 200, 255), flowSlow: rgb(50, 0, 100), flowFast: rgb(255, 230, 255) },
-  // Six more (Robert: "those gradients are amazing. let's add 6 more. Let's add a couple more
-  // that have gradients like weather that contrast, also the two tone sunset one could use some
-  // more options"): three that jump hue like Weather, three two-tone like Sunset.
-  { name: 'Spectrum', heatCold: rgb(30, 0, 90), heatCool: rgb(0, 170, 170), heatWarm: rgb(255, 230, 0), heatHot: rgb(230, 30, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), lavaColor: rgb(0, 170, 170), lavaHighlight: rgb(255, 230, 0), flowSlow: rgb(30, 0, 90), flowFast: rgb(255, 230, 0) },
-  { name: 'Neon', heatCold: rgb(0, 40, 60), heatCool: rgb(0, 220, 255), heatWarm: rgb(255, 0, 200), heatHot: rgb(255, 230, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(5, 5, 15), lavaColor: rgb(255, 0, 200), lavaHighlight: rgb(0, 220, 255), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0) },
-  { name: 'Thermal', heatCold: rgb(0, 0, 0), heatCool: rgb(90, 0, 130), heatWarm: rgb(220, 30, 0), heatHot: rgb(255, 220, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), lavaColor: rgb(220, 30, 0), lavaHighlight: rgb(255, 220, 0), flowSlow: rgb(90, 0, 130), flowFast: rgb(255, 220, 0) },
-  { name: 'Dusk', heatCold: rgb(10, 20, 80), heatCool: rgb(40, 80, 200), heatWarm: rgb(240, 120, 170), heatHot: rgb(255, 190, 140), heatPeak: rgb(255, 250, 230), bgColor: rgb(5, 5, 20), lavaColor: rgb(60, 90, 210), lavaHighlight: rgb(255, 190, 160), flowSlow: rgb(10, 20, 80), flowFast: rgb(255, 190, 140) },
-  { name: 'Rose', heatCold: rgb(50, 0, 40), heatCool: rgb(150, 20, 80), heatWarm: rgb(255, 90, 140), heatHot: rgb(255, 200, 90), heatPeak: rgb(255, 245, 220), bgColor: rgb(10, 0, 10), lavaColor: rgb(255, 90, 140), lavaHighlight: rgb(255, 210, 120), flowSlow: rgb(80, 0, 60), flowFast: rgb(255, 200, 90) },
-  { name: 'Mint', heatCold: rgb(0, 40, 45), heatCool: rgb(0, 150, 130), heatWarm: rgb(120, 255, 200), heatHot: rgb(200, 180, 255), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 5, 8), lavaColor: rgb(0, 170, 140), lavaHighlight: rgb(200, 255, 230), flowSlow: rgb(0, 60, 60), flowFast: rgb(220, 200, 255) }
+  { name: 'Weather', heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40) },
+  { name: 'Spectrum', heatCold: rgb(30, 0, 90), heatCool: rgb(0, 170, 170), heatWarm: rgb(255, 230, 0), heatHot: rgb(230, 30, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(30, 0, 90), flowFast: rgb(255, 230, 0) },
+  { name: 'Neon', heatCold: rgb(0, 40, 60), heatCool: rgb(0, 220, 255), heatWarm: rgb(255, 0, 200), heatHot: rgb(255, 230, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(5, 5, 15), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0) },
+  { name: 'Thermal', heatCold: rgb(0, 0, 0), heatCool: rgb(90, 0, 130), heatWarm: rgb(220, 30, 0), heatHot: rgb(255, 220, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(90, 0, 130), flowFast: rgb(255, 220, 0) },
+  { name: 'Lava', heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(8, 4, 4), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120) },
+  { name: 'Acid', heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100) }
 ]
 export const applyTheme = theme => {
   for (const [key, state] of Object.entries(colorSettings)) if (theme[key]) state({ ...theme[key] })
 }
 
+// The other two kinds of gradient (Robert: "maybe we should make like a two color gradient
+// version and luminance gradient"): Two tone runs the five stops from one colour to another,
+// Luminance runs one colour from near black through itself to white. Mixed in linear light so
+// the middle does not go muddy. The pickers below are not saved; the five stops they set are.
+export const gradientKinds = ['presets', 'duotone', 'mono'] // six contrast presets; two colours; one colour dark to light
+export const gradientKind = fnstate('presets')
+export const gradientFrom = fnstate(rgb(0, 20, 117))
+export const gradientTo = fnstate(rgb(255, 255, 230))
+export const gradientHue = fnstate(rgb(255, 126, 20))
+const toLinear = c => Math.pow(c / 255, 2.2)
+const fromLinear = v => Math.round(Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2) * 255)
+const mixLinear = (a, b, t) => ({ r: fromLinear(toLinear(a.r) * (1 - t) + toLinear(b.r) * t), g: fromLinear(toLinear(a.g) * (1 - t) + toLinear(b.g) * t), b: fromLinear(toLinear(a.b) * (1 - t) + toLinear(b.b) * t) })
+const stops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
+export const applyTwoTone = () => {
+  const a = gradientFrom(); const b = gradientTo()
+  stops.forEach((state, k) => state(mixLinear(a, b, k / 4)))
+}
+export const applyLuminance = () => {
+  const c = gradientHue()
+  const black = rgb(0, 0, 0); const white = rgb(255, 255, 255)
+  stops[0](mixLinear(black, c, 0.12)); stops[1](mixLinear(black, c, 0.5)); stops[2]({ ...c }); stops[3](mixLinear(c, white, 0.5)); stops[4](mixLinear(c, white, 0.92))
+}
+gradientFrom.subscribe(() => { if (gradientKind() === 'duotone') applyTwoTone() })
+gradientTo.subscribe(() => { if (gradientKind() === 'duotone') applyTwoTone() })
+gradientHue.subscribe(() => { if (gradientKind() === 'mono') applyLuminance() })
+gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if (kind === 'mono') applyLuminance() })
+
 // These keys are the saved and shared JSON format, so they must not change.
-const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
+// lavaColor and lavaHighlight were here until 2026-10-31, when the heat map became the only
+// view (Robert: "I think this now completely replaces the non heat map mode. we should get rid
+// of the heat map toggle, make heat map the default, and remove the code for the old color
+// mode"); old saves and links that still carry them are simply ignored.
+const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
-  lavaColor: { ...defaultLavaColor },
-  lavaHighlight: { ...defaultLavaHighlight },
   heatCold: { ...defaultHeatColors.heatCold },
   heatCool: { ...defaultHeatColors.heatCool },
   heatWarm: { ...defaultHeatColors.heatWarm },

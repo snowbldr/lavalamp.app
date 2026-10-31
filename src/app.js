@@ -57,9 +57,7 @@ import {
   heatWarm,
   flowFast,
   flowSlow,
-  highlightColor,
   interactionRadius,
-  lavaColor,
   loadSavedSettings,
   maxTemp,
   pace,
@@ -67,7 +65,6 @@ import {
   particleSize,
   restDensity,
   showFlow,
-  showHeat,
   showCups,
   sound,
   soundPending,
@@ -155,8 +152,6 @@ export async function start () {
   params.touchHeat = 48
 
   const look = {}
-  mirror(lavaColor, look, 'lavaColor')
-  mirror(highlightColor, look, 'highlightColor')
   mirror(heatCold, look, 'heatCold')
   mirror(heatCool, look, 'heatCool')
   mirror(heatWarm, look, 'heatWarm')
@@ -166,7 +161,7 @@ export async function start () {
   mirror(flowFast, look, 'flowFast')
   mirror(particleSize, look, 'particleSize')
   mirror(showFlow, look, 'showFlow')
-  mirror(showHeat, look, 'showHeat')
+  look.showHeat = true // the heat map is the lamp's only colouring now; the lab still draws its silhouette flat
   mirror(showHeater, look, 'showHeater')
   mirror(showCups, look, 'showCups')
   mirror(smooth, look, 'smooth')

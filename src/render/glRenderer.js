@@ -2,12 +2,13 @@ import { drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlay
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
 // WebGL exists: soft discs composited source-over into a texture, then one fullscreen pass
-// thresholds the alpha so the discs fuse and lights the underside of every blob by looking up
-// to HIGHLIGHT_HEIGHT pixels down for a bottom edge. Nothing is read back: the 2D version spent
+// thresholds the alpha so the discs fuse. (It also lit the underside of every blob with a
+// highlight colour until 2026-10-31, when the heat map became the only colouring; Robert:
+// "We're going to add lighting separately in a future step that will supersede the highlight
+// anyway".) Nothing is read back: the 2D version spent
 // 4.8 ms of a 9.7 ms frame in getImageData and another 1.9 in a JavaScript threshold pass on
 // Robert's Mac, and a phone has far less to spend. Flow arrows and the heater strip, which are
 // line drawing, go on a transparent 2D canvas laid over this one.
-const HIGHLIGHT_HEIGHT = 15
 const ALPHA_THRESHOLD = 70 // of 255, as in the canvas renderer
 // The same pixel budget as the canvas renderer, for the same look: the GPU could draw the window
 // at full resolution for free, but the stretch softens the blob edges by a pixel or two and that
@@ -15,7 +16,6 @@ const ALPHA_THRESHOLD = 70 // of 255, as in the canvas renderer
 const PIXEL_BUDGET = 1_000_000
 const MIN_VIEW_DISC = 2 // the smallest disc radius drawn in the Reservoirs view, in bitmap px
 const HEAT_STEPS = 2048 // was 48, which banded the heat colours in tens of px wide steps (Robert: "can we add more gradient steps for the color?"). The table is built once per palette change and read by index per particle, so the count costs nothing; past about 1024 (256 screen levels per segment between the five swatches) nothing more can show.
-const MAX_HIGHLIGHT = 32 // shader loop bound, in bitmap pixels
 // The smoothing pass: a separable Gaussian blur of the density field before the threshold, so
 // the bumps of the individual discs round off before the edge is cut (Robert: "mainly just that
 // rough edge... could we do like an edge smoothing pass like we did with the highlight?").
@@ -75,11 +75,9 @@ void main () {
   vUv = aPosition * 0.5 + 0.5;
   gl_Position = vec4(aPosition, 0.0, 1.0);
 }`
-// Threshold, then highlight: a pixel j below this one that is solid with a transparent pixel (or
-// the floor row) under it is a bottom edge, and this pixel takes 1 - j / steps of the highlight
-// colour from the lowest such edge within reach, which is what the canvas pass painted. The cut
-// is a smoothstep uSoft wide in alpha, about a pixel at the edge, so the outline is antialiased
-// rather than a staircase.
+// Threshold: the cut is a smoothstep uSoft wide in alpha, about a pixel at the edge, so the
+// outline is antialiased rather than a staircase; the colour is the heat colour read from the
+// Blend field, or one flat colour for the lab's silhouette.
 const COMPOSITE_FRAGMENT = `
 precision mediump float;
 varying vec2 vUv;
@@ -89,30 +87,14 @@ uniform vec2 uTexel;
 uniform float uThreshold;
 uniform float uSoft;
 uniform vec3 uLava;
-uniform vec3 uHighlight;
-uniform float uSteps;
 uniform float uHeat;
-uniform float uRows;
 void main () {
   vec4 c = texture2D(uAccum, vUv);
   float coverage = smoothstep(uThreshold - uSoft, uThreshold + uSoft, c.a);
   if (coverage <= 0.0) { gl_FragColor = vec4(0.0); return; }
   vec4 b = texture2D(uBlend, vUv);
+  // The heat colour from the Blend field, or one flat colour (the lab's silhouette).
   vec3 rgb = uHeat > 0.5 ? b.rgb / max(b.a, 1e-5) : uLava;
-  if (uHeat < 0.5) {
-    float amount = 0.0;
-    for (int j = 0; j < ${MAX_HIGHLIGHT}; j++) {
-      if (float(j) >= uSteps) break;
-      float vj = vUv.y - float(j) * uTexel.y;
-      if (vj < 0.0) break;
-      float here = texture2D(uAccum, vec2(vUv.x, vj)).a;
-      if (here <= uThreshold) continue;
-      float row = floor(vj * uRows); // from the bottom; row 1 is the floor row of the canvas pass
-      float below = texture2D(uAccum, vec2(vUv.x, vj - uTexel.y)).a;
-      if (row == 1.0 || (row > 1.0 && below <= uThreshold)) amount = 1.0 - float(j) / uSteps;
-    }
-    rgb = mix(rgb, uHighlight, amount);
-  }
   gl_FragColor = vec4(rgb * coverage, coverage);
 }`
 
@@ -146,7 +128,7 @@ export function createGlRenderer (canvas, look) {
     return out
   }
   const pLoc = loc(particles, ['aCentre', 'aCorner', 'aColor', 'uResolution', 'uSize'])
-  const cLoc = loc(composite, ['aPosition', 'uAccum', 'uBlend', 'uTexel', 'uThreshold', 'uSoft', 'uLava', 'uHighlight', 'uSteps', 'uHeat', 'uRows'])
+  const cLoc = loc(composite, ['aPosition', 'uAccum', 'uBlend', 'uTexel', 'uThreshold', 'uSoft', 'uLava', 'uHeat'])
   const bLoc = loc(blur, ['aPosition', 'uSource', 'uStep', 'uRadius'])
 
   // Particle vertices: six per particle, each centre x, y, corner x, y, colour r, g, b.
@@ -246,7 +228,7 @@ export function createGlRenderer (canvas, look) {
     // Pass 1: the discs, into the accumulation texture.
     const floats = count * 6 * STRIDE
     if (vertexData.length < floats) vertexData = new Float32Array(floats)
-    const { r, g, b } = look.lavaColor
+    const { r, g, b } = look.lavaColor || { r: 0, g: 0, b: 0 }
     const lava = [r / 255, g / 255, b / 255]
     if (heat) prepareHeatTable()
     const top = HEAT_STEPS - 1
@@ -339,7 +321,7 @@ export function createGlRenderer (canvas, look) {
       if (radius >= 0.5) blurInto(accum, accumTarget, radius)
     }
     t1 = now(); profile.smooth = t1 - t; t = t1
-    // Pass 3: threshold and highlight, to the screen.
+    // Pass 3: threshold and colour, to the screen.
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, width, height)
     gl.useProgram(composite)
@@ -358,11 +340,7 @@ export function createGlRenderer (canvas, look) {
     const sizePx = Math.max(1, disc * discScale)
     gl.uniform1f(cLoc.uSoft, Math.min(0.12, Math.max(0.004, 0.7 / sizePx)))
     gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
-    const hl = look.highlightColor
-    gl.uniform3f(cLoc.uHighlight, hl.r / 255, hl.g / 255, hl.b / 255)
-    gl.uniform1f(cLoc.uSteps, Math.min(MAX_HIGHLIGHT, Math.max(1, Math.round(HIGHLIGHT_HEIGHT * view.k * scale))))
     gl.uniform1f(cLoc.uHeat, heat ? 1 : 0)
-    gl.uniform1f(cLoc.uRows, height)
     gl.drawArrays(gl.TRIANGLES, 0, 3)
     t1 = now(); profile.composite = t1 - t; t = t1
     // The overlay canvas: only touched while a drawn-on-top view is on.
