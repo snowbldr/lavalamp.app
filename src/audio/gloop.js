@@ -75,6 +75,7 @@ export function createGloop (tune = {}) {
   let time = 0
   let lastGlug = -1
   let ticks = false // play a tick per event instead of the voices
+  let silent = false // detect and report events, play nothing (the evolution page records clips this way)
   let onEvent = null // the sound board's hook: fn({ type, x, y, size, strength, time })
   let prevY = new Float32Array(0) // last frame's y per particle, for the line crossings
   const up = new Float32Array(COLUMNS) // this frame's fast particles rising, per column
@@ -250,7 +251,8 @@ export function createGloop (tune = {}) {
     const x = (c + 0.5) / COLUMNS
     const pan = x * 2 - 1
     stats[type]++
-    if (ticks) tick(type, pan)
+    if (silent) { /* the hook alone */ }
+    else if (ticks) tick(type, pan)
     else if (type === 'snap' || type === 'lift' || type === 'land') { bloop(pan, size, strength); stats.bloops++ }
     if (onEvent) onEvent({ type, x, y, size, strength, time })
   }
@@ -306,11 +308,11 @@ export function createGloop (tune = {}) {
     stats.agitation = agitation
     const now = context.currentTime
     master.gain.setTargetAtTime(T.master, now, 0.05)
-    noise.gain.gain.setTargetAtTime(bed === 'noise' ? T.noiseLevel * agitation * agitation : 0, now, 0.05)
+    noise.gain.gain.setTargetAtTime(bed === 'noise' && !silent ? T.noiseLevel * agitation * agitation : 0, now, 0.05)
     noise.filter.frequency.setTargetAtTime(140 + 500 * agitation, now, 0.05)
-    hum.gain.gain.setTargetAtTime(bed === 'hum' ? T.humLevel * (0.15 + 0.85 * agitation) : 0, now, 0.1)
+    hum.gain.gain.setTargetAtTime(bed === 'hum' && !silent ? T.humLevel * (0.15 + 0.85 * agitation) : 0, now, 0.1)
     hum.filter.frequency.setTargetAtTime(120 + 300 * agitation, now, 0.1)
-    if (ticks) { /* the voices are quiet while the ticks are on */ } else if (bed === 'simmer') {
+    if (ticks || silent) { /* the voices are quiet */ } else if (bed === 'simmer') {
       // Tiny pops, Poisson in time, placed where the lava is moving most, lower as it stirs more.
       const rate = T.simmerRateLow + (T.simmerRateHigh - T.simmerRateLow) * agitation * agitation
       if (Math.random() < rate * dt) {
@@ -362,14 +364,20 @@ export function createGloop (tune = {}) {
     setBed (name) { bed = BEDS.includes(name) ? name : 'none' },
     // Ticks instead of voices, one timbre per event, for checking the detection by ear.
     setTicks (on) { ticks = !!on },
+    setSilent (on) { silent = !!on },
     set onEvent (fn) { onEvent = fn },
     // Play a tick by hand, to learn them.
     playTick (type) { if (context && context.state === 'running') tick(type, 0) },
     // Play one sound by hand (the sound board's buttons): 'bloop' or 'glug', size 0 to 1.
-    play (voice, size = 0.5, strength = 1, pan = 0) {
+    play (voice, size = 0.5, strength = 1, pan = 0, tune = null) {
       if (!context || context.state !== 'running') return
+      // A one-off tune (the evolution page plays each genome's numbers) is swapped in for the call.
+      const keep = tune ? { ...T } : null
+      if (tune) Object.assign(T, tune)
       if (voice === 'glug') glug(pan, size, strength); else bloop(pan, size, strength, voice === 'pop' ? T.simmerSpeed : 1)
+      if (keep) Object.assign(T, keep)
     },
+    get agitation () { return agitation },
     tune: T,
     get bed () { return bed },
     get enabled () { return enabled },

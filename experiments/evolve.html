@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>sound evolution</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script type="importmap">
+    { "imports": { "@srfnstack/fntags": "https://cdn.jsdelivr.net/npm/@srfnstack/fntags@1.3.0/index.js" } }
+    </script>
+    <link rel="stylesheet" href="../src/ui/panel.css">
+    <style>
+      body { margin: 0; background: #1c1c1e; color: #ececec; font: 13px system-ui, sans-serif; padding: 16px; box-sizing: border-box; }
+      .top { display: flex; gap: 16px; align-items: flex-start; }
+      .lamp { background: #000; width: 300px; height: 450px; position: relative; border-radius: 6px; overflow: hidden; flex: none; }
+      .lamp canvas { position: absolute; left: 0; top: 0; width: 300px; height: 450px; }
+      .controls { display: flex; flex-direction: column; gap: 8px; max-width: 520px; }
+      .buttons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .clips { display: flex; gap: 6px; flex-wrap: wrap; }
+      .clip { border: 2px solid transparent; border-radius: 6px; cursor: pointer; padding: 2px; }
+      .clip.on { border-color: var(--accent); }
+      .clip video { width: 60px; height: 90px; display: block; border-radius: 4px; background: #000; }
+      .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
+      .cell { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 6px; display: flex; gap: 8px; }
+      .cell.starred { border-color: #f0c030; }
+      .cell.playing { border-color: var(--accent); }
+      .cell video { width: 120px; height: 180px; background: #000; border-radius: 4px; flex: none; }
+      .cell .info { display: flex; flex-direction: column; gap: 4px; font-size: 11px; flex: 1; }
+      .cell .genes { opacity: 0.7; white-space: pre-wrap; font: 10px ui-monospace, monospace; }
+      .readout { opacity: 0.7; }
+      p { opacity: 0.7; max-width: 900px; margin: 4px 0; }
+      button.star { font-size: 16px; }
+    </style>
+</head>
+<body>
+<script type="module">
+  import { start } from './evolve.js'
+  start()
+</script>
+</body>
+</html>

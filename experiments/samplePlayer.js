@@ -21,17 +21,17 @@ export function createSamplePlayer (getContext, getMaster) {
   }
 
   // Play one sample. `size` 0 to 1 bends pitch and stretch by the sample's by-size amounts.
-  function play (sample, { size = 0.5, strength = 1, pan = 0 } = {}) {
+  function play (sample, { size = 0.5, strength = 1, pan = 0, settings = null, at = 0 } = {}) {
     const context = getContext()
     if (!context || context.state !== 'running' || !sample.buffer) return
-    const s = sample.settings
+    const s = settings ? { ...sample.settings, ...settings } : sample.settings
     const semis = s.pitch + s.pitchBySize * (size - 0.5)
     const rate = Math.pow(2, semis / 12)
     const stretch = Math.max(0.1, s.stretch * Math.pow(2, s.stretchBySize * (size - 0.5)))
     const duration = sample.buffer.duration
     const from = Math.max(0, Math.min(duration, s.start * duration))
     const to = Math.max(from + 0.01, Math.min(duration, s.end * duration))
-    const t0 = context.currentTime + 0.005
+    const t0 = (at || context.currentTime) + 0.005
     const level = s.gain * strength
     let out = getMaster()
     if (context.createStereoPanner) { const p = context.createStereoPanner(); p.pan.value = Math.max(-0.8, Math.min(0.8, pan)); p.connect(out); out = p }
@@ -76,5 +76,30 @@ export function createSamplePlayer (getContext, getMaster) {
     }
   }
 
-  return { samples, add, play, trigger }
+  // A bed: the sample looped from `at`, its level following `curve` (values a `step` seconds
+  // apart) times `gain`, through a lowpass at `cutoff` Hz. Returns a stop function.
+  function loop (sample, { at, gain = 0.5, curve = null, step = 0.1, cutoff = 20000, rate = 1 } = {}) {
+    const context = getContext()
+    if (!context || !sample.buffer) return () => {}
+    const src = context.createBufferSource()
+    src.buffer = sample.buffer
+    src.loop = true
+    src.playbackRate.value = rate
+    const filter = context.createBiquadFilter()
+    filter.type = 'lowpass'; filter.frequency.value = cutoff
+    const g = context.createGain()
+    const t0 = at || context.currentTime
+    if (curve && curve.length > 1) {
+      const values = new Float32Array(curve.length)
+      for (let i = 0; i < curve.length; i++) values[i] = gain * curve[i]
+      g.gain.setValueCurveAtTime(values, t0, step * (curve.length - 1))
+    } else {
+      g.gain.value = gain
+    }
+    src.connect(filter); filter.connect(g); g.connect(getMaster())
+    src.start(t0)
+    return () => { try { g.gain.cancelScheduledValues(context.currentTime); g.gain.setTargetAtTime(0, context.currentTime, 0.05); src.stop(context.currentTime + 0.3) } catch (e) { /* already stopped */ } }
+  }
+
+  return { samples, add, play, trigger, loop }
 }
