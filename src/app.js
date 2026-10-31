@@ -147,11 +147,6 @@ export async function start () {
   mirror(showHeater, look, 'showHeater')
   mirror(showCups, look, 'showCups')
   mirror(smooth, look, 'smooth')
-  // The drawn disc never goes under the particle spacing (the square root of that area, times a
-  // little), or the metaball field has holes between particles and the lava turns to sand
-  // (Robert, with Size 3 carried from the lab into a radius 32 lamp: "all kinds of weird heating
-  // defects").
-  mirror(interactionRadius, look, 'minDisc', r => 1.2 * Math.sqrt(14 * (r / 20) * (r / 20)))
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
   let edge = 'bottom' // the page edge the lamp's floor sits on
@@ -159,6 +154,7 @@ export async function start () {
   let [pageWidth, pageHeight] = pageSize()
   let [width, height] = lampSizeFor(turns, pageWidth, pageHeight)
   const lamp = canvas({ id: 'lavalamp', style: { transition: 'transform 0.4s' } })
+  if (device) params.capacity = GPU_PARTICLES
   const sim = device ? createGpuLamp({ device, width, height, params }) : createSimulation({ width, height, params })
   const renderer = createRenderer(lamp, look)
   const motion = createMotionInput()

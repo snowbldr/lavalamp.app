@@ -519,7 +519,9 @@ export function getGpuDevice () {
 export function createGpuSimulation ({ device, width: width0, height: height0, params, random = Math.random }) {
   let width = width0
   let height = height0
-  const capacity = Math.max(64, Math.ceil(params.particleCount / WORKGROUP) * WORKGROUP)
+  // Room for params.capacity particles if given (the lamp passes its GPU budget: the count follows
+  // the window and can grow after the sim is made), else the count at creation.
+  const capacity = Math.max(64, Math.ceil(Math.max(params.particleCount, params.capacity || 0) / WORKGROUP) * WORKGROUP)
   let alive = 0
   let time = 0
   let heaterTime = 0

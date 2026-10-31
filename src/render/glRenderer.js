@@ -290,7 +290,7 @@ export function createGlRenderer (canvas, look) {
     // holes all over and weird wrong color edges"). Discs and the blur shrink with the square root
     // of the view's scale instead, so they stay fat relative to the spacing.
     const discScale = Math.sqrt(view.k) * scale
-    const disc = Math.max(look.particleSize, look.minDisc || 0) // never under the spacing, see app.js minDisc
+    const disc = look.particleSize
     gl.uniform1f(pLoc.uSize, disc * discScale)
     gl.drawArrays(gl.TRIANGLES, 0, count * 6)
     gl.disableVertexAttribArray(pLoc.aColor)
