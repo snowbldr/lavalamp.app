@@ -27,7 +27,11 @@
     const audio = new Audio(`./samples/${item.file}`)
     const button = document.createElement('button')
     button.innerHTML = `${item.name}<small>${item.license}</small>`
-    button.onclick = () => { audio.currentTime = 0; audio.play(); button.classList.add('playing') }
+    // Tap plays; tap again while it plays stops it (Robert: "clicking on a running sound should stop it").
+    button.onclick = () => {
+      if (!audio.paused) { audio.pause(); audio.currentTime = 0; button.classList.remove('playing'); return }
+      audio.currentTime = 0; audio.play(); button.classList.add('playing')
+    }
     audio.onended = () => button.classList.remove('playing')
     audio.onloadedmetadata = () => { button.querySelector('small').textContent = `${audio.duration.toFixed(1)} s` }
     pads.appendChild(button)
