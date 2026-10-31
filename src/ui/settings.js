@@ -220,6 +220,10 @@ export const sound = fnstate(false)
 export const soundPending = fnstate(false) // on while the audio is starting, for the switch to show it
 export const soundBeds = ['simmer', 'glug', 'noise', 'hum', 'none']
 export const soundBed = fnstate('simmer')
+// The lamp over the whole screen, no browser around it (Robert: "a full screen mode that has no
+// border"). Not saved: the browser forgets fullscreen on reload anyway. Follows the browser too,
+// so Esc flips the switch back.
+export const fullscreen = fnstate(false)
 // What a finger on the lamp does. Not saved.
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')

@@ -68,6 +68,7 @@ import {
   showCups,
   sound,
   soundPending,
+  fullscreen,
   soundBed,
   showHeater,
   settle,
@@ -192,6 +193,17 @@ export async function start () {
   gloop.setBed(soundBed())
   soundBed.subscribe(name => gloop.setBed(name))
   sound.subscribe(on => { soundPending(!!on); gloop.set(on).then(() => soundPending(false)) })
+  // Fullscreen: the switch asks the browser, and the browser's own changes (Esc, the window's
+  // button) are read back so the switch stays honest. The lamp refits on the resize that follows.
+  const root = document.documentElement
+  const inFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement)
+  fullscreen.subscribe(on => {
+    if (on === inFullscreen()) return
+    const request = on ? (root.requestFullscreen || root.webkitRequestFullscreen) : (document.exitFullscreen || document.webkitExitFullscreen)
+    if (!request) { fullscreen(false); return } // iPhone Safari has no page fullscreen
+    Promise.resolve(request.call(on ? root : document)).catch(() => fullscreen(inFullscreen()))
+  })
+  for (const event of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(event, () => fullscreen(inFullscreen()))
 
   // Size the lamp to the page for the current turn, and keep the window-following defaults honest.
   function fit () {
@@ -279,7 +291,8 @@ export async function start () {
           position: 'fixed',
           bottom: '2px',
           left: '2px',
-          'z-index': 200
+          'z-index': 200,
+          display: fullscreen.bindStyle(() => fullscreen() ? 'none' : 'block') // nothing but lava in fullscreen
         }
       },
       a({ target: '_blank', href: 'https://github.com/snowbldr/lavalamp.app' }, 'Copyright © 2020-2026 Robert Kempton')

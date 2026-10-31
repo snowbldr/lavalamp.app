@@ -85,6 +85,7 @@ import {
   gradientTo,
   gradientHue,
   soundPending,
+  fullscreen,
   soundBed,
   soundBeds,
   showHeater,
@@ -216,6 +217,8 @@ export function createSettingsPanel () {
         ['Heater', 'Show the heater strip and its elements along the floor.'],
         ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
       ]),
+      pair('Fullscreen', toggle('fullscreen', fullscreen)),
+      hint(help, 'The lamp over the whole screen with nothing around it. Esc brings the browser back.'),
       row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
       hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.')
     ),
