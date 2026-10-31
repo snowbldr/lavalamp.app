@@ -5,6 +5,7 @@
 // Replay, and a filmstrip of frames at a fixed interval after the pulse, to lay beside the stills.
 import { button, div, fnstate, option, select, span } from '@srfnstack/fntags'
 import { createSimulation } from '../src/sim/simulation.js'
+import { createGpuSimulation, getGpuDevice } from '../src/sim/gpuSimulation.js'
 import { seedRandom } from '../src/sim/random.js'
 import { createRenderer } from '../src/render/renderer.js'
 import { DECADES, hint, knob, knobs, row, segmented, toggle } from '../src/ui/components.js'
@@ -15,7 +16,11 @@ const H = 900
 const FRAME = 1 / 60
 const SEED = 1
 
-export function start () {
+export async function start () {
+  // The GPU backend's device, if this browser has WebGPU; the Backend row switches between the
+  // CPU simulation and the GPU one, same knobs, same world (Robert: "yeah, do it").
+  const device = await getGpuDevice().catch(() => null)
+  const backend = fnstate(device ? 'gpu' : 'cpu')
   // The liquid.
   const wobble = fnstate(0.87)
   const kick = fnstate(6)
@@ -94,6 +99,7 @@ export function start () {
   let captured = 0
   let nextCapture = Infinity
   let lastReadout = -1
+  let frameMs = 16.7
   let measured = 0
   let capturing = false
 
@@ -103,7 +109,8 @@ export function start () {
       // would weaken by the substep count; scaling the stiffnesses up by it keeps the liquid.
       particleCount: count(), interactionRadius: radius(), stiffness: stiffness() * Math.max(1, Math.round(substeps())), stiffnessNear: near() * Math.max(1, Math.round(substeps())), restDensity: density(),
       maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
-      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: Math.max(1, Math.round(settle())), viscosity: viscosity(), reach: reach(), wallPush: wall(), kickBelow: skin()
+      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: Math.max(1, Math.round(settle())), viscosity: viscosity(), reach: reach(), wallPush: wall(), kickBelow: skin(),
+      spawnArea: 7 * (radius() / 20) * (radius() / 20) // the slab's floor area per particle, as the lamp sets it; without it the lab spawned a 3400 px column that collapsed into the pool during Warm
     }
   }
 
@@ -157,6 +164,7 @@ export function start () {
     s.versions.push({ name: `v${s.versions.length + 1}`, created: Date.now(), settings: { ...from } })
     useVersion(s.versions.length - 1)
   }
+  backend.subscribe(() => reset())
   for (const k in states) {
     states[k].subscribe(() => {
       if (applying) return
@@ -182,7 +190,8 @@ export function start () {
   function reset () {
     seedRandom(SEED)
     live = params()
-    sim = createSimulation({ width: W, height: H, params: live })
+    sim = backend() === 'gpu' && device ? createGpuSimulation({ device, width: W, height: H, params: live }) : createSimulation({ width: W, height: H, params: live })
+    window.pinchLab = { sim, live } // for poking from the console
     time = 0
     captured = 0
     capturing = true
@@ -205,6 +214,7 @@ export function start () {
     // Step by real time (a 120 Hz display otherwise runs the lab at double speed), a quarter of it
     // in slow motion, in whole frames.
     const nowReal = performance.now()
+    frameMs += ((nowReal - lastReal) - frameMs) * 0.05 // eased, so it can be read
     owed += Math.min(0.1, (nowReal - lastReal) / 1000) * (slow() ? 0.25 : 1)
     lastReal = nowReal
     let steps = 0
@@ -239,7 +249,7 @@ export function start () {
       for (let i = 0; i < sim.count; i++) sum += sim.state.p[i]
       measured = density() + sum / sim.count / live.stiffness
     }
-    clock.textContent = `${time.toFixed(1)} s · density ${measured.toFixed(1)} of ${density()}`
+    clock.textContent = `${time.toFixed(1)} s · density ${measured.toFixed(1)} of ${density()} · ${frameMs.toFixed(1)} ms/frame`
     requestAnimationFrame(frame)
   }
 
@@ -323,6 +333,7 @@ export function start () {
         ['Frames', 'how many frames the strip takes before it stops.']
       ]),
       row('View', segmented('view', view, ['silhouette', 'lamp', 'heat'])),
+      row('Backend', device ? segmented('backend', backend, ['cpu', 'gpu']) : span({ class: 'readout' }, 'cpu (no WebGPU here)')),
       row('Slow motion', toggle('slow', slow)),
       hint(help, 'Slow motion runs the lab at a quarter speed. View: silhouette is black lava on the video\'s orange for shape, lamp is the lamp\'s own colours and lighting, heat is the heat map (blue sinking, red rising).')),
     div({ class: 'actions' },

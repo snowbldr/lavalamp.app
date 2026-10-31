@@ -276,7 +276,8 @@ export function createGlRenderer (canvas, look) {
     // holes all over and weird wrong color edges"). Discs and the blur shrink with the square root
     // of the view's scale instead, so they stay fat relative to the spacing.
     const discScale = Math.sqrt(view.k) * scale
-    gl.uniform1f(pLoc.uSize, look.particleSize * discScale)
+    const disc = Math.max(look.particleSize, look.minDisc || 0) // never under the spacing, see app.js minDisc
+    gl.uniform1f(pLoc.uSize, disc * discScale)
     gl.drawArrays(gl.TRIANGLES, 0, count * 6)
     gl.disableVertexAttribArray(pLoc.aColor)
     gl.disableVertexAttribArray(pLoc.aCorner)
@@ -314,7 +315,7 @@ export function createGlRenderer (canvas, look) {
     gl.uniform2f(cLoc.uTexel, 1 / width, 1 / height)
     gl.uniform1f(cLoc.uThreshold, (ALPHA_THRESHOLD + 0.5) / 255)
     // About one bitmap pixel of alpha slope at a lone disc's edge, wider when the field is blurred.
-    const sizePx = Math.max(1, look.particleSize * discScale)
+    const sizePx = Math.max(1, disc * discScale)
     gl.uniform1f(cLoc.uSoft, Math.min(0.12, Math.max(0.004, 0.7 / sizePx)))
     gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
     const hl = look.highlightColor
