@@ -31,6 +31,11 @@ import {
   wall,
   elementHeat,
   elementLife,
+  elementRate,
+  elementLifeScale,
+  elementCore,
+  floorHeat,
+  floorGlow,
   defaultGravityStrength,
   defaultMaxTemp,
   defaultParticleCount,
@@ -125,6 +130,11 @@ export async function start () {
   mirror(wall, params, 'wallPush')
   mirror(elementHeat, params, 'elementHeat')
   mirror(elementLife, params, 'elementLife')
+  mirror(elementRate, params, 'elementRate')
+  mirror(elementLifeScale, params, 'elementLifeScale')
+  mirror(elementCore, params, 'elementCore')
+  mirror(floorHeat, params, 'floorHeat')
+  mirror(floorGlow, params, 'floorGlow')
   // The floor area a settled particle takes up, for the spawn slab: about 14 px² at radius 20 (measured,
   // scaling with the radius squared; the old liquid's 400 px² at radius 60.
   mirror(interactionRadius, params, 'spawnArea', r => 14 * (r / 20) * (r / 20))

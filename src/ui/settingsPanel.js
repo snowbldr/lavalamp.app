@@ -18,8 +18,18 @@ import {
   defaultWall,
   defaultElementHeat,
   defaultElementLife,
+  defaultElementRate,
+  defaultElementLifeScale,
+  defaultElementCore,
+  defaultFloorHeat,
+  defaultFloorGlow,
   elementHeat,
   elementLife,
+  elementRate,
+  elementLifeScale,
+  elementCore,
+  floorHeat,
+  floorGlow,
   settle,
   viscosity,
   wobbleKick,
@@ -205,9 +215,18 @@ export function createSettingsPanel () {
         knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax, v => `${v} g`),
         knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01 }, () => defaultReach, v => `${Number(v).toFixed(2)} r`),
         knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
-        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`),
+        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
+      ),
+      // The heater (Robert: "the heaters get too hot for too long. We need some knobs to tweak
+      // the heater pulses and heat and such").
+      knobs(
         knob('Element', 'element-heat', elementHeat, { min: 1, max: 80, step: 1 }, () => defaultElementHeat),
-        knob('Burn', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife, seconds)
+        knob('Burn', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife, seconds),
+        knob('Big Burn', 'element-life-scale', elementLifeScale, { min: 1, max: 8, step: 0.5 }, () => defaultElementLifeScale, times),
+        knob('Pulses', 'element-rate', elementRate, { min: 0.5, max: 12, step: 0.5 }, () => defaultElementRate, fixed(1)),
+        knob('Core', 'element-core', elementCore, { min: 0.02, max: 0.3, step: 0.01 }, () => defaultElementCore, fixed(2)),
+        knob('Floor', 'floor-heat', floorHeat, { min: 0, max: 1, step: 0.05 }, () => defaultFloorHeat, fixed(2)),
+        knob('Glow', 'floor-glow', floorGlow, { min: 0, max: 6, step: 0.1 }, () => defaultFloorGlow, fixed(1))
       ),
       hint(help, [
         ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
@@ -231,7 +250,12 @@ export function createSettingsPanel () {
         ['Skin', 'Which particles take the Kick: those below this fraction of the mean density. 300 is all of them.'],
         ['Wall', 'Lava this close to a side wall is eased away from it, in px; a glass the wax does not wet.'],
         ['Element', 'How hard a lit heating element heats the lava over it, per step at its core. The lab\'s finger is 48.'],
-        ['Burn', 'How long a lighting burns, at most; a wide burn is shorter. The lab\'s pulse is 3.4 s.']
+        ['Burn', 'How long a lighting burns, at most, for the smallest pot; a wide burn is shorter. The lab\'s pulse is 3.4 s.'],
+        ['Big Burn', 'How much longer the biggest pot burns than the smallest, at most; 1 makes every pot burn the same.'],
+        ['Pulses', 'How many pots light per Heat interval, between them; small pots near the middle light most.'],
+        ['Core', 'How wide a lit pot\'s hot core is at its narrowest, as a fraction of the shorter side; each lighting draws between this and the whole pot.'],
+        ['Floor', 'The floor\'s contact heat when nothing is lit, as a share of full power.'],
+        ['Glow', 'How much brighter the floor gets under a pot at full glow.']
       ])
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),

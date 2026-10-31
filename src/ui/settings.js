@@ -77,7 +77,8 @@ export const defaultStir = 20
 // and default. This is the mechanism we were missing for maximum lava gloopiness").
 // 0.55 in the new liquid (was 0.02): a lump warms as one almost at once.
 export const defaultConduction = 0.55
-export const defaultPace = 1
+// Robert, with the lamp beside the video: "default pace needs ot be ~0.45 or so".
+export const defaultPace = 0.45
 export const defaultTurbulence = 45
 export const defaultDrifters = 2
 export const defaultHeatSpots = 15
@@ -159,6 +160,21 @@ export const skin = fnstate(defaultSkin)
 export const wall = fnstate(defaultWall)
 export const elementHeat = fnstate(defaultElementHeat)
 export const elementLife = fnstate(defaultElementLife)
+// The rest of the heater's numbers (Robert: "the heaters get too hot for too long. We need some
+// knobs to tweak the heater pulses and heat and such"): lightings per Heat interval, how much
+// longer the biggest pot burns than the smallest, a lit pot's core width as a fraction of the
+// shorter side, the floor's idle contact heat and its boost under a lit pot. The defaults are
+// what the constants in simulation.js were.
+export const defaultElementRate = 4
+export const defaultElementLifeScale = 4
+export const defaultElementCore = 0.1
+export const defaultFloorHeat = 0.2
+export const defaultFloorGlow = 2
+export const elementRate = fnstate(defaultElementRate)
+export const elementLifeScale = fnstate(defaultElementLifeScale)
+export const elementCore = fnstate(defaultElementCore)
+export const floorHeat = fnstate(defaultFloorHeat)
+export const floorGlow = fnstate(defaultFloorGlow)
 // The random seed: every random number in the lamp comes from it, so the same seed on the same
 // window gives the same lamp. Drawn fresh on each load unless saved, shared or given as ?seed=.
 // Shown in the panel so a lamp worth keeping can be saved. Changing it reloads the page, since
@@ -179,9 +195,9 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, settle, viscosity, reach, skin, wall, elementHeat, elementLife, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'wall'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'wall', 'floorHeat', 'floorGlow'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -220,6 +236,11 @@ const defaults = () => ({
   wall: defaultWall,
   elementHeat: defaultElementHeat,
   elementLife: defaultElementLife,
+  elementRate: defaultElementRate,
+  elementLifeScale: defaultElementLifeScale,
+  elementCore: defaultElementCore,
+  floorHeat: defaultFloorHeat,
+  floorGlow: defaultFloorGlow,
   seed: randomSeed()
 })
 

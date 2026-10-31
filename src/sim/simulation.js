@@ -88,7 +88,8 @@ const ELEMENT_ASPECT = 3
 const ELEMENT_SIZE_SKEW = 1.6
 const ELEMENT_RATE = 4 // was 3 with the cups; the bottles hold twice the cold mass
 const SPOT_SPREAD = 0.2
-const SPOT_BASE = 0.2
+const SPOT_BASE = 0.2 // the floor's contact heat with nothing lit, of normal power (params.floorHeat)
+const SPOT_GLOW = 2 // how much brighter the floor is under a lit element at full glow (params.floorGlow)
 const SPOT_CAP = 3
 // Cups in the ceiling. Robert, on a glob that spread flat under the ceiling, cooled as a sheet
 // and fell as a strip: "put like a zig zag, or cups at the top for the lava to sit in so that
@@ -193,8 +194,14 @@ const ELEMENTS_ARE_CUPS = true
 // each lighting draws its core width between ELEMENT_CORE and the whole cup, leaning narrow
 // (a uniform draw squared), and trades life for width, so a wide burn is short and a narrow
 // one runs long.
-const ELEMENT_CORE = 0.1
-const ELEMENT_LIFE_SCALE = 4
+const ELEMENT_CORE = 0.1 // params.elementCore
+const ELEMENT_LIFE_SCALE = 4 // params.elementLifeScale
+// Robert, with the lamp beside the video of a real one: "the heaters get too hot for too long.
+// We need some knobs to tweak the heater pulses and heat and such." So the heater's numbers are
+// params as well as constants: elementRate (lightings per Heat interval), elementLifeScale (how
+// much longer the biggest pot burns than the smallest), elementCore (a lit pot's core width),
+// floorHeat (the floor's idle contact heat) and floorGlow (the floor's boost under a lit pot),
+// beside the Element heat and Burn life that already were.
 // Whether lava hidden in the floor bottles gets the floor's contact heating as well (heated, the pool hovered).
 const HEAT_IN_CUPS = false
 // Touch. A finger (or the mouse) acts in a soft circle TOUCH_RADIUS of the lamp's shorter side
@@ -234,7 +241,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third), worldOnly (no lava: the world alone, for the GPU lamp's shell)
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third), elementRate, elementLifeScale, elementCore, floorHeat, floorGlow (see SPOT_BASE and ELEMENT_CORE), worldOnly (no lava: the world alone, for the GPU lamp's shell)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -619,7 +626,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1] } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1], elementRate = ELEMENT_RATE, elementLifeScale = ELEMENT_LIFE_SCALE, elementCore = ELEMENT_CORE, floorHeat = SPOT_BASE, floorGlow = SPOT_GLOW } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
@@ -667,19 +674,22 @@ export function createSimulation ({ width, height, params }) {
         // every clock starting full the first lighting was the shortest of a dozen long waits
         // ("still taking forever before the first heater fires").
         if (el.next === 0) {
-          const wait = heatSpots / ELEMENT_RATE * weight / el.weight
+          const wait = heatSpots / elementRate * weight / el.weight
           el.next = heaterTime + wait * (el.fresh ? randomRange(0, 1) : randomRange(0.5, 1.5))
           el.fresh = false
         }
         if (heaterTime >= el.next) {
           el.heat = randomRange(elementHeatTop * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeatTop)
           el.start = heaterTime
-          let lifeScale = el.lifeScale || 1
+          let lifeScale = 1
           if (ELEMENTS_ARE_CUPS) {
+            // A bigger cup burns longer, by its area over the smallest cup's, up to elementLifeScale.
+            lifeScale = Math.min(elementLifeScale, el.areaRatio)
             // This lighting's core: narrow to the whole cup, leaning narrow; wider burns shorter.
+            const coreMin = Math.min(el.cupHalf, elementCore * shorter / width)
             const u = random()
-            el.coreFraction = el.coreMin + (el.cupHalf - el.coreMin) * u * u
-            lifeScale = Math.max(1, lifeScale * el.coreMin / el.coreFraction)
+            el.coreFraction = coreMin + (el.cupHalf - coreMin) * u * u
+            lifeScale = Math.max(1, lifeScale * coreMin / el.coreFraction)
           }
           el.life = randomRange(elementLifeTop * ELEMENT_LIFE[0] / ELEMENT_LIFE[1], elementLifeTop) * lifeScale
           el.next = 0
@@ -704,11 +714,11 @@ export function createSimulation ({ width, height, params }) {
       if (!heater) return 0 // the pinch lab heats with a finger only
       if (progress >= 1) {
         if (heatSpots <= 0) return 1
-        let power = SPOT_BASE
+        let power = floorHeat
         for (const el of elements) {
           if (el.glow <= 0) continue
           const d = (x - el.x) / el.halfWidth
-          power += 2 * el.glow * Math.exp(-d * d)
+          power += floorGlow * el.glow * Math.exp(-d * d)
         }
         return power > SPOT_CAP ? SPOT_CAP : power
       }
@@ -917,8 +927,9 @@ export function createSimulation ({ width, height, params }) {
         const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / Math.max(ELEMENT_RADIUS[0], fr)
         const cupWidth = cup.fw * width
         const core = Math.min(cupWidth / 2, ELEMENT_CORE * shorter)
-        const lifeScale = Math.min(ELEMENT_LIFE_SCALE, (cupWidth * cupWidth) / (smallest * smallest))
-        elements.push({ fx, fr, weight, cupHalf: cup.fw / 2, coreMin: core / width, coreFraction: core / width, lifeScale, heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
+        // The core width and the life scale are drawn at each lighting from the params; the
+        // cup's area over the smallest cup's is what the life scale is capped against.
+        elements.push({ fx, fr, weight, cupHalf: cup.fw / 2, coreFraction: core / width, areaRatio: (cupWidth * cupWidth) / (smallest * smallest), heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
       }
       return
     }
