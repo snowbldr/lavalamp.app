@@ -111,6 +111,8 @@ void main () {
 
 export function createGlRenderer (canvas, look) {
   const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false })
+  // Half float render targets need both of these on WebGL 1; without them the field is 8 bit.
+  const halfFloat = gl && gl.getExtension('OES_texture_half_float') && gl.getExtension('EXT_color_buffer_half_float') ? gl.getExtension('OES_texture_half_float') : null
   if (!gl) return null
 
   const compile = (type, source) => {
@@ -195,11 +197,23 @@ export function createGlRenderer (canvas, look) {
     overlay.height = height
     overlay.style.width = canvas.style.width
     overlay.style.height = canvas.style.height
+    // The field is accumulated in half floats where the browser can render to them. In 8 bits
+    // the premultiplied colour at a blurred edge has only a few levels left once it is divided by
+    // its small alpha, and the heat view showed it as a jagged band of the wrong colour along
+    // every edge (Robert: "what are these messed up heated areas? ... it's wrong").
     for (const target of [accumTarget, scratchTarget]) {
       gl.bindTexture(gl.TEXTURE_2D, target.texture)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer)
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target.texture, 0)
+      let ok = false
+      if (halfFloat) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, halfFloat.HALF_FLOAT_OES, null)
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target.texture, 0)
+        ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE
+      }
+      if (!ok) {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target.texture, 0)
+      }
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }

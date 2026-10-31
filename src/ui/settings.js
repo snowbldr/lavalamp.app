@@ -25,9 +25,14 @@ import { seedRandom } from '../sim/random.js'
 // same motion, at a bigger grain. A phone window is the lab's size and gets the lab's liquid as is.
 // Max heat and gravity scale with the height, as the lab's 6200 and 500 at 900 px.
 export const LAB_AREA_PER_PARTICLE = 360 * 900 / 3050
-export const MAX_PARTICLES = 6000
-const liquidScale = (width, height) => Math.sqrt(Math.max(1, width * height / LAB_AREA_PER_PARTICLE / MAX_PARTICLES))
-export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / LAB_AREA_PER_PARTICLE), MAX_PARTICLES)
+export const CPU_PARTICLES = 6000
+// On the GPU backend the budget is ten times the CPU's: 60000 particles is about 12 ms a step
+// on Robert's Apple GPU, and a desktop window wants 30000 at the lab's own grain.
+export const GPU_PARTICLES = 60000
+let budget = CPU_PARTICLES
+export const setParticleBudget = n => { budget = n }
+const liquidScale = (width, height) => Math.sqrt(Math.max(1, width * height / LAB_AREA_PER_PARTICLE / budget))
+export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / LAB_AREA_PER_PARTICLE), budget)
 export const computeDefaultInteractionRadius = (width, height) => Math.round(20 * liquidScale(width, height))
 export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height))
 export const computeDefaultSmooth = (width, height) => Math.round(3 * liquidScale(width, height))

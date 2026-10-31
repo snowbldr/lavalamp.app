@@ -110,7 +110,7 @@ export async function start () {
       particleCount: count(), interactionRadius: radius(), stiffness: stiffness() * Math.max(1, Math.round(substeps())), stiffnessNear: near() * Math.max(1, Math.round(substeps())), restDensity: density(),
       maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
       wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: Math.max(1, Math.round(settle())), viscosity: viscosity(), reach: reach(), wallPush: wall(), kickBelow: skin(),
-      spawnArea: 7 * (radius() / 20) * (radius() / 20) // the slab's floor area per particle, as the lamp sets it; without it the lab spawned a 3400 px column that collapsed into the pool during Warm
+      spawnArea: 14 * (radius() / 20) * (radius() / 20) // the slab's floor area per particle, as the lamp sets it: the liquid settles at about 14 px² at radius 20 (7 laid the pool at twice its rest density and it burst to the ceiling in the first second on both backends)
     }
   }
 

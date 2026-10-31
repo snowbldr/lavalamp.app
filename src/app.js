@@ -1,5 +1,6 @@
 import { a, canvas, div, sub } from '@srfnstack/fntags'
 import { createSimulation } from './sim/simulation.js'
+import { createGpuLamp, getGpuDevice } from './sim/gpuSimulation.js'
 import { createRenderer } from './render/renderer.js'
 import { createMotionInput } from './input/motion.js'
 import { createPointerInput } from './input/pointer.js'
@@ -18,6 +19,8 @@ import {
   computeDefaultInteractionRadius,
   computeDefaultParticleSize,
   computeDefaultSmooth,
+  setParticleBudget,
+  GPU_PARTICLES,
   defaultInteractionRadius,
   defaultParticleSize,
   defaultSmooth,
@@ -88,8 +91,12 @@ const followWindow = (defaultState, state, value) => {
   if (wasDefault) state(value)
 }
 
-export function start () {
+export async function start () {
   loadSavedSettings()
+  // The GPU backend when the browser has WebGPU and the URL does not say ?cpu; it carries ten
+  // times the particles, so the window-following defaults move with it before anything is sized.
+  const device = new URLSearchParams(window.location.search).has('cpu') ? null : await getGpuDevice().catch(() => null)
+  if (device) setParticleBudget(GPU_PARTICLES)
 
   const params = {}
   mirror(particleCount, params, 'particleCount', Math.trunc)
@@ -114,9 +121,9 @@ export function start () {
   mirror(reach, params, 'reach')
   mirror(skin, params, 'kickBelow')
   mirror(wall, params, 'wallPush')
-  // The floor area a settled particle takes up, for the spawn slab: 7 px² at radius 20 in the lab,
+  // The floor area a settled particle takes up, for the spawn slab: about 14 px² at radius 20 (measured,
   // scaling with the radius squared; the old liquid's 400 px² at radius 60.
-  mirror(interactionRadius, params, 'spawnArea', r => 7 * (r / 20) * (r / 20))
+  mirror(interactionRadius, params, 'spawnArea', r => 14 * (r / 20) * (r / 20))
   // Finger heat per step, the lab's 48 (the lamp's old 12 was for Max heat 2000).
   params.touchHeat = 48
 
@@ -140,7 +147,7 @@ export function start () {
   // little), or the metaball field has holes between particles and the lava turns to sand
   // (Robert, with Size 3 carried from the lab into a radius 32 lamp: "all kinds of weird heating
   // defects").
-  mirror(interactionRadius, look, 'minDisc', r => 1.2 * Math.sqrt(7 * (r / 20) * (r / 20)))
+  mirror(interactionRadius, look, 'minDisc', r => 1.2 * Math.sqrt(14 * (r / 20) * (r / 20)))
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
   let edge = 'bottom' // the page edge the lamp's floor sits on
@@ -148,7 +155,7 @@ export function start () {
   let [pageWidth, pageHeight] = pageSize()
   let [width, height] = lampSizeFor(turns, pageWidth, pageHeight)
   const lamp = canvas({ id: 'lavalamp', style: { transition: 'transform 0.4s' } })
-  const sim = createSimulation({ width, height, params })
+  const sim = device ? createGpuLamp({ device, width, height, params }) : createSimulation({ width, height, params })
   const renderer = createRenderer(lamp, look)
   const motion = createMotionInput()
   const toLamp = (px, py) => pageToLamp(turns, pageWidth, pageHeight, width, height, px, py)

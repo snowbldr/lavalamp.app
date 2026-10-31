@@ -27,11 +27,13 @@
 //   conduct    temperature eased toward the neighbours' mean
 // density and relax repeat for each extra Settle pass.
 
+import { createSimulation } from './simulation.js'
+
 const WORKGROUP = 64
 const MAX_TOUCHES = 4
 const FIXED = 64 // the mean density is summed in fixed point: integer atomics are all WGSL has
 
-const SHADER = /* wgsl */`
+export const SHADER = /* wgsl */`
 // Four storage buffers, not one per array: this device allows 8 per shader stage (the adapter
 // 10), and the bind group had 15. V holds the vec2 arrays in sections of the capacity: pos, posOut, vel,
 // velOut, px. F the f32 arrays: temp, tempOut, press, pressNear, dens. U the u32 arrays: cellOf,
@@ -70,9 +72,18 @@ struct Params {
   capacity: u32,
   cellCap: u32,
   jacobi: f32,
-  pad1: f32,
-  pad2: f32,
-  pad3: f32,
+  kickSmooth: f32,
+  worldPower: f32,
+  elementCount: u32,
+  gridCols: u32,
+  gridRows: u32,
+  gridCell: f32,
+  impulseX: f32,
+  impulseY: f32,
+  elementsAt: u32,
+  flowAt: u32,
+  pad2: u32,
+  pad3: u32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -83,6 +94,10 @@ struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
 @group(0) @binding(3) var<storage, read_write> F: array<f32>;
 @group(0) @binding(4) var<storage, read_write> U: array<u32>;
 @group(0) @binding(5) var<storage, read_write> A: array<atomic<u32>>;
+// The lamp's world, sampled on the CPU each step: the heater's power per column of the floor
+// (256 columns), the lit elements (x, radius, half width, heat times glow; 8 floats each), and
+// the stirring (the convection roll and the eddies) on a grid, two floats a point.
+@group(0) @binding(6) var<storage, read_write> WLD: array<f32>;
 
 fn POS(i: u32) -> u32 { return i; }
 fn POSOUT(i: u32) -> u32 { return P.capacity + i; }
@@ -122,8 +137,10 @@ fn cellX(x: f32) -> i32 { return clamp(i32(floor(x / P.cell)), 0, i32(P.cols) - 
 fn cellY(y: f32) -> i32 { return clamp(i32(floor(y / P.cell)), 0, i32(P.rows) - 1); }
 fn cellIndex(p: vec2f) -> u32 { return u32(cellX(p.x)) + u32(cellY(p.y)) * P.cols; }
 
-// The floor heater's power under x: a front from the middle while warming up, then full.
+// The floor heater's power under x: the lamp's, by column, when a world is sampled; else the
+// lab's, a front from the middle while warming up, then full.
 fn heaterPower(x: f32) -> f32 {
+  if (P.worldPower > 0.5) { return WLD[u32(clamp(x / P.width * 256.0, 0.0, 255.0))]; }
   if (P.heater < 0.5) { return 0.0; }
   if (P.progress >= 1.0) { return 1.0; }
   let half = P.width * 0.5;
@@ -148,6 +165,31 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     t += inc;
     if (abs(fromFloor) < P.size) { t += inc * inc; }
   }
+  // The lit elements' heat in depth: a Gaussian over each element's radius, as simulation.js.
+  for (var e = 0u; e < P.elementCount; e++) {
+    let o = P.elementsAt + e * 8u;
+    let ex = WLD[o]; let er = WLD[o + 1u]; let eh = WLD[o + 2u]; let heat = WLD[o + 3u];
+    if (heat <= 0.0 || er <= 0.0 || eh <= 0.0) { continue; }
+    let dx = (p.x - ex) * er / eh;
+    let d2 = (dx * dx + fromFloor * fromFloor) / (er * er);
+    if (d2 < 4.0) { t = min(P.maxTemp, t + heat * exp(-d2)); }
+  }
+  // The stirring at this point, from the grid, bilinear.
+  var stir = vec2f(P.impulseX, P.impulseY);
+  if (P.gridCols > 1u && P.gridRows > 1u) {
+    let gx = clamp(p.x / P.gridCell, 0.0, f32(P.gridCols - 1u) - 0.001);
+    let gy = clamp(p.y / P.gridCell, 0.0, f32(P.gridRows - 1u) - 0.001);
+    let x0 = u32(floor(gx)); let y0 = u32(floor(gy));
+    let fx = gx - f32(x0); let fy = gy - f32(y0);
+    let at = P.flowAt;
+    let i00 = at + (x0 + y0 * P.gridCols) * 2u;
+    let i10 = i00 + 2u;
+    let i01 = i00 + P.gridCols * 2u;
+    let i11 = i01 + 2u;
+    let v00 = vec2f(WLD[i00], WLD[i00 + 1u]); let v10 = vec2f(WLD[i10], WLD[i10 + 1u]);
+    let v01 = vec2f(WLD[i01], WLD[i01 + 1u]); let v11 = vec2f(WLD[i11], WLD[i11 + 1u]);
+    stir += mix(mix(v00, v10, fx), mix(v01, v11, fx), fy);
+  }
   // Fingers: heat, cool, push, pull, spin.
   var finger = vec2f(0.0, 0.0);
   for (var k = 0u; k < P.touches; k++) {
@@ -165,7 +207,7 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
   }
   t = clamp(t, 0.0, P.maxTemp);
   F[TEMP(i)] = t;
-  let drift = vec2f(finger.x, P.gravity - t + finger.y);
+  let drift = vec2f(finger.x + stir.x, P.gravity - t + finger.y + stir.y);
   var v = V[VEL(i)];
   if (P.wobble > 0.0) { v += (drift - v) * min(1.0, P.dt / P.wobble); } else { v = drift; }
   V[VEL(i)] = v;
@@ -271,13 +313,18 @@ fn relax(@builtin(global_invocation_id) id: vec3u) {
       }
     }
   }
-  let cap = P.reach * P.radius;
-  let shift = length(own);
-  if (shift > cap) { own *= cap / shift; }
   // Every particle moves at once from the same snapshot, so two neighbours closing on each other
   // both take the whole step and cross; the sequential solver never does that. The move is scaled
-  // by the Jacobi factor (under relaxation) and Settle passes make up the convergence.
-  V[POSOUT(i)] = p + (pushed - own) * P.jacobi;
+  // by the Jacobi factor (under relaxation) and Settle passes make up the convergence. Reach caps
+  // the whole move, the pushes received included: a particle's own move was capped and the pushes
+  // were not, and where the heat finger packed lava past its density the near pressure spiked, a
+  // hundred neighbours each pushed from the same snapshot, and the pool erupted into a spray
+  // (Robert: "on the gpu, in pinch, with current settings, it sometimes randomly explodes").
+  var delta = (pushed - own) * P.jacobi; // WGSL reserves the word move
+  let cap = P.reach * P.radius * P.jacobi;
+  let shift = length(delta);
+  if (shift > cap) { delta *= cap / shift; }
+  V[POSOUT(i)] = p + delta;
 }
 
 @compute @workgroup_size(${WORKGROUP})
@@ -301,7 +348,36 @@ fn kick(@builtin(global_invocation_id) id: vec3u) {
   // one snapshot: the kick is scaled by the Jacobi factor (GPU Kick 3 measured as the CPU's Kick 6:
   // lamp area 17% against 16%, fastest particle 189 against 208 px/s, mean 62 against 77).
   if (P.wobble > 0.0 && skin && !onWall) {
-    v += (p - V[PX(i)]) / P.dt * P.kick * P.jacobi;
+    var delta = p - V[PX(i)];
+    if (P.kickSmooth > 0.5) {
+      // The move averaged over the neighbourhood. Every particle moving at once leaves a
+      // checkerboard of small opposite moves between neighbours that the sequential solver never
+      // has; those cancel in the average, and the real motion, a neck's recoil, a blob's skin
+      // pulled in, is the same across a neighbourhood and survives. Kicking the raw move launched
+      // the whole pool to the ceiling in the first second (1668 px/s at the lab's 3050, with the
+      // heater off; the CPU 129).
+      var sum = delta;
+      var weight = 1.0;
+      let cx = cellX(p.x);
+      let cy = cellY(p.y);
+      for (var yy = max(cy - 1, 0); yy <= min(cy + 1, i32(P.rows) - 1); yy++) {
+        for (var xx = max(cx - 1, 0); xx <= min(cx + 1, i32(P.cols) - 1); xx++) {
+          let c = u32(xx) + u32(yy) * P.cols;
+          let end = U[CELLSTART(c + 1u)];
+          for (var k = U[CELLSTART(c)]; k < end; k++) {
+            let j = U[SORTED(k)];
+            if (j == i) { continue; }
+            let r = length(V[POS(j)] - p);
+            if (r >= P.radius) { continue; }
+            let g = 1.0 - r / P.radius;
+            sum += g * (V[POS(j)] - V[PX(j)]);
+            weight += g;
+          }
+        }
+      }
+      delta = sum / weight;
+    }
+    v += delta / P.dt * P.kick * P.jacobi;
     let speed = length(v);
     let limit = P.cap * P.gravity;
     if (speed > limit) { v *= limit / speed; }
@@ -403,7 +479,14 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 36 // the Params struct, 144 bytes
+const PARAM_FLOATS = 48 // the Params struct, 45 fields, padded to 192 bytes
+const POWER_COLUMNS = 256
+const MAX_ELEMENTS = 32
+const ELEMENTS_AT = POWER_COLUMNS
+const FLOW_AT = POWER_COLUMNS + MAX_ELEMENTS * 8
+const FLOW_CELL = 24 // px between stirring samples
+const MAX_FLOW_POINTS = 16384
+const WORLD_FLOATS = FLOW_AT + MAX_FLOW_POINTS * 2
 
 export function isWebGpuAvailable () {
   return typeof navigator !== 'undefined' && !!navigator.gpu
@@ -423,13 +506,17 @@ export function getGpuDevice () {
   return devicePromise
 }
 
-export function createGpuSimulation ({ device, width, height, params, random = Math.random }) {
+export function createGpuSimulation ({ device, width: width0, height: height0, params, random = Math.random }) {
+  let width = width0
+  let height = height0
   const capacity = Math.max(64, Math.ceil(params.particleCount / WORKGROUP) * WORKGROUP)
   let alive = 0
   let time = 0
   let heaterTime = 0
   let frame = 0
   let touches = []
+  let world = null // set by createGpuLamp: { elementCount, gridCols, gridRows, gridCell }
+  const impulse = [0, 0]
   const state = {
     x: new Float32Array(capacity),
     y: new Float32Array(capacity),
@@ -451,7 +538,8 @@ export function createGpuSimulation ({ device, width, height, params, random = M
       { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }
     ]
   })
   const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [layout] })
@@ -471,7 +559,8 @@ export function createGpuSimulation ({ device, width, height, params, random = M
     V: storage(5 * vec2Bytes), // pos, posOut, vel, velOut, px
     F: storage(5 * f32Bytes), // temp, tempOut, press, pressNear, dens
     U: null, // cellOf, sorted, cellStart (sized with the grid)
-    A: null // cellCount, mean accumulator
+    A: null, // cellCount, mean accumulator
+    WLD: storage(WORLD_FLOATS * 4) // the lamp's world, see createGpuLamp
   }
   const sizeGrid = () => { buffers.U = storage((2 * capacity + cellCap) * 4); buffers.A = storage((cellCap + 1) * 4) }
   sizeGrid()
@@ -481,7 +570,7 @@ export function createGpuSimulation ({ device, width, height, params, random = M
   const readVel = device.createBuffer({ size: vec2Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST })
   let bindGroup = makeBindGroup()
   function makeBindGroup () {
-    const order = ['params', 'touches', 'V', 'F', 'U', 'A']
+    const order = ['params', 'touches', 'V', 'F', 'U', 'A', 'WLD']
     return device.createBindGroup({ layout, entries: order.map((name, binding) => ({ binding, resource: { buffer: buffers[name] } })) })
   }
   function fitGrid () {
@@ -544,7 +633,17 @@ export function createGpuSimulation ({ device, width, height, params, random = M
     pu[29] = Math.min(MAX_TOUCHES, touches.length)
     pu[30] = capacity
     pu[31] = cellCap
-    pf[32] = params.jacobi ?? 0.5
+    pf[32] = params.jacobi ?? 0.5 // the relaxation move scale per pass; see settle in step
+    pf[33] = params.kickSmooth ?? 1
+    pf[34] = world ? 1 : 0
+    pu[35] = world ? world.elementCount : 0
+    pu[36] = world ? world.gridCols : 0
+    pu[37] = world ? world.gridRows : 0
+    pf[38] = world ? world.gridCell : 1
+    pf[39] = impulse[0]; pf[40] = impulse[1]
+    pu[41] = ELEMENTS_AT
+    pu[42] = FLOW_AT
+    impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
       const t = touches[k]
@@ -557,6 +656,7 @@ export function createGpuSimulation ({ device, width, height, params, random = M
 
   let reading = false
   let warned = false
+  let reads = 0 // readbacks landed, for debugging
   async function readBack () {
     if (reading) return
     reading = true
@@ -571,6 +671,7 @@ export function createGpuSimulation ({ device, width, height, params, random = M
       state.temp.set(t.subarray(0, n))
       state.p.set(pr.subarray(0, n))
       readPos.unmap(); readTemp.unmap(); readPress.unmap(); readVel.unmap()
+      reads++
     } catch (err) {
       if (!warned) { warned = true; console.warn('gpu readback', err) }
     }
@@ -632,6 +733,14 @@ export function createGpuSimulation ({ device, width, height, params, random = M
     state,
     get count () { return alive },
     setTouches (list) { touches = list || [] },
+    push (fx, fy) { impulse[0] += fx; impulse[1] += fy },
+    // The world's samples for the next step: power columns, elements, flow grid (Float32Array).
+    setWorld (floats, info) { world = info; device.queue.writeBuffer(buffers.WLD, 0, floats) },
+    resize (w, h) { width = w; height = h; cols = Math.ceil(width / cell) + 1; rows = Math.ceil(height / cell) + 1; const needed = cols * rows + 1; if (needed > cellCap) { cellCap = needed; buffers.U.destroy(); buffers.A.destroy(); sizeGrid(); bindGroup = makeBindGroup() } },
+    // Move every particle by fn(x, y) (the lamp turning with the phone), from the last readback.
+    transform (fn) { const xs = new Float32Array(2 * capacity); for (let i = 0; i < alive; i++) { const [nx, ny] = fn(state.x[i], state.y[i]); state.x[i] = nx; state.y[i] = ny; xs[2 * i] = nx; xs[2 * i + 1] = ny } device.queue.writeBuffer(buffers.V, 0, xs); device.queue.writeBuffer(buffers.V, 4 * vec2Bytes, xs) },
+    get width () { return width },
+    get height () { return height },
     // Finished with the GPU work queued so far (for timing).
     settled () { return device.queue.onSubmittedWorkDone() },
     // Read a buffer straight back, for poking from the console.
@@ -646,6 +755,68 @@ export function createGpuSimulation ({ device, width, height, params, random = M
       staging.unmap(); staging.destroy()
       return out
     },
+    debug () { return { reading, warned, reads, alive, capacity } },
+    gpu: true
+  }
+}
+
+// The lamp on the GPU: the particles in createGpuSimulation, the world (the heater's front and
+// its elements and heat spots, the convection roll, the eddies) in a simulation.js with no
+// particles, stepped alongside and sampled onto the GPU each frame: the heater's power per
+// column of the floor, the lit elements, and the stirring on a grid FLOW_CELL px apart. Bottles
+// and pots are not on the GPU yet, so the world runs with a flat floor and ceiling.
+export function createGpuLamp ({ device, width, height, params }) {
+  const shellParams = new Proxy(params, { get (t, k) { if (k === 'particleCount') return 0; if (k === 'cupDepth') return 0; return t[k] } })
+  const shell = createSimulation({ width, height, params: shellParams })
+  const gpu = createGpuSimulation({ device, width, height, params })
+  const floats = new Float32Array(WORLD_FLOATS)
+  function sample () {
+    const w = gpu.width
+    const h = gpu.height
+    for (let c = 0; c < POWER_COLUMNS; c++) floats[c] = shell.heaterAt((c + 0.5) / POWER_COLUMNS * w)
+    const elements = shell.heaterElements()
+    let n = 0
+    for (const el of elements) {
+      if (n >= MAX_ELEMENTS || !(el.glow > 0) || !(el.heat > 0)) continue
+      const o = ELEMENTS_AT + n * 8
+      floats[o] = el.x; floats[o + 1] = el.radius; floats[o + 2] = el.halfWidth; floats[o + 3] = el.heat * el.glow
+      n++
+    }
+    let gridCols = Math.floor(w / FLOW_CELL) + 2
+    let gridRows = Math.floor(h / FLOW_CELL) + 2
+    let gridCell = FLOW_CELL
+    while (gridCols * gridRows > MAX_FLOW_POINTS) { gridCell *= 1.5; gridCols = Math.floor(w / gridCell) + 2; gridRows = Math.floor(h / gridCell) + 2 }
+    const stirring = (params.stir || 0) !== 0 || (params.turbulence || 0) !== 0
+    for (let gy = 0; gy < gridRows; gy++) {
+      for (let gx = 0; gx < gridCols; gx++) {
+        const o = FLOW_AT + (gx + gy * gridCols) * 2
+        if (stirring) { const [vx, vy] = shell.flowAt(gx * gridCell, gy * gridCell); floats[o] = vx; floats[o + 1] = vy } else { floats[o] = 0; floats[o + 1] = 0 }
+      }
+    }
+    gpu.setWorld(floats, { elementCount: n, gridCols, gridRows, gridCell })
+  }
+  return {
+    step (dt) {
+      shell.setTouches([]) // the fingers act on the GPU side
+      shell.step(dt)
+      sample()
+      gpu.step(dt)
+    },
+    resize (w, h) { shell.resize(w, h); gpu.resize(w, h) },
+    push: gpu.push,
+    setTouches: gpu.setTouches,
+    transform: gpu.transform,
+    flowAt: shell.flowAt,
+    heaterAt: shell.heaterAt,
+    heaterElements: shell.heaterElements,
+    ceilingAt: shell.ceilingAt,
+    floorAt: shell.floorAt,
+    bottles: shell.bottles,
+    floorBottles: shell.floorBottles,
+    get state () { return gpu.state },
+    get count () { return gpu.count },
+    get width () { return gpu.width },
+    get height () { return gpu.height },
     gpu: true
   }
 }
