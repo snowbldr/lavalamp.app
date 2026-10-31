@@ -17,18 +17,18 @@ const SEED = 1
 
 export function start () {
   // The liquid.
-  const wobble = fnstate(0.3)
-  const kick = fnstate(1)
-  const cap = fnstate(2)
-  // Robert's liquid of 2026-10-30, found at the knobs once viscosity was in ("low values for near and
-  // high density. that allows for getting very smooth stretchy globs at particle size 7").
-  const stiffness = fnstate(2130)
-  const near = fnstate(1000) // Robert had 7011, then asked for the knob to run 1 to 1000
-  const density = fnstate(7)
-  const gloop = fnstate(0.02)
+  const wobble = fnstate(0.46)
+  const kick = fnstate(1.6)
+  const cap = fnstate(3.4)
+  // Robert's liquid, pasted from Copy settings on 2026-10-30 while he tuned it: radius 8 with 1980
+  // particles drawn at size 2, so the fluid itself is fine grained now, not just the drawing.
+  const stiffness = fnstate(2434)
+  const near = fnstate(1000)
+  const density = fnstate(3.3)
+  const gloop = fnstate(0.0315)
   // Half the lamp's grain, at Robert's suggestion: "maybe we need a smaller particle size? that
   // should be fine now that we have a much faster render". Same lava, four times the particles.
-  const radius = fnstate(30)
+  const radius = fnstate(8)
   const settle = fnstate(2) // relaxation passes a frame
   const viscosity = fnstate(40) // the paper's sigma
   // Physics steps per 60 Hz frame. Finer grain needs them: at half the radius the same frame moves
@@ -36,25 +36,25 @@ export function start () {
   // times the particles one step a frame left the lava in droplets and sheets, two steps a frame
   // pinched with a neck that lived 2.4 s (the video's 2.4 s). Each step costs the whole physics again.
   const substeps = fnstate(1)
-  const size = fnstate(7)
-  const smooth = fnstate(8) // edge smoothing radius, px
+  const size = fnstate(2)
+  const smooth = fnstate(0) // edge smoothing radius, px
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
   // had too much momentum taking off from the initial heating. maybe warm the whole bottom first,
   // then gently pulse the heat until it takes off". So: the lamp's own floor heater runs for Warm
   // seconds, then a finger on the floor's middle pulses for Pulse seconds every Gap seconds at Heat,
   // and Max heat caps the temperature (rise speed is temperature minus gravity, 500).
-  const count = fnstate(640)
+  const count = fnstate(1980)
   const warm = fnstate(6) // seconds of whole-floor heating before the pulses
   const pulse = fnstate(0.6) // seconds of finger heat per pulse
   const gap = fnstate(1.5) // seconds between pulses
   const heat = fnstate(20) // finger heat per step
-  const maxHeat = fnstate(800)
+  const maxHeat = fnstate(1690)
   const interval = fnstate(0.6) // seconds between filmstrip frames
   const frames = fnstate(12)
   const from = fnstate(14) // the filmstrip starts itself at this time after a Replay
   const slow = fnstate(false)
   // Silhouette is black on orange like the video, Lamp the lamp's own colours and lighting, Heat the heat map.
-  const view = fnstate('silhouette')
+  const view = fnstate('heat')
   const help = fnstate(false)
 
   const canvas = document.createElement('canvas')
@@ -174,10 +174,10 @@ export function start () {
     button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the knobs do' }, '?'),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Liquid')),
       knobs(
-        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02 }, () => 0.3, v => `${v} s`),
-        knob('Kick', 'kick', kick, { min: 0, max: 3, step: 0.1 }, () => 1),
-        knob('Cap', 'cap', cap, { min: 0.5, max: 5, step: 0.1 }, () => 2, v => `${v} g`),
-        knob('Gloop', 'gloop', gloop, { min: 0, max: 0.04, step: 0.0005 }, () => 0.02, v => Number(v).toFixed(4))
+        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02 }, () => 0.46, v => `${v} s`),
+        knob('Kick', 'kick', kick, { min: 0, max: 3, step: 0.1 }, () => 1.6),
+        knob('Cap', 'cap', cap, { min: 0.5, max: 5, step: 0.1 }, () => 3.4, v => `${v} g`),
+        knob('Gloop', 'gloop', gloop, { min: 0, max: 0.04, step: 0.0005 }, () => 0.0315, v => Number(v).toFixed(4))
       ),
       hint(help, [
         ['Wobble', 'inertia: seconds for a particle to ease onto its drift. 0 is the overdamped wax with no snap at all.'],
@@ -186,10 +186,10 @@ export function start () {
         ['Gloop', 'heat conduction between touching particles: high is lava that warms and lifts as one piece.']
       ]),
       knobs(
-        knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1 }, () => 2130),
-        knob('Near', 'near', near, { min: 1, max: 1000, step: 1 }, () => 1000),
-        knob('Density', 'density', density, { min: 0.1, max: 15, step: 0.1 }, () => 7, v => Number(v).toFixed(1)),
-        knob('Radius', 'radius', radius, { min: 5, max: 100, step: 1 }, () => 30)
+        knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1 }, () => 2434),
+        knob('Near', 'near', near, { min: 1, max: 10000, step: 1 }, () => 1000),
+        knob('Density', 'density', density, { min: 0.1, max: 15, step: 0.1 }, () => 3.3, v => Number(v).toFixed(1)),
+        knob('Radius', 'radius', radius, { min: 2, max: 100, step: 1 }, () => 8)
       ),
       knobs(
         knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => 2),
@@ -207,7 +207,7 @@ export function start () {
       ])),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
       knobs(
-        knob('Lava', 'count', count, { min: 50, max: 6000, step: 10 }, () => 640),
+        knob('Lava', 'count', count, { min: 50, max: 6000, step: 10 }, () => 1980),
         knob('Warm', 'warm', warm, { min: 0, max: 20, step: 0.5 }, () => 6, v => `${v} s`),
         knob('Pulse', 'pulse', pulse, { min: 0.1, max: 4, step: 0.1 }, () => 0.6, v => `${v} s`),
         knob('Gap', 'gap', gap, { min: 0.1, max: 6, step: 0.1 }, () => 1.5, v => `${v} s`)
@@ -220,9 +220,9 @@ export function start () {
       ]),
       knobs(
         knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1 }, () => 20),
-        knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 2000, step: 10 }, () => 800),
-        knob('Size', 'size', size, { min: 2, max: 50, step: 1 }, () => 7),
-        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => 8)
+        knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 3000, step: 10 }, () => 1690),
+        knob('Size', 'size', size, { min: 1, max: 50, step: 1 }, () => 2),
+        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => 0)
       ),
       hint(help, [
         ['Heat', 'how hard each pulse heats: temperature added per frame under the finger. 12 is the lamp\'s touch.'],
