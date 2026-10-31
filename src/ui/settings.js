@@ -72,8 +72,10 @@ export const defaultTurbulence = 45
 export const defaultDrifters = 2
 export const defaultHeatSpots = 15
 // How deep the ceiling cups are, as a fraction of each cup's width. 0 is a flat ceiling.
-// 0 for now with the new liquid: at its spacing the reservoirs would want fifty times the lava.
-export const defaultCupDepth = 0
+// Robert: "I don't want the reservoirs off by default". At the new liquid's spacing they hold a
+// lamp's worth of lava (13500 hidden particles on a desktop window, 70 ms a step against 18
+// without), which is the GPU's job to carry.
+export const defaultCupDepth = 1
 // Inertia: seconds for a particle's velocity to ease toward its drift. 0 is the overdamped wax the
 // lamp was tuned as; above it, pinched necks snap back and freed blobs wobble.
 export const defaultWobble = 0.87

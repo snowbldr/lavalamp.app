@@ -249,6 +249,7 @@ export function start () {
   // kept on window.lavaProfile, for finding what a slow device is spending its time on.
   const profiling = new URLSearchParams(window.location.search).has('profile')
   look.profile = profiling
+  if (profiling) window.lavalamp = { sim, params, look } // for timing the running lamp from the console
   const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
   const report = () => {
     const out = {
