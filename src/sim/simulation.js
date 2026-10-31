@@ -246,9 +246,8 @@ export function createSimulation ({ width, height, params }) {
   let scratchF = new Float32Array(params.particleCount)
   let scratchI = new Int16Array(params.particleCount)
   let scratchId = new Int32Array(params.particleCount)
-  let sweep = false // which way the relaxation walks the sorted particles this step
   let visit = new Int32Array(0) // the order the relaxation visits the particles in this step
-  let cellOrder = new Int32Array(0) // a fixed shuffle of the hash's cells
+  let visitSeed = 12345 // the visiting order's own little generator, so the lamp's seeded randomness is untouched
   // The live count follows params.particleCount; particles added later appear in the slab too.
   let alive = 0
   let heaterTime = 0
@@ -538,31 +537,62 @@ export function createSimulation ({ width, height, params }) {
   // step alternates direction (sweep) to keep the sweep from pushing the lava one way. Same
   // statistics as before, different frames: a seed reproduces a lamp within a version, not
   // across this change.
-  // The order the relaxation visits the particles: cell by cell, the cells in a fixed shuffle,
-  // the particles of a cell together. Walking the sorted particles straight through was fastest
-  // (93 ms at 50000 against 125 unsorted) but is a sweep across the lamp, and even alternating
-  // its direction each step changed the liquid (max speed at Robert's settings 1664 to 1128, the
-  // pinch never parting): a sweep lets one step's pressure travel across the pool. Visiting them
-  // in a random order kept the liquid and gave back all the speed (121 ms). Cell blocks in random
-  // order keep the random statistics at any scale above a cell and the memory locality within one.
+  // The order the relaxation visits the particles: a fresh random order every step. The relaxation
+  // is sequential (each particle sees the moves of the ones before it), so any fixed order is a
+  // sweep, and a sweep pushes lava the way it walks. Walking the sorted particles straight through
+  // (93 ms at 50000) made the liquid stiffer and killed the pinch; cells in a fixed random order
+  // with each cell's particles together (103 ms) looked innocent in the gas tests but, because the
+  // counting sort leaves each cell's particles in left to right order, it swept every cell left to
+  // right and a cold pool ran as a conveyor, bottom row one way and the row above the other, up the
+  // far wall, 0.4 px a frame forever (Robert: "the new primary goal is to get static particles that
+  // aren't constantly moving with no stimulus"). Reversing the order inside the cells reversed the
+  // conveyor; a fresh shuffle every step removed it. The data stays sorted for the neighbour reads.
   function planVisit () {
-    const cells = hash.start.length - 1
-    if (cellOrder.length !== cells) cellOrder = shuffledOrder(cells)
     if (visit.length < alive) visit = new Int32Array(alive)
-    const start = hash.start
-    let s = 0
-    for (let k = 0; k < cells; k++) {
-      const c = cellOrder[k]
-      for (let i = start[c], end = start[c + 1]; i < end; i++) visit[s++] = i
+    for (let i = 0; i < alive; i++) visit[i] = i
+    for (let i = alive - 1; i > 0; i--) {
+      visitSeed = (visitSeed * 1103515245 + 12345) & 0x7fffffff
+      const j = visitSeed % (i + 1)
+      const t = visit[i]; visit[i] = visit[j]; visit[j] = t
+    }
+  }
+
+  // Sort the particle arrays into the hash's cell order, so that a particle's neighbours sit near
+  // it in memory and the neighbour loops stop jumping about: at 50000 particles that was the
+  // step, 125 ms with no single hot function left (Robert: "let's see if we can make it work at
+  // 50k"). The hash has just been built, so its indices array is the order; afterwards it is the
+  // identity. Every array indexed by particle moves: positions, velocities, temperature, the
+  // pre-relaxation positions and the bottle. Scratch arrays (pressure, weights, shared heat) are
+  // recomputed each step and need not. The relaxation then walks the particles in cell order,
+  // which is a sweep across the lamp rather than the random order they were spawned in, so the
+  // step alternates direction (sweep) to keep the sweep from pushing the lava one way. Same
+  // statistics as before, different frames: a seed reproduces a lamp within a version, not
+  // across this change.
+  // The order the relaxation visits the particles: a fresh random order every step. The relaxation
+  // is sequential (each particle sees the moves of the ones before it), so any fixed order is a
+  // sweep, and a sweep pushes lava the way it walks. Walking the sorted particles straight through
+  // (93 ms at 50000) made the liquid stiffer and killed the pinch; cells in a fixed random order
+  // with each cell's particles together (103 ms) looked innocent in the gas tests but, because the
+  // counting sort leaves each cell's particles in left to right order, it swept every cell left to
+  // right and a cold pool ran as a conveyor, bottom row one way and the row above the other, up the
+  // far wall, 0.4 px a frame forever (Robert: "the new primary goal is to get static particles that
+  // aren't constantly moving with no stimulus"). Reversing the order inside the cells reversed the
+  // conveyor; a fresh shuffle every step removed it. The data stays sorted for the neighbour reads.
+  function planVisit () {
+    if (visit.length < alive) visit = new Int32Array(alive)
+    for (let i = 0; i < alive; i++) visit[i] = i
+    for (let i = alive - 1; i > 0; i--) {
+      visitSeed = (visitSeed * 1103515245 + 12345) & 0x7fffffff
+      const j = visitSeed % (i + 1)
+      const t = visit[i]; visit[i] = visit[j]; visit[j] = t
     }
   }
 
   // A fixed shuffle of 0 to n - 1 from its own little generator, so the lamp's seeded randomness
   // is untouched.
-  function shuffledOrder (n) {
+  function shuffledOrder (n, seed = 12345) {
     const order = new Int32Array(n)
     for (let i = 0; i < n; i++) order[i] = i
-    let seed = 12345
     for (let i = n - 1; i > 0; i--) {
       seed = (seed * 1103515245 + 12345) & 0x7fffffff
       const j = seed % (i + 1)
@@ -755,7 +785,6 @@ export function createSimulation ({ width, height, params }) {
     }
     hash.build(x, y, alive)
     reorder()
-    sweep = !sweep
     planVisit()
 
     const { g, shared, home } = state
