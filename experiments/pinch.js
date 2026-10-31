@@ -21,7 +21,7 @@ export function start () {
   const kick = fnstate(1.6)
   const cap = fnstate(3.4)
   // Robert's liquid, pasted from Copy settings on 2026-10-30 ("this one is by FAR the best one yet"):
-  // 3050 particles at radius 20 drawn at size 2 with no smoothing; Stiff 7.5 against Density 360, so
+  // 3050 particles at radius 20 drawn at size 3 with Smooth 3 ("size 3, smooth 3 looks fucking amazing"); Stiff 7.5 against Density 360, so
   // the pull is a near constant cohesion; Gloop 0.7, so a lump warms as one; Skin 300, so every
   // particle carries its pressure move as velocity, the paper's own velocity; Max heat 6200.
   const stiffness = fnstate(7.5)
@@ -41,8 +41,8 @@ export function start () {
   const reach = fnstate(1) // the most a relaxation step may move a particle, in radii; the check that keeps high Density from exploding
   const wall = fnstate(0) // px from a side wall within which lava is eased away from it; the walls also take the momentum carried into them
   const skin = fnstate(300) // a particle counts as skin, and takes the kick, below this fraction of the lava's mean density; 0 is the lamp's rule, pressure below zero
-  const size = fnstate(2)
-  const smooth = fnstate(0) // edge smoothing radius, px
+  const size = fnstate(3)
+  const smooth = fnstate(3) // edge smoothing radius, px
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
   // had too much momentum taking off from the initial heating. maybe warm the whole bottom first,
   // then gently pulse the heat until it takes off". So: the lamp's own floor heater runs for Warm
@@ -302,8 +302,8 @@ export function start () {
         knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1, scales: DECADES }, () => 48),
         knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 3000, step: 10, scales: DECADES }, () => 6200),
         knob('Finger', 'finger', finger, { min: 5, max: 180, step: 1, scales: DECADES }, () => 45, v => `${v} px`),
-        knob('Size', 'size', size, { min: 1, max: 50, step: 1, scales: DECADES }, () => 2),
-        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1, scales: DECADES }, () => 0)
+        knob('Size', 'size', size, { min: 1, max: 50, step: 1, scales: DECADES }, () => 3),
+        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1, scales: DECADES }, () => 3)
       ),
       hint(help, [
         ['Heat', 'how hard each pulse heats: temperature added per frame under the finger. 12 is the lamp\'s touch.'],
