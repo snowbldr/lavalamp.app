@@ -234,7 +234,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third)
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third), worldOnly (no lava: the world alone, for the GPU lamp's shell)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -631,7 +631,9 @@ export function createSimulation ({ width, height, params }) {
     // it, a particle per SPAWN_AREA of their area, so the pool stays the same depth whatever the
     // seed lays out below it (bottle rows vary from 670 to 930 particles' worth at a full window).
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
-    const target = particleCount + reserveFill()
+    // params.worldOnly: no lava at all (the GPU lamp runs this simulation for its world, the
+    // heater, the eddies and the bottles, and keeps the particles on the GPU).
+    const target = params.worldOnly ? 0 : particleCount + reserveFill()
     ensureCapacity(target)
     fill(target)
     stirEddies(dt, turbulence, drifters)

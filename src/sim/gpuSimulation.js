@@ -9,9 +9,16 @@
 //
 // This first version carries the pinch lab's world: a flat box, the floor heater with its warm
 // up front, fingers, gravity and heat, the carried velocity (Wobble, Kick, Cap, Skin), Reach,
-// Wall, viscosity, conduction and Settle. Not yet: the stir and eddies, the heating elements and
-// heat spots, the bottles and pots. Positions and temperatures come back to the CPU each frame
-// for the renderer (one frame late); drawing from the GPU's own buffers is the next step.
+// Wall, viscosity, conduction and Settle. createGpuLamp adds the lamp's world: the stir and
+// eddies, the heating elements and heat spots, and the bottles and pots (Robert: "the lava looks
+// incredible the dynamics are amazing. we need to get the rest of the lavalamp working on gpu").
+// The bottles are simulation.js's geometry, laid out and drawn on the CPU, uploaded as a table
+// (the neck's numbers, the bulb's radius at 120 angles, the outline as a polygon) and enforced
+// in the shader by the same rules: a particle past the lip or the floor line is locked to the
+// bottle it entered through (its home), a stray is put back on the nearest point of its own
+// bottle, and heat between bottles goes through glass. Positions and temperatures come back to
+// the CPU each frame for the renderer (one frame late); drawing from the GPU's own buffers is
+// the next step.
 //
 // Every step is a fixed list of passes over one bind group:
 //   drift      cool and heat each particle, ease its velocity toward its drift, move it
@@ -32,6 +39,14 @@ import { createSimulation } from './simulation.js'
 const WORKGROUP = 64
 const MAX_TOUCHES = 4
 const FIXED = 64 // the mean density is summed in fixed point: integer atomics are all WGSL has
+// The bottle table: 16 scalars (cx, lineY, dir, w, rm, rs, yf, neckEnd, cy, R, reach, then room),
+// the bulb's radius at OUTLINE_POINTS angles, and the outline as OUTLINE_POINTS x,y pairs.
+const OUTLINE_POINTS = 120
+const BOTTLE_FLOATS = 16 + OUTLINE_POINTS * 3
+const MAX_BOTTLES = 64
+const GLASS_CONDUCTION = 0.3 // simulation.js
+const RESERVE_COOLING = 0.3 // heat.js
+const RELAX_CAP = 20 // fluid.js
 
 export const SHADER = /* wgsl */`
 // Four storage buffers, not one per array: this device allows 8 per shader stage (the adapter
@@ -82,8 +97,10 @@ struct Params {
   impulseY: f32,
   elementsAt: u32,
   flowAt: u32,
-  pad2: u32,
-  pad3: u32,
+  ceilingBottles: u32,
+  floorBottles: u32,
+  relaxCap: f32,
+  gridTop: f32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -98,6 +115,8 @@ struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
 // (256 columns), the lit elements (x, radius, half width, heat times glow; 8 floats each), and
 // the stirring (the convection roll and the eddies) on a grid, two floats a point.
 @group(0) @binding(6) var<storage, read_write> WLD: array<f32>;
+// The bottles: the ceiling's then the floor's, BOTTLE_FLOATS each (see bottleTable).
+@group(0) @binding(7) var<storage, read_write> BOT: array<f32>;
 
 fn POS(i: u32) -> u32 { return i; }
 fn POSOUT(i: u32) -> u32 { return P.capacity + i; }
@@ -109,6 +128,7 @@ fn TEMPOUT(i: u32) -> u32 { return P.capacity + i; }
 fn PRESS(i: u32) -> u32 { return 2u * P.capacity + i; }
 fn NEAR(i: u32) -> u32 { return 3u * P.capacity + i; }
 fn DENS(i: u32) -> u32 { return 4u * P.capacity + i; }
+fn HOME(i: u32) -> u32 { return 5u * P.capacity + i; } // the bottle a hidden particle is in, as a float; -1 for none
 fn CELLOF(i: u32) -> u32 { return i; }
 fn SORTED(i: u32) -> u32 { return P.capacity + i; }
 fn CELLSTART(c: u32) -> u32 { return 2u * P.capacity + c; }
@@ -134,8 +154,122 @@ fn skewedNormal(i: u32, salt: u32, lo: f32, hi: f32, skew: f32) -> f32 {
   return trunc(num * (hi - lo) + lo);
 }
 fn cellX(x: f32) -> i32 { return clamp(i32(floor(x / P.cell)), 0, i32(P.cols) - 1); }
-fn cellY(y: f32) -> i32 { return clamp(i32(floor(y / P.cell)), 0, i32(P.rows) - 1); }
+fn cellY(y: f32) -> i32 { return clamp(i32(floor((y - P.gridTop) / P.cell)), 0, i32(P.rows) - 1); }
 fn cellIndex(p: vec2f) -> u32 { return u32(cellX(p.x)) + u32(cellY(p.y)) * P.cols; }
+
+
+// simulation.js's bottles. A bottle is a mouth of half width w in the line at lineY (the lip for
+// the ceiling, the bottom edge for the floor), a neck to neckEnd in direction dir (-1 up, +1
+// down) with fillets rm at the mouth and rs at the shoulder (yf), and a bulb centred at cy whose
+// radius at a canvas angle is the table's, OUTLINE points around; the outline itself follows as
+// a polygon, for putting a stray particle back on its nearest point.
+const OUTLINE = ${OUTLINE_POINTS}u;
+const BOTTLE = ${BOTTLE_FLOATS}u;
+const RADII = 16u;
+const POLY = ${16 + OUTLINE_POINTS}u;
+const TAU = 6.2831853;
+const GLASS = ${GLASS_CONDUCTION}; // conduction between bottles, a share of the usual
+fn bf(b: u32, k: u32) -> f32 { return BOT[b * BOTTLE + k]; }
+fn bRadius(b: u32, theta: f32) -> f32 {
+  var a = theta / TAU; a -= floor(a);
+  let f = a * f32(OUTLINE);
+  let k = u32(f);
+  let t = f - f32(k);
+  return mix(bf(b, RADII + k), bf(b, RADII + (k + 1u) % OUTLINE), t);
+}
+fn neckHalf(b: u32, py: f32) -> f32 {
+  let lineY = bf(b, 1u); let dir = bf(b, 2u); let w = bf(b, 3u); let rm = bf(b, 4u); let rs = bf(b, 5u); let yf = bf(b, 6u);
+  let t = abs(py - lineY);
+  var mouth = 0.0;
+  if (t < rm) { mouth = rm - sqrt(max(0.0, rm * rm - (rm - t) * (rm - t))); }
+  let u = (py - yf) * dir;
+  var shoulder = 0.0;
+  if (u > 0.0) { let m = min(u, rs); shoulder = rs - sqrt(max(0.0, rs * rs - m * m)); }
+  return w + mouth + shoulder;
+}
+fn insideBottle(b: u32, p: vec2f) -> bool {
+  let cx = bf(b, 0u); let lineY = bf(b, 1u); let dir = bf(b, 2u); let neckEnd = bf(b, 7u); let cy = bf(b, 8u); let reach = bf(b, 10u);
+  let dx = p.x - cx;
+  if ((p.y - neckEnd) * dir <= 0.0 && (p.y - lineY) * dir >= 0.0 && abs(dx) <= neckHalf(b, p.y)) { return true; }
+  let dy = p.y - cy;
+  let d2 = dx * dx + dy * dy;
+  if (d2 > reach * reach) { return false; }
+  let rr = bRadius(b, atan2(dy, dx));
+  return d2 <= rr * rr;
+}
+// simulation.js containIn: keep a particle past the row's line inside one bottle of the row, the
+// one it entered through (HOME), or hold it at the line under no mouth. Returns the position.
+fn containIn(i: u32, p: vec2f, first: u32, count: u32) -> vec2f {
+  let lineY = bf(first, 1u);
+  let dir = bf(first, 2u);
+  if ((p.y - lineY) * dir <= 0.0) { F[HOME(i)] = -1.0; return p; }
+  var k = i32(F[HOME(i)]);
+  if (k < i32(first) || k >= i32(first + count)) {
+    k = -1;
+    for (var j = first; j < first + count; j++) { if (insideBottle(j, p)) { k = i32(j); break; } }
+    if (k < 0) { for (var j = first; j < first + count; j++) { if (abs(p.x - bf(j, 0u)) <= neckHalf(j, lineY)) { k = i32(j); break; } } }
+    if (k < 0) { return vec2f(p.x, lineY); }
+    F[HOME(i)] = f32(k);
+  }
+  let b = u32(k);
+  if (insideBottle(b, p)) { return p; }
+  let cx = bf(b, 0u); let w = bf(b, 3u); let rm = bf(b, 4u); let rs = bf(b, 5u); let yf = bf(b, 6u); let neckEnd = bf(b, 7u);
+  let dx = p.x - cx;
+  var bestD = abs(p.y - lineY);
+  var best = vec2f(p.x, lineY);
+  if ((p.y - neckEnd) * dir <= 0.0) {
+    // In the neck's span but outside its walls: sideways to the wall, or out of a fillet along
+    // its radius; past a fillet's square the lip, so the line or the bulb is the way back.
+    let side = select(-1.0, 1.0, dx >= 0.0);
+    let fromLine = abs(p.y - lineY);
+    let pastShoulder = (p.y - yf) * dir;
+    var n = vec2f(cx + side * w, p.y);
+    var valid = true;
+    var rc = 0.0;
+    if (fromLine < rm) { rc = rm; } else if (pastShoulder > 0.0) { rc = rs; }
+    if (rc > 0.0 && abs(dx) <= w + rc) {
+      let cc = vec2f(cx + side * (w + rc), select(yf, lineY + dir * rm, fromLine < rm));
+      let e = p - cc;
+      let el = max(length(e), 1e-6);
+      n = cc + e / el * rc;
+      if (abs(n.x - cx) > w + rc + 0.01 || (n.y - lineY) * dir < -0.01 || (n.y - neckEnd) * dir > 0.01) { valid = false; }
+    } else if (rc > 0.0 && abs(dx) > w + rc) {
+      valid = false;
+    }
+    if (valid) { let d = distance(n, p); if (d < bestD) { bestD = d; best = n; } }
+  }
+  // The nearest point on the bulb's outline.
+  for (var k2 = 0u; k2 < OUTLINE; k2++) {
+    let a = vec2f(bf(b, POLY + k2 * 2u), bf(b, POLY + k2 * 2u + 1u));
+    let k3 = (k2 + 1u) % OUTLINE;
+    let c = vec2f(bf(b, POLY + k3 * 2u), bf(b, POLY + k3 * 2u + 1u));
+    let e = c - a;
+    let len2 = max(dot(e, e), 1e-6);
+    let t = clamp(dot(p - a, e) / len2, 0.0, 1.0);
+    let q = a + e * t;
+    let d = distance(q, p);
+    if (d < bestD) { bestD = d; best = q; }
+  }
+  return best;
+}
+// simulation.js contain, the position part: the side walls, then the floor's pots below the
+// bottom edge and the ceiling's bottles above the lip (the lip is the top edge), or the flat
+// box when there are none. Returns the position; the caller decides what the glass does to the
+// velocity.
+fn contain(i: u32, pIn: vec2f) -> vec2f {
+  var p = pIn;
+  p.x = clamp(p.x, 0.0, P.width);
+  if (P.ceilingBottles + P.floorBottles > 0u) {
+    if (p.y > P.height) {
+      if (P.floorBottles > 0u) { p = containIn(i, p, P.ceilingBottles, P.floorBottles); } else { p.y = P.height; F[HOME(i)] = -1.0; }
+    } else if (p.y < 0.0) {
+      if (P.ceilingBottles > 0u) { p = containIn(i, p, 0u, P.ceilingBottles); } else { p.y = 0.0; F[HOME(i)] = -1.0; }
+    } else { F[HOME(i)] = -1.0; }
+  } else {
+    p.y = clamp(p.y, 0.0, P.height);
+  }
+  return p;
+}
 
 // The floor heater's power under x: the lamp's, by column, when a world is sampled; else the
 // lab's, a front from the middle while warming up, then full.
@@ -157,7 +291,9 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
   var p = V[POS(i)];
   var t = F[TEMP(i)];
   // heat.js nextTemperature: cooling, then contact heating near the floor.
-  if (t > 0.0) { t -= skewedNormal(i, 1u, 0.25, 2.75, 1.8) * P.cooling; }
+  // Lava hidden in a pot below the floor cools at heat.js's RESERVE_COOLING: the base of a lamp
+  // is glass over the bulb and holds its warmth.
+  if (t > 0.0) { t -= skewedNormal(i, 1u, 0.25, 2.75, 1.8) * P.cooling * select(1.0, ${RESERVE_COOLING}, p.y > P.height); }
   let fromFloor = P.height - p.y;
   if (p.y > P.height * 0.8 && t < P.maxTemp) {
     let d = max(1.0, abs(fromFloor));
@@ -217,8 +353,7 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
   // particles sat on the floor line (the CPU keeps 17), took the floor's contact heat, and the
   // pool warmed through warm up where the CPU's cooled; with it enforced every pass, 148, and the
   // warm up matches the CPU (mean temperature 340 against 345 at six seconds).
-  p.y = clamp(p.y, 0.0, P.height);
-  p.x = clamp(p.x, 0.0, P.width);
+  p = contain(i, p);
   V[PX(i)] = p;
   V[POS(i)] = p;
 }
@@ -328,12 +463,27 @@ fn relax(@builtin(global_invocation_id) id: vec3u) {
   // hundred neighbours each pushed from the same snapshot, and the pool erupted into a spray
   // (Robert: "on the gpu, in pinch, with current settings, it sometimes randomly explodes").
   var delta = (pushed - own) * P.jacobi; // WGSL reserves the word move
-  let cap = P.reach * P.radius * P.jacobi;
+  // Lava hidden in a bottle is capped at fluid.js's RELAX_CAP as well, as simulation.js does.
+  var cap = P.reach * P.radius;
+  if (F[HOME(i)] >= 0.0) { cap = min(cap, P.relaxCap); }
+  cap *= P.jacobi;
   let shift = length(delta);
   if (shift > cap) { delta *= cap / shift; }
-  var q = p + delta;
-  q.y = clamp(q.y, 0.0, P.height);
-  q.x = clamp(q.x, 0.0, P.width);
+  let q0 = p + delta;
+  let q = contain(i, q0);
+  // Glass takes the momentum carried into it, as the side walls do in kick: the part of the
+  // velocity pointing into the bottle wall that just pushed the particle back goes. Only the
+  // bottles do this; the flat floor and ceiling of the box are left as they were tuned.
+  if (q0.y > P.height || q0.y < 0.0) {
+    let n = q - q0;
+    let nl = length(n);
+    if (nl > 1e-4) {
+      let u = n / nl;
+      var v = V[VEL(i)];
+      let into = dot(v, u);
+      if (into < 0.0) { v -= into * u; V[VEL(i)] = v; }
+    }
+  }
   V[POSOUT(i)] = q;
 }
 
@@ -397,7 +547,8 @@ fn kick(@builtin(global_invocation_id) id: vec3u) {
   if (P.wallPush > 0.0) {
     if (p.x < P.wallPush) { v.x += (P.wallPush - p.x) * 2.0; } else if (p.x > P.width - P.wallPush) { v.x -= (p.x - (P.width - P.wallPush)) * 2.0; }
   }
-  if (p.y < 0.0) { p.y = 0.0; v.y = max(v.y, 0.0); } else if (p.y > P.height) { p.y = P.height; v.y = min(v.y, 0.0); }
+  // The floor and ceiling (and the bottles past them) were enforced by contain in the relaxation
+  // passes, and the position has not moved since.
   V[POS(i)] = p;
   V[VEL(i)] = v;
 }
@@ -462,6 +613,7 @@ fn conduct(@builtin(global_invocation_id) id: vec3u) {
   var heat = 0.0;
   let cx = cellX(p.x);
   let cy = cellY(p.y);
+  let home = F[HOME(i)];
   for (var yy = max(cy - 1, 0); yy <= min(cy + 1, i32(P.rows) - 1); yy++) {
     for (var xx = max(cx - 1, 0); xx <= min(cx + 1, i32(P.cols) - 1); xx++) {
       let c = u32(xx) + u32(yy) * P.cols;
@@ -471,7 +623,10 @@ fn conduct(@builtin(global_invocation_id) id: vec3u) {
         if (j == i) { continue; }
         let r = length(V[POS(j)] - p);
         if (r >= P.radius) { continue; }
-        let g = 1.0 - r / P.radius;
+        var g = 1.0 - r / P.radius;
+        // Heat crossing from one bottle to another goes through glass (simulation.js GLASS_CONDUCTION).
+        let other = F[HOME(j)];
+        if (home >= 0.0 && other >= 0.0 && other != home) { g *= GLASS; }
         weight += g;
         heat += g * F[TEMP(j)];
       }
@@ -489,7 +644,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 48 // the Params struct, 45 fields, padded to 192 bytes
+const PARAM_FLOATS = 48 // the Params struct, 47 fields, padded to 192 bytes
 const POWER_COLUMNS = 256
 const MAX_ELEMENTS = 32
 const ELEMENTS_AT = POWER_COLUMNS
@@ -536,6 +691,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     p: new Float32Array(capacity),
     vx: new Float32Array(capacity),
     vy: new Float32Array(capacity),
+    home: new Float32Array(capacity).fill(-1), // the bottle a particle was spawned in; the GPU keeps the live one
     id: new Int32Array(capacity)
   }
   for (let i = 0; i < capacity; i++) state.id[i] = i
@@ -551,7 +707,8 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
       { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } }
     ]
   })
   const pipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [layout] })
@@ -562,20 +719,27 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
   const vec2Bytes = capacity * 8
   const f32Bytes = capacity * 4
   let cell = Math.max(4, params.interactionRadius)
+  // The grid covers the lamp and its bottles: from gridTop (the top of the highest bulb, 0 with
+  // no bottles) to the bottom of the deepest pot. Clamping the hidden lava into the edge rows
+  // instead would put a pot's thousands of particles in one row of cells.
+  let gridTop = 0
+  let gridBottom = height
   let cols = Math.ceil(width / cell) + 1
-  let rows = Math.ceil(height / cell) + 1
+  let rows = Math.ceil((gridBottom - gridTop) / cell) + 1
   let cellCap = Math.max(cols * rows + 1, 64)
   const buffers = {
     params: device.createBuffer({ size: PARAM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
     touches: device.createBuffer({ size: MAX_TOUCHES * 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
     V: storage(5 * vec2Bytes), // pos, posOut, vel, velOut, px
-    F: storage(5 * f32Bytes), // temp, tempOut, press, pressNear, dens
+    F: storage(6 * f32Bytes), // temp, tempOut, press, pressNear, dens, home
     U: null, // cellOf, sorted, cellStart (sized with the grid)
     A: null, // cellCount, mean accumulator
-    WLD: storage(WORLD_FLOATS * 4) // the lamp's world, see createGpuLamp
+    WLD: storage(WORLD_FLOATS * 4), // the lamp's world, see createGpuLamp
+    BOT: storage(MAX_BOTTLES * BOTTLE_FLOATS * 4) // the bottles, see setBottles
   }
   const sizeGrid = () => { buffers.U = storage((2 * capacity + cellCap) * 4); buffers.A = storage((cellCap + 1) * 4) }
   sizeGrid()
+  device.queue.writeBuffer(buffers.F, 5 * f32Bytes, new Float32Array(capacity).fill(-1)) // home: none
   // Two sets of staging buffers for the readback: one may be mapped (being read) while the other
   // takes the next frame's copy, so the state the CPU sees is at most a frame old. With one set,
   // every frame while a map was pending went uncopied, and a harness stepping sixty frames in one
@@ -583,15 +747,12 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
   const staging = [0, 1].map(() => ({ pos: device.createBuffer({ size: vec2Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), temp: device.createBuffer({ size: f32Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), press: device.createBuffer({ size: f32Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), vel: device.createBuffer({ size: vec2Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), busy: false }))
   let bindGroup = makeBindGroup()
   function makeBindGroup () {
-    const order = ['params', 'touches', 'V', 'F', 'U', 'A', 'WLD']
+    const order = ['params', 'touches', 'V', 'F', 'U', 'A', 'WLD', 'BOT']
     return device.createBindGroup({ layout, entries: order.map((name, binding) => ({ binding, resource: { buffer: buffers[name] } })) })
   }
-  function fitGrid () {
-    const want = Math.max(4, params.interactionRadius)
-    if (want === cell) return
-    cell = want
+  function layoutGrid () {
     cols = Math.ceil(width / cell) + 1
-    rows = Math.ceil(height / cell) + 1
+    rows = Math.ceil((gridBottom - gridTop) / cell) + 1
     const needed = cols * rows + 1
     if (needed > cellCap) {
       cellCap = needed
@@ -601,28 +762,96 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
       bindGroup = makeBindGroup()
     }
   }
+  function fitGrid () {
+    const want = Math.max(4, params.interactionRadius)
+    if (want === cell) return
+    cell = want
+    layoutGrid()
+  }
 
-  // The lava arrives as a warm slab on the floor, as simulation.js spawns it.
+  // The bottles, from simulation.js's lists (bottles() and floorBottles()): the ceiling's then
+  // the floor's, as a table the shader reads (see BOTTLE_FLOATS). The floor's pots are also where
+  // the reserve spawns, and how much of it there is.
+  let ceiling = []
+  let floor = []
+  let reserve = 0 // particles the pots hold between them, on top of params.particleCount
+  const areaOf = b => {
+    let sum = 0
+    const n = 72
+    for (let k = 0; k < n; k++) { const rr = b.radiusAt(k / n * Math.PI * 2); sum += rr * rr }
+    return Math.PI * sum / n + 2 * b.w * Math.abs(b.neckEnd - b.lineY)
+  }
+  function setBottles (ceilingList, floorList) {
+    ceiling = (ceilingList || []).slice(0, MAX_BOTTLES)
+    floor = (floorList || []).slice(0, MAX_BOTTLES - ceiling.length)
+    const table = new Float32Array(MAX_BOTTLES * BOTTLE_FLOATS)
+    let top = 0
+    let bottom = height
+    ceiling.concat(floor).forEach((b, n) => {
+      const o = n * BOTTLE_FLOATS
+      table[o] = b.cx; table[o + 1] = b.lineY; table[o + 2] = b.dir; table[o + 3] = b.w; table[o + 4] = b.rm; table[o + 5] = b.rs
+      table[o + 6] = b.yf; table[o + 7] = b.neckEnd; table[o + 8] = b.cy; table[o + 9] = b.R; table[o + 10] = b.reach
+      for (let k = 0; k < OUTLINE_POINTS; k++) table[o + 16 + k] = b.radiusAt(k / OUTLINE_POINTS * Math.PI * 2)
+      table.set(b.outline.subarray(0, OUTLINE_POINTS * 2), o + 16 + OUTLINE_POINTS)
+      if (b.dir < 0) top = Math.min(top, b.cy - b.reach); else bottom = Math.max(bottom, b.cy + b.reach)
+    })
+    device.queue.writeBuffer(buffers.BOT, 0, table)
+    let area = 0
+    for (const b of floor) area += areaOf(b) * (b.cx <= 0 || b.cx >= width ? 0.5 : 1)
+    reserve = Math.round(area / (params.spawnArea || 400))
+    if (top !== gridTop || bottom !== gridBottom) { gridTop = top; gridBottom = bottom; layoutGrid() }
+  }
+
+  // The lava arrives as a warm slab on the floor, as simulation.js spawns it, with the pots'
+  // worth inside the pots first (a pot picked by area, a point picked uniformly inside it).
   function fill (target) {
     target = Math.min(capacity, target)
     if (target <= alive) { alive = target; return }
     const spawnArea = params.spawnArea || 400
-    const depth = Math.max(0, spawnArea * target / width)
+    const hidden = Math.max(0, Math.min(target, reserve) - alive)
+    const depth = Math.max(0, spawnArea * (target - Math.min(target, reserve)) / width)
     const xs = new Float32Array(2 * capacity)
     const ts = new Float32Array(capacity)
-    for (let i = 0; i < alive; i++) { xs[2 * i] = state.x[i]; xs[2 * i + 1] = state.y[i]; ts[i] = state.temp[i] }
+    const homes = new Float32Array(capacity).fill(-1)
+    for (let i = 0; i < alive; i++) { xs[2 * i] = state.x[i]; xs[2 * i + 1] = state.y[i]; ts[i] = state.temp[i]; homes[i] = state.home[i] }
+    const areas = floor.map(areaOf)
+    const total = areas.reduce((a, b) => a + b, 0)
     for (let i = alive; i < target; i++) {
-      const x = random() * width
-      const y = (height - depth) + random() * depth // the same draws as simulation.js's spawn, so a seed gives both the same slab
+      let x = random() * width
+      let y = (height - depth) + random() * depth // the same draws as simulation.js's spawn, so a seed gives both the same slab
+      if (i - alive < hidden && floor.length) {
+        let pick = random() * total
+        let k = floor.length - 1
+        for (let j = 0; j < floor.length; j++) { pick -= areas[j]; if (pick <= 0) { k = j; break } }
+        const b = floor[k]
+        const bulb = areas[k] - 2 * b.w * Math.abs(b.neckEnd - b.lineY)
+        for (let tries = 0; tries < 50; tries++) {
+          let px, py
+          if (random() * areas[k] < bulb) {
+            px = b.cx + (random() * 2 - 1) * b.reach
+            py = b.cy + (random() * 2 - 1) * b.reach
+            const rr = b.radiusAt(Math.atan2(py - b.cy, px - b.cx))
+            if ((px - b.cx) ** 2 + (py - b.cy) ** 2 > rr * rr) continue
+          } else {
+            px = b.cx + (random() * 2 - 1) * b.w
+            py = b.lineY + random() * (b.neckEnd - b.lineY)
+          }
+          if (px < 0 || px > width) continue
+          x = px; y = py
+          homes[i] = ceiling.length + k
+          break
+        }
+      }
       xs[2 * i] = x; xs[2 * i + 1] = y
       ts[i] = 0.8 * params.gravity
-      state.x[i] = x; state.y[i] = y; state.temp[i] = ts[i]
+      state.x[i] = x; state.y[i] = y; state.temp[i] = ts[i]; state.home[i] = homes[i]
     }
     alive = target
     device.queue.writeBuffer(buffers.V, 0, xs) // pos
     device.queue.writeBuffer(buffers.V, 4 * vec2Bytes, xs) // px
     device.queue.writeBuffer(buffers.V, 2 * vec2Bytes, new Float32Array(2 * capacity)) // vel
     device.queue.writeBuffer(buffers.F, 0, ts) // temp
+    device.queue.writeBuffer(buffers.F, 5 * f32Bytes, homes) // home
   }
 
   const paramData = new ArrayBuffer(PARAM_FLOATS * 4)
@@ -656,6 +885,10 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[39] = impulse[0]; pf[40] = impulse[1]
     pu[41] = ELEMENTS_AT
     pu[42] = FLOW_AT
+    pu[43] = ceiling.length
+    pu[44] = floor.length
+    pf[45] = RELAX_CAP
+    pf[46] = gridTop
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
@@ -690,7 +923,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
   }
 
   function step (dt) {
-    const target = Math.trunc(params.particleCount)
+    const target = Math.min(capacity, Math.trunc(params.particleCount) + reserve)
     if (target !== alive) fill(target)
     fitGrid()
     if (params.heater !== false) heaterTime += dt
@@ -748,7 +981,9 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     push (fx, fy) { impulse[0] += fx; impulse[1] += fy },
     // The world's samples for the next step: power columns, elements, flow grid (Float32Array).
     setWorld (floats, info) { world = info; device.queue.writeBuffer(buffers.WLD, 0, floats) },
-    resize (w, h) { width = w; height = h; cols = Math.ceil(width / cell) + 1; rows = Math.ceil(height / cell) + 1; const needed = cols * rows + 1; if (needed > cellCap) { cellCap = needed; buffers.U.destroy(); buffers.A.destroy(); sizeGrid(); bindGroup = makeBindGroup() } },
+    resize (w, h) { width = w; height = h; if (!floor.length) gridBottom = h; layoutGrid() },
+    setBottles,
+    get reserve () { return reserve },
     // Move every particle by fn(x, y) (the lamp turning with the phone), from the last readback.
     transform (fn) { const xs = new Float32Array(2 * capacity); for (let i = 0; i < alive; i++) { const [nx, ny] = fn(state.x[i], state.y[i]); state.x[i] = nx; state.y[i] = ny; xs[2 * i] = nx; xs[2 * i + 1] = ny } device.queue.writeBuffer(buffers.V, 0, xs); device.queue.writeBuffer(buffers.V, 4 * vec2Bytes, xs) },
     get width () { return width },
@@ -775,16 +1010,23 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
 // The lamp on the GPU: the particles in createGpuSimulation, the world (the heater's front and
 // its elements and heat spots, the convection roll, the eddies) in a simulation.js with no
 // particles, stepped alongside and sampled onto the GPU each frame: the heater's power per
-// column of the floor, the lit elements, and the stirring on a grid FLOW_CELL px apart. Bottles
-// and pots are not on the GPU yet, so the world runs with a flat floor and ceiling.
+// column of the floor, the lit elements, and the stirring on a grid FLOW_CELL px apart. The
+// shell also lays out the bottles and pots, which go up as a table whenever they change (a
+// resize, the Bottles knob); the shell itself holds no lava (worldOnly), so its reservoirs do not
+// fill with CPU particles.
 export function createGpuLamp ({ device, width, height, params }) {
-  const shellParams = new Proxy(params, { get (t, k) { if (k === 'particleCount') return 0; if (k === 'cupDepth') return 0; return t[k] } })
+  const shellParams = new Proxy(params, { get (t, k) { if (k === 'particleCount') return 0; if (k === 'worldOnly') return true; return t[k] } })
   const shell = createSimulation({ width, height, params: shellParams })
   const gpu = createGpuSimulation({ device, width, height, params })
   const floats = new Float32Array(WORLD_FLOATS)
+  let bottlesSeen = null
+  let potsSeen = null
   function sample () {
     const w = gpu.width
     const h = gpu.height
+    const bottles = shell.bottles()
+    const pots = shell.floorBottles()
+    if (bottles !== bottlesSeen || pots !== potsSeen) { bottlesSeen = bottles; potsSeen = pots; gpu.setBottles(bottles, pots) }
     for (let c = 0; c < POWER_COLUMNS; c++) floats[c] = shell.heaterAt((c + 0.5) / POWER_COLUMNS * w)
     const elements = shell.heaterElements()
     let n = 0
@@ -825,6 +1067,7 @@ export function createGpuLamp ({ device, width, height, params }) {
     floorAt: shell.floorAt,
     bottles: shell.bottles,
     floorBottles: shell.floorBottles,
+    core: gpu, // the particle simulation itself, for poking from the console
     get state () { return gpu.state },
     get count () { return gpu.count },
     get width () { return gpu.width },
