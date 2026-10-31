@@ -234,7 +234,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal)
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -619,7 +619,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat = ELEMENT_HEAT[1], elementLife = ELEMENT_LIFE[1] } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
@@ -670,7 +670,7 @@ export function createSimulation ({ width, height, params }) {
           el.fresh = false
         }
         if (heaterTime >= el.next) {
-          el.heat = randomRange(...ELEMENT_HEAT)
+          el.heat = randomRange(elementHeat * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeat)
           el.start = heaterTime
           let lifeScale = el.lifeScale || 1
           if (ELEMENTS_ARE_CUPS) {
@@ -679,7 +679,7 @@ export function createSimulation ({ width, height, params }) {
             el.coreFraction = el.coreMin + (el.cupHalf - el.coreMin) * u * u
             lifeScale = Math.max(1, lifeScale * el.coreMin / el.coreFraction)
           }
-          el.life = randomRange(...ELEMENT_LIFE) * lifeScale
+          el.life = randomRange(elementLife * ELEMENT_LIFE[0] / ELEMENT_LIFE[1], elementLife) * lifeScale
           el.next = 0
         }
       }

@@ -104,6 +104,12 @@ export const defaultViscosity = 32
 export const defaultReach = 1
 export const defaultSkin = 300
 export const defaultWall = 0
+// The heater's elements against the new liquid (Robert: "the launching strips are back without
+// the reservoirs, that was never a fix for the fluid behavior"): a lit element's heat per step at
+// its core and how long a lighting burns, the tops of their ranges. The lab's finger, which
+// pinches cleanly, is 48 per step for 3.4 s over 45 px; the elements were 3 to 8 for 5 to 15 s.
+export const defaultElementHeat = 8
+export const defaultElementLife = 15
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultInteractionRadius = fnstate(computeDefaultInteractionRadius(window.innerWidth, window.innerHeight))
@@ -146,6 +152,8 @@ export const viscosity = fnstate(defaultViscosity)
 export const reach = fnstate(defaultReach)
 export const skin = fnstate(defaultSkin)
 export const wall = fnstate(defaultWall)
+export const elementHeat = fnstate(defaultElementHeat)
+export const elementLife = fnstate(defaultElementLife)
 // The random seed: every random number in the lamp comes from it, so the same seed on the same
 // window gives the same lamp. Drawn fresh on each load unless saved, shared or given as ?seed=.
 // Shown in the panel so a lamp worth keeping can be saved. Changing it reloads the page, since
@@ -166,7 +174,7 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, settle, viscosity, reach, skin, wall, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, settle, viscosity, reach, skin, wall, elementHeat, elementLife, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'wall'])
 
@@ -205,6 +213,8 @@ const defaults = () => ({
   reach: defaultReach,
   skin: defaultSkin,
   wall: defaultWall,
+  elementHeat: defaultElementHeat,
+  elementLife: defaultElementLife,
   seed: randomSeed()
 })
 

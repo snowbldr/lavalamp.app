@@ -16,6 +16,10 @@ import {
   defaultReach,
   defaultSkin,
   defaultWall,
+  defaultElementHeat,
+  defaultElementLife,
+  elementHeat,
+  elementLife,
   settle,
   viscosity,
   wobbleKick,
@@ -201,7 +205,9 @@ export function createSettingsPanel () {
         knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax, v => `${v} g`),
         knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01 }, () => defaultReach, v => `${Number(v).toFixed(2)} r`),
         knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
-        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
+        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`),
+        knob('Element', 'element-heat', elementHeat, { min: 1, max: 80, step: 1 }, () => defaultElementHeat),
+        knob('Burn', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife, seconds)
       ),
       hint(help, [
         ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
@@ -223,7 +229,9 @@ export function createSettingsPanel () {
         ['Cap', 'The fastest that carried velocity may get, in gravities.'],
         ['Reach', 'The most the pressure step may move a particle in one go, in radii. Low keeps a high Density from flying apart.'],
         ['Skin', 'Which particles take the Kick: those below this fraction of the mean density. 300 is all of them.'],
-        ['Wall', 'Lava this close to a side wall is eased away from it, in px; a glass the wax does not wet.']
+        ['Wall', 'Lava this close to a side wall is eased away from it, in px; a glass the wax does not wet.'],
+        ['Element', 'How hard a lit heating element heats the lava over it, per step at its core. The lab\'s finger is 48.'],
+        ['Burn', 'How long a lighting burns, at most; a wide burn is shorter. The lab\'s pulse is 3.4 s.']
       ])
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),
