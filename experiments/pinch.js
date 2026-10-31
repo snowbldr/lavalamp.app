@@ -20,13 +20,14 @@ export function start () {
   const wobble = fnstate(0.46)
   const kick = fnstate(1.6)
   const cap = fnstate(3.4)
-  // Robert's liquid, pasted from Copy settings on 2026-10-30 ("this is almost right with size 3
-  // particles"): 5050 particles at radius 20 drawn at size 3, Stiff 3.7 against Density 530, so the
-  // pull is a near constant cohesion and Near holds the particles apart.
-  const stiffness = fnstate(3.7)
-  const near = fnstate(801)
-  const density = fnstate(530.1)
-  const gloop = fnstate(0.0315)
+  // Robert's liquid, pasted from Copy settings on 2026-10-30 ("this one is by FAR the best one yet"):
+  // 3050 particles at radius 20 drawn at size 2 with no smoothing; Stiff 7.5 against Density 360, so
+  // the pull is a near constant cohesion; Gloop 0.7, so a lump warms as one; Skin 300, so every
+  // particle carries its pressure move as velocity, the paper's own velocity; Max heat 6200.
+  const stiffness = fnstate(7.5)
+  const near = fnstate(1101)
+  const density = fnstate(360.1)
+  const gloop = fnstate(0.7)
   // Half the lamp's grain, at Robert's suggestion: "maybe we need a smaller particle size? that
   // should be fine now that we have a much faster render". Same lava, four times the particles.
   const radius = fnstate(20)
@@ -37,23 +38,23 @@ export function start () {
   // times the particles one step a frame left the lava in droplets and sheets, two steps a frame
   // pinched with a neck that lived 2.4 s (the video's 2.4 s). Each step costs the whole physics again.
   const substeps = fnstate(1)
-  const reach = fnstate(0.2) // the most a relaxation step may move a particle, in radii; the check that keeps high Density from exploding
-  const wall = fnstate(10) // px from a side wall within which lava is eased away from it; the walls also take the momentum carried into them
-  const skin = fnstate(0.8) // a particle counts as skin, and takes the kick, below this fraction of the lava's mean density; 0 is the lamp's rule, pressure below zero
-  const size = fnstate(3)
-  const smooth = fnstate(5) // edge smoothing radius, px
+  const reach = fnstate(1) // the most a relaxation step may move a particle, in radii; the check that keeps high Density from exploding
+  const wall = fnstate(0) // px from a side wall within which lava is eased away from it; the walls also take the momentum carried into them
+  const skin = fnstate(300) // a particle counts as skin, and takes the kick, below this fraction of the lava's mean density; 0 is the lamp's rule, pressure below zero
+  const size = fnstate(2)
+  const smooth = fnstate(0) // edge smoothing radius, px
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
   // had too much momentum taking off from the initial heating. maybe warm the whole bottom first,
   // then gently pulse the heat until it takes off". So: the lamp's own floor heater runs for Warm
   // seconds, then a finger on the floor's middle pulses for Pulse seconds every Gap seconds at Heat,
   // and Max heat caps the temperature (rise speed is temperature minus gravity, 500).
-  const count = fnstate(5050)
+  const count = fnstate(3050)
   const warm = fnstate(6) // seconds of whole-floor heating before the pulses
-  const pulse = fnstate(0.6) // seconds of finger heat per pulse
-  const gap = fnstate(1.5) // seconds between pulses
-  const heat = fnstate(20) // finger heat per step
-  const finger = fnstate(85) // radius of the heat finger, px (the lamp's is 12% of its shorter side)
-  const maxHeat = fnstate(2100)
+  const pulse = fnstate(3.2) // seconds of finger heat per pulse
+  const gap = fnstate(1.7) // seconds between pulses
+  const heat = fnstate(48) // finger heat per step
+  const finger = fnstate(45) // radius of the heat finger, px (the lamp's is 12% of its shorter side)
+  const maxHeat = fnstate(6200)
   const interval = fnstate(0.6) // seconds between filmstrip frames
   const frames = fnstate(12)
   const from = fnstate(14) // the filmstrip starts itself at this time after a Replay
@@ -250,7 +251,7 @@ export function start () {
         knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02, scales: DECADES }, () => 0.46, v => `${v} s`),
         knob('Kick', 'kick', kick, { min: 0, max: 3, step: 0.1, scales: DECADES }, () => 1.6),
         knob('Cap', 'cap', cap, { min: 0.5, max: 5, step: 0.1, scales: DECADES }, () => 3.4, v => `${v} g`),
-        knob('Gloop', 'gloop', gloop, { min: 0, max: 0.04, step: 0.0005, scales: DECADES }, () => 0.0315, v => Number(v).toFixed(4))
+        knob('Gloop', 'gloop', gloop, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 0.7, v => Number(v).toFixed(4))
       ),
       hint(help, [
         ['Wobble', 'inertia: seconds for a particle to ease onto its drift. 0 is the overdamped wax with no snap at all.'],
@@ -259,18 +260,18 @@ export function start () {
         ['Gloop', 'heat conduction between touching particles: high is lava that warms and lifts as one piece.']
       ]),
       knobs(
-        knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1, scales: DECADES }, () => 3.7),
-        knob('Near', 'near', near, { min: 1, max: 10000, step: 1, scales: DECADES }, () => 801),
-        knob('Density', 'density', density, { min: 0.1, max: 15, step: 0.1, scales: DECADES }, () => 530.1, v => Number(v).toFixed(1)),
+        knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1, scales: DECADES }, () => 7.5),
+        knob('Near', 'near', near, { min: 1, max: 10000, step: 1, scales: DECADES }, () => 1101),
+        knob('Density', 'density', density, { min: 0.1, max: 15, step: 0.1, scales: DECADES }, () => 360.1, v => Number(v).toFixed(1)),
         knob('Radius', 'radius', radius, { min: 2, max: 100, step: 1, scales: DECADES }, () => 20)
       ),
       knobs(
         knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1, scales: DECADES }, () => 1),
         knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1, scales: DECADES }, () => 32),
         knob('Substeps', 'substeps', substeps, { min: 1, max: 4, step: 1, scales: DECADES }, () => 1),
-        knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01, scales: DECADES }, () => 0.2, v => `${Number(v).toFixed(2)} r`),
-        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1, scales: DECADES }, () => 10, v => `${v} px`),
-        knob('Skin', 'skin', skin, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 0.8, v => Number(v).toFixed(2))
+        knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01, scales: DECADES }, () => 1, v => `${Number(v).toFixed(2)} r`),
+        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1, scales: DECADES }, () => 0, v => `${v} px`),
+        knob('Skin', 'skin', skin, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 300, v => Number(v).toFixed(2))
       ),
       hint(help, [
         ['Stiff', 'pressure pushing particles apart when they crowd past the rest density.'],
@@ -286,10 +287,10 @@ export function start () {
       ])),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
       knobs(
-        knob('Lava', 'count', count, { min: 50, max: 50000, step: 50, scales: DECADES }, () => 5050),
+        knob('Lava', 'count', count, { min: 50, max: 50000, step: 50, scales: DECADES }, () => 3050),
         knob('Warm', 'warm', warm, { min: 0, max: 20, step: 0.5, scales: DECADES }, () => 6, v => `${v} s`),
-        knob('Pulse', 'pulse', pulse, { min: 0.1, max: 4, step: 0.1, scales: DECADES }, () => 0.6, v => `${v} s`),
-        knob('Gap', 'gap', gap, { min: 0.1, max: 6, step: 0.1, scales: DECADES }, () => 1.5, v => `${v} s`)
+        knob('Pulse', 'pulse', pulse, { min: 0.1, max: 4, step: 0.1, scales: DECADES }, () => 3.2, v => `${v} s`),
+        knob('Gap', 'gap', gap, { min: 0.1, max: 6, step: 0.1, scales: DECADES }, () => 1.7, v => `${v} s`)
       ),
       hint(help, [
         ['Lava', 'particles in the pool. The blob is cut from these, so more lava is a bigger blob or a second one.'],
@@ -298,11 +299,11 @@ export function start () {
         ['Gap', 'seconds between pulses. They repeat until you Replay, so a blob keeps coming.']
       ]),
       knobs(
-        knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1, scales: DECADES }, () => 20),
-        knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 3000, step: 10, scales: DECADES }, () => 2100),
-        knob('Finger', 'finger', finger, { min: 5, max: 180, step: 1, scales: DECADES }, () => 85, v => `${v} px`),
-        knob('Size', 'size', size, { min: 1, max: 50, step: 1, scales: DECADES }, () => 3),
-        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1, scales: DECADES }, () => 5)
+        knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1, scales: DECADES }, () => 48),
+        knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 3000, step: 10, scales: DECADES }, () => 6200),
+        knob('Finger', 'finger', finger, { min: 5, max: 180, step: 1, scales: DECADES }, () => 45, v => `${v} px`),
+        knob('Size', 'size', size, { min: 1, max: 50, step: 1, scales: DECADES }, () => 2),
+        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1, scales: DECADES }, () => 0)
       ),
       hint(help, [
         ['Heat', 'how hard each pulse heats: temperature added per frame under the finger. 12 is the lamp\'s touch.'],
