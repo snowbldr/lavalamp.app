@@ -22,6 +22,14 @@
 // AudioContext is made on the toggle's click, which is the user gesture browsers want before
 // any sound; `set` resolves once sound is actually running, so the switch can show it warming up.
 export const BEDS = ['simmer', 'glug', 'noise', 'hum', 'none']
+// The events the lava can fire, each with a tick of its own for checking the detection by ear
+// against the eye (Robert: "the correlation of the visual to the audio still seems off. I think
+// we should create like 5 different tick sounds that we can use to identify the start of an
+// event so I can say when there should be a tick or when there is one that shouldn't be there").
+// A burst is a jump in a column's count of fast particles; it is a snap when those particles
+// move both ways (a neck's recoil), a lift when they mostly rise, a land when they mostly fall.
+// Pour is lava crossing the floor line into or out of the pots, spill the same at the lip.
+export const EVENTS = ['snap', 'lift', 'land', 'pour', 'spill']
 export const TUNE = {
   master: 0.8,
   fast: 0.5, // a particle is fast above this many gravities
@@ -66,7 +74,16 @@ export function createGloop (tune = {}) {
   const lastBloop = new Float64Array(COLUMNS)
   let time = 0
   let lastGlug = -1
-  const stats = { bloops: 0, pops: 0, glugs: 0, agitation: 0 } // for the sound board's readout
+  let ticks = false // play a tick per event instead of the voices
+  let onEvent = null // the sound board's hook: fn({ type, x, y, size, strength, time })
+  let prevY = new Float32Array(0) // last frame's y per particle, for the line crossings
+  const up = new Float32Array(COLUMNS) // this frame's fast particles rising, per column
+  const down = new Float32Array(COLUMNS)
+  const sumY = new Float32Array(COLUMNS) // and where they are
+  const crossFloor = new Float32Array(COLUMNS)
+  const crossLip = new Float32Array(COLUMNS)
+  const lastCross = new Float64Array(COLUMNS * 2)
+  const stats = { bloops: 0, pops: 0, glugs: 0, agitation: 0, snap: 0, lift: 0, land: 0, pour: 0, spill: 0 } // for the sound board's readout
 
   function start () {
     if (context) { if (context.state === 'suspended') context.resume(); return }
@@ -201,6 +218,43 @@ export function createGloop (tune = {}) {
     if (T.glugBreath > 0) puff(out, t, level * T.glugBreath, 0.14 * slow, 'lowpass', 500, 0.7)
   }
 
+  // The ticks, one timbre per event, short enough to place in time by ear:
+  //   snap   a click, 2 kHz square, 25 ms
+  //   lift   a chirp rising 400 to 900 Hz
+  //   land   a chirp falling 900 to 300 Hz
+  //   pour   a thud, 110 Hz sine
+  //   spill  two clicks at 1.3 kHz, 70 ms apart
+  function tick (type, pan) {
+    const t = context.currentTime + 0.005
+    const out = panner(pan)
+    const tone = (shape, f0, f1, start, length, level) => {
+      const osc = context.createOscillator()
+      osc.type = shape
+      osc.frequency.setValueAtTime(f0, t + start)
+      if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(f1, t + start + length)
+      const g = context.createGain()
+      g.gain.setValueAtTime(level, t + start)
+      g.gain.exponentialRampToValueAtTime(0.0005, t + start + length)
+      osc.connect(g); g.connect(out)
+      osc.start(t + start); osc.stop(t + start + length + 0.01)
+    }
+    if (type === 'snap') tone('square', 2000, 2000, 0, 0.025, 0.25)
+    else if (type === 'lift') tone('sine', 400, 900, 0, 0.07, 0.4)
+    else if (type === 'land') tone('sine', 900, 300, 0, 0.07, 0.4)
+    else if (type === 'pour') tone('sine', 110, 110, 0, 0.08, 0.5)
+    else if (type === 'spill') { tone('square', 1300, 1300, 0, 0.02, 0.2); tone('square', 1300, 1300, 0.07, 0.02, 0.2) }
+  }
+
+  // An event the lava fired: a tick or a voice, and the board's hook.
+  function fire (type, c, y, size, strength) {
+    const x = (c + 0.5) / COLUMNS
+    const pan = x * 2 - 1
+    stats[type]++
+    if (ticks) tick(type, pan)
+    else if (type === 'snap' || type === 'lift' || type === 'land') { bloop(pan, size, strength); stats.bloops++ }
+    if (onEvent) onEvent({ type, x, y, size, strength, time })
+  }
+
   // Pick a column to place a bed sound in, weighted by where the lava is moving.
   function busyColumn () {
     let total = 0
@@ -216,23 +270,33 @@ export function createGloop (tune = {}) {
     if (!enabled || !context || context.state !== 'running') return
     if (ready) { ready(); ready = null }
     time += dt
-    fast.fill(0)
+    fast.fill(0); up.fill(0); down.fill(0); sumY.fill(0); crossFloor.fill(0); crossLip.fill(0)
     let visible = 0
     let speedSum = 0
     const thr = T.fast * gravity
     const { x, y, vx, vy } = state
+    const tracked = prevY.length >= count
     for (let i = 0; i < count; i++) {
       const py = y[i]
+      let c = Math.floor(x[i] / width * COLUMNS)
+      if (c < 0) c = 0; else if (c >= COLUMNS) c = COLUMNS - 1
+      if (tracked) {
+        const was = prevY[i]
+        if ((was <= height) !== (py <= height)) crossFloor[c]++
+        if ((was < 0) !== (py < 0)) crossLip[c]++
+      }
       if (py < 0 || py > height) continue
       visible++
       const s = Math.hypot(vx[i], vy[i])
       speedSum += s
       if (s > thr) {
-        let c = Math.floor(x[i] / width * COLUMNS)
-        if (c < 0) c = 0; else if (c >= COLUMNS) c = COLUMNS - 1
         fast[c]++
+        sumY[c] += py
+        if (vy[i] < -thr * 0.7) up[c]++; else if (vy[i] > thr * 0.7) down[c]++
       }
     }
+    if (prevY.length < count) prevY = new Float32Array(Math.max(count, prevY.length * 2))
+    prevY.set(y.subarray(0, count))
     if (visible === 0) return
     // Agitation: the mean speed against gravity, eased so the bed swells and fades rather than
     // flickers; a lifting lamp sits about half way, the warm-up pins it.
@@ -246,7 +310,7 @@ export function createGloop (tune = {}) {
     noise.filter.frequency.setTargetAtTime(140 + 500 * agitation, now, 0.05)
     hum.gain.gain.setTargetAtTime(bed === 'hum' ? T.humLevel * (0.15 + 0.85 * agitation) : 0, now, 0.1)
     hum.filter.frequency.setTargetAtTime(120 + 300 * agitation, now, 0.1)
-    if (bed === 'simmer') {
+    if (ticks) { /* the voices are quiet while the ticks are on */ } else if (bed === 'simmer') {
       // Tiny pops, Poisson in time, placed where the lava is moving most, lower as it stirs more.
       const rate = T.simmerRateLow + (T.simmerRateHigh - T.simmerRateLow) * agitation * agitation
       if (Math.random() < rate * dt) {
@@ -265,7 +329,8 @@ export function createGloop (tune = {}) {
         stats.glugs++
       }
     }
-    // Bloops where the fast count jumped.
+    // Bursts where the fast count jumped: a snap, a lift or a land by which way the fast
+    // particles are going. And the line crossings, pours and spills.
     const minBurst = Math.max(3, T.burst * visible)
     for (let c = 0; c < COLUMNS; c++) {
       const burst = fast[c] - prevFast[c]
@@ -273,10 +338,13 @@ export function createGloop (tune = {}) {
         lastBloop[c] = time
         const size = Math.min(1, fast[c] / (0.02 * visible)) // 0 a speck, 1 two percent of the lava moving at once
         const strength = Math.min(1, burst / (minBurst * 6))
-        bloop((c + 0.5) / COLUMNS * 2 - 1, size, 0.3 + 0.7 * strength)
-        stats.bloops++
+        const meanY = sumY[c] / fast[c] / height
+        const type = up[c] > 2 * down[c] ? 'lift' : down[c] > 2 * up[c] ? 'land' : 'snap'
+        fire(type, c, meanY, size, strength)
       }
       prevFast[c] = fast[c]
+      if (crossFloor[c] >= minBurst && time - lastCross[c] >= T.cooldown) { lastCross[c] = time; fire('pour', c, 1, Math.min(1, crossFloor[c] / (0.02 * visible)), 1) }
+      if (crossLip[c] >= minBurst && time - lastCross[COLUMNS + c] >= T.cooldown) { lastCross[COLUMNS + c] = time; fire('spill', c, 0, Math.min(1, crossLip[c] / (0.02 * visible)), 1) }
     }
   }
 
@@ -292,6 +360,11 @@ export function createGloop (tune = {}) {
       return new Promise(resolve => { ready = resolve })
     },
     setBed (name) { bed = BEDS.includes(name) ? name : 'none' },
+    // Ticks instead of voices, one timbre per event, for checking the detection by ear.
+    setTicks (on) { ticks = !!on },
+    set onEvent (fn) { onEvent = fn },
+    // Play a tick by hand, to learn them.
+    playTick (type) { if (context && context.state === 'running') tick(type, 0) },
     // Play one sound by hand (the sound board's buttons): 'bloop' or 'glug', size 0 to 1.
     play (voice, size = 0.5, strength = 1, pan = 0) {
       if (!context || context.state !== 'running') return

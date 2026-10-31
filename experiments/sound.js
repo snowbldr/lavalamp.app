@@ -9,7 +9,7 @@ import { createSimulation } from '../src/sim/simulation.js'
 import { seedRandom } from '../src/sim/random.js'
 import { createRenderer } from '../src/render/renderer.js'
 import { createPointerInput } from '../src/input/pointer.js'
-import { BEDS, TUNE, createGloop } from '../src/audio/gloop.js'
+import { BEDS, EVENTS, TUNE, createGloop } from '../src/audio/gloop.js'
 import { DECADES, hint, knob, knobs, row, segmented, toggle } from '../src/ui/components.js'
 import {
   GPU_PARTICLES, GPU_REACH, setParticleBudget,
@@ -84,6 +84,18 @@ export async function start () {
   const lampBox = div({ class: 'lamp' })
   const canvas = document.createElement('canvas')
   lampBox.appendChild(canvas)
+  // The markers: a numbered ring where each event fired, fading over a second, on a canvas over
+  // the lamp, so the ear and the eye can be checked against each other (Robert: "the correlation
+  // of the visual to the audio still seems off").
+  const marks = document.createElement('canvas')
+  marks.width = W; marks.height = H
+  marks.style.pointerEvents = 'none'
+  lampBox.appendChild(marks)
+  const marksContext = marks.getContext('2d')
+  const EVENT_COLOURS = { snap: '#ffffff', lift: '#4cff4c', land: '#ff4c4c', pour: '#4c9cff', spill: '#ffd34c' }
+  const live = [] // { type, x, y, at }
+  const log = fnstate('')
+  const recent = []
   const renderer = createRenderer(canvas, look)
   renderer.resize(W, H)
   const touchMode = fnstate('heat')
@@ -94,6 +106,36 @@ export async function start () {
   const sound = fnstate(false)
   const pending = fnstate(false)
   const bed = fnstate('simmer')
+  const ticks = fnstate(false)
+  ticks.subscribe(on => gloop.setTicks(on))
+  gloop.onEvent = e => {
+    live.push({ ...e, at: performance.now() })
+    recent.unshift(`${e.time.toFixed(1).padStart(6)}s  ${e.type.padEnd(5)}  x ${(e.x * 100).toFixed(0).padStart(3)}%  y ${(e.y * 100).toFixed(0).padStart(3)}%  size ${e.size.toFixed(2)}`)
+    if (recent.length > 12) recent.pop()
+    log(recent.join('\n'))
+  }
+  function drawMarks () {
+    marksContext.clearRect(0, 0, W, H)
+    const now = performance.now()
+    for (let i = live.length - 1; i >= 0; i--) {
+      const m = live[i]
+      const age = (now - m.at) / 1000
+      if (age > 1) { live.splice(i, 1); continue }
+      const px = m.x * W
+      const py = Math.max(12, Math.min(H - 12, m.y * H))
+      marksContext.globalAlpha = 1 - age
+      marksContext.strokeStyle = EVENT_COLOURS[m.type]
+      marksContext.lineWidth = 3
+      marksContext.beginPath()
+      marksContext.arc(px, py, 14 + age * 30, 0, Math.PI * 2)
+      marksContext.stroke()
+      marksContext.fillStyle = EVENT_COLOURS[m.type]
+      marksContext.font = 'bold 16px system-ui, sans-serif'
+      marksContext.textAlign = 'center'
+      marksContext.fillText(String(EVENTS.indexOf(m.type) + 1), px, py + 6)
+    }
+    marksContext.globalAlpha = 1
+  }
   const pace = fnstate(defaultPace)
   const states = {}
   for (const group of Object.values(KNOBS)) for (const [key] of group) states[key] = fnstate(TUNE[key])
@@ -123,7 +165,8 @@ export async function start () {
     if (now - lastReadout < 1000) return
     const s = gloop.stats
     const dt = (now - lastReadout) / 1000
-    readout(`agitation ${s.agitation.toFixed(2)}   bloops ${((s.bloops - lastStats.bloops) / dt).toFixed(1)}/s   pops ${((s.pops - lastStats.pops) / dt).toFixed(1)}/s   glugs ${((s.glugs - lastStats.glugs) / dt).toFixed(1)}/s   ${s.state}`)
+    const per = k => ((s[k] - lastStats[k]) / dt).toFixed(1)
+    readout(`agitation ${s.agitation.toFixed(2)}   snap ${per('snap')}  lift ${per('lift')}  land ${per('land')}  pour ${per('pour')}  spill ${per('spill')} /s   pops ${per('pops')}/s   ${s.state}`)
     lastStats = s
     lastReadout = now
   }
@@ -138,6 +181,10 @@ export async function start () {
     { class: 'panel' },
     row('Sound', div({ class: pending.bindAttr(() => pending() ? 'pending' : '') }, toggle('sound', sound))),
     row('Bed', segmented('bed', bed, BEDS)),
+    row('Ticks', toggle('ticks', ticks)),
+    div({ class: 'buttons' }, ...EVENTS.map((type, k) => button({ class: 'small', style: { color: EVENT_COLOURS[type] }, onclick: () => gloop.playTick(type) }, `${k + 1} ${type}`))),
+    hint(help, 'Ticks plays one short sound per event instead of the voices, and a numbered ring marks where it fired: 1 snap (click, a burst moving both ways), 2 lift (rising chirp), 3 land (falling chirp), 4 pour (thud, lava crossing the floor line), 5 spill (double click, lava crossing the lip). The buttons play each tick to learn it. The log below lists the last events.'),
+    div({ class: 'readout' }, log.bindAs(() => log())),
     row('Finger', segmented('touch', touchMode, ['push', 'pull', 'spin', 'heat', 'cool'])),
     knobs(knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, v => `${Number(v).toFixed(2)}x`)),
     div({ class: 'buttons' },
@@ -184,6 +231,7 @@ export async function start () {
     shown.temp = sim.state.temp
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view: null })
     if (gloop.enabled) gloop.update(sim.state, sim.count, W, H, params.gravity, FRAME * pace())
+    drawMarks()
     updateReadout()
     requestAnimationFrame(frame)
   }
