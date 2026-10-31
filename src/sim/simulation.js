@@ -619,7 +619,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat = ELEMENT_HEAT[1], elementLife = ELEMENT_LIFE[1] } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1] } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
@@ -670,7 +670,7 @@ export function createSimulation ({ width, height, params }) {
           el.fresh = false
         }
         if (heaterTime >= el.next) {
-          el.heat = randomRange(elementHeat * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeat)
+          el.heat = randomRange(elementHeatTop * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeatTop)
           el.start = heaterTime
           let lifeScale = el.lifeScale || 1
           if (ELEMENTS_ARE_CUPS) {
@@ -679,7 +679,7 @@ export function createSimulation ({ width, height, params }) {
             el.coreFraction = el.coreMin + (el.cupHalf - el.coreMin) * u * u
             lifeScale = Math.max(1, lifeScale * el.coreMin / el.coreFraction)
           }
-          el.life = randomRange(elementLife * ELEMENT_LIFE[0] / ELEMENT_LIFE[1], elementLife) * lifeScale
+          el.life = randomRange(elementLifeTop * ELEMENT_LIFE[0] / ELEMENT_LIFE[1], elementLifeTop) * lifeScale
           el.next = 0
         }
       }
