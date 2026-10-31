@@ -233,7 +233,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero)
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -245,6 +245,7 @@ export function createSimulation ({ width, height, params }) {
   // Scratch for sorting the particle arrays into cell order (see reorder).
   let scratchF = new Float32Array(params.particleCount)
   let scratchI = new Int16Array(params.particleCount)
+  let scratchId = new Int32Array(params.particleCount)
   let sweep = false // which way the relaxation walks the sorted particles this step
   let visit = new Int32Array(0) // the order the relaxation visits the particles in this step
   let cellOrder = new Int32Array(0) // a fixed shuffle of the hash's cells
@@ -284,7 +285,8 @@ export function createSimulation ({ width, height, params }) {
       shared: new Float32Array(count), // neighbour mean temperature scratch space
       px: new Float32Array(count), // position after the drift move, before the pressure step (for the wobble kick)
       py: new Float32Array(count),
-      home: new Int16Array(count).fill(-1) // the bottle a hidden particle is in, -1 for none
+      home: new Int16Array(count).fill(-1), // the bottle a hidden particle is in, -1 for none
+      id: new Int32Array(count) // the particle's birth index, kept through the cell order sort, so a particle can be followed
     }
   }
 
@@ -293,6 +295,7 @@ export function createSimulation ({ width, height, params }) {
   function spawn (i, depth, hidden = false) {
     const list = hidden ? floorBottleList() : []
     state.home[i] = -1
+    state.id[i] = i
     state.x[i] = randomBetween(0, width)
     state.y[i] = randomRange(height - depth, height)
     if (list.length) {
@@ -570,19 +573,21 @@ export function createSimulation ({ width, height, params }) {
 
   function reorder () {
     const order = hash.indices
-    if (scratchF.length < alive) { scratchF = new Float32Array(alive); scratchI = new Int16Array(alive) }
-    const { x, y, vx, vy, temp, px, py, home } = state
+    if (scratchF.length < alive) { scratchF = new Float32Array(alive); scratchI = new Int16Array(alive); scratchId = new Int32Array(alive) }
+    const { x, y, vx, vy, temp, px, py, home, id } = state
     for (const a of [x, y, vx, vy, temp, px, py]) {
       for (let k = 0; k < alive; k++) scratchF[k] = a[order[k]]
       a.set(scratchF.subarray(0, alive))
     }
     for (let k = 0; k < alive; k++) scratchI[k] = home[order[k]]
     home.set(scratchI.subarray(0, alive))
+    for (let k = 0; k < alive; k++) scratchId[k] = id[order[k]]
+    id.set(scratchId.subarray(0, alive))
     for (let k = 0; k < alive; k++) order[k] = k
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1 } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
@@ -795,7 +800,7 @@ export function createSimulation ({ width, height, params }) {
         heat += w * temp[n]
       }
       shared[i] = weight > 0 ? heat / weight : temp[i]
-      relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach)
+      relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach, share)
       // Only at a surface, a stretched neck or a blob's skin being pulled back toward its neighbours
       // (surface tension), does the pressure step's kick become velocity, capped at WOBBLE_MAX
       // gravities. The surface test is pressure below zero, which is density below the rest
@@ -840,7 +845,7 @@ export function createSimulation ({ width, height, params }) {
         const i = visit[s]
         const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbEnd[i], i, interactionRadius)
         updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
-        relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach)
+        relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach, share)
         contain(i)
       }
     }

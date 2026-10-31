@@ -99,7 +99,7 @@ export function updatePressure (state, i, neighbours, stiffness, stiffnessNear, 
 // its pressure and it was extruded up the walls in a column (111 to 162 particles at the walls
 // against 7 to 12).
 export const RELAX_CAP = 20
-export function relax (state, i, neighbours, dt, cap = Infinity) {
+export function relax (state, i, neighbours, dt, cap = Infinity, share = 0.1) {
   const xi = state.x[i]
   const yi = state.y[i]
   const dtSq = dt * dt
@@ -114,8 +114,8 @@ export function relax (state, i, neighbours, dt, cap = Infinity) {
     const dy = unit[1] * magnitude
     sx += dx
     sy += dy
-    state.x[n] += dx * 0.1
-    state.y[n] += dy * 0.1
+    state.x[n] += dx * share
+    state.y[n] += dy * share
   }
   const shift = Math.sqrt(sx * sx + sy * sy)
   const capped = shift > cap
