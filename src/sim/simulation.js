@@ -233,7 +233,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px)
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -265,6 +265,7 @@ export function createSimulation ({ width, height, params }) {
   let touchHeatNow = TOUCH_HEAT // params.touchHeat as of the last step
   let touchRadiusNow = 0 // params.touchRadius as of the last step, px; 0 means the TOUCH_RADIUS fraction
   let wallPushNow = 0 // params.wallPush as of the last step, px
+  let meanDensity = 0 // the lava's mean density as of the last step, for the kick's surface test
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -581,7 +582,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0 } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
@@ -795,12 +796,19 @@ export function createSimulation ({ width, height, params }) {
       }
       shared[i] = weight > 0 ? heat / weight : temp[i]
       relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach)
-      if (wobble > 0 && state.p[i] < 0) {
-        // Only where the pressure is negative, which is a stretched neck or a blob's skin being
-        // pulled back toward its neighbours (surface tension), does the pressure step's kick become
-        // velocity, capped at WOBBLE_MAX gravities. Carrying the bulk pressure's kicks as well
-        // made the whole pool slosh like water even at a tenth of a second. Walls and glass never
-        // kick: contain comes after.
+      // Only at a surface, a stretched neck or a blob's skin being pulled back toward its neighbours
+      // (surface tension), does the pressure step's kick become velocity, capped at WOBBLE_MAX
+      // gravities. The surface test is pressure below zero, which is density below the rest
+      // density: right when the pool sits at its rest density, as the lamp's does. With `kickBelow`
+      // the test is density below that fraction of the lava's mean density instead: Robert's
+      // liquid sets the rest density far above anything the pool reaches (Stiff 3.7, Density 530,
+      // the pool at 12), so pressure is negative everywhere and the whole cold pool was kicked
+      // every frame, 91 px/s of carried velocity in lava that should lie still, and climbed the
+      // walls on it ("with heat off, the fluid should be completely static").
+      const surface = kickBelow > 0 ? state.p[i] / stiffness + restDensity < kickBelow * meanDensity : state.p[i] < 0
+      // Carrying the bulk pressure's kicks as well made the whole pool slosh like water even at a
+      // tenth of a second. Walls and glass never kick: contain comes after.
+      if (wobble > 0 && surface) {
         vx[i] += (x[i] - px[i]) / dt * wobbleKick
         vy[i] += (y[i] - py[i]) / dt * wobbleKick
         const speed = Math.hypot(vx[i], vy[i])
@@ -836,6 +844,9 @@ export function createSimulation ({ width, height, params }) {
         contain(i)
       }
     }
+    let densitySum = 0
+    for (let i = 0; i < alive; i++) densitySum += state.p[i] / stiffness + restDensity
+    meanDensity = alive > 0 ? densitySum / alive : 0
     // Applied after the pass so every particle saw the same temperatures.
     for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i])
   }

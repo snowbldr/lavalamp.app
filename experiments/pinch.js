@@ -39,6 +39,7 @@ export function start () {
   const substeps = fnstate(1)
   const reach = fnstate(0.2) // the most a relaxation step may move a particle, in radii; the check that keeps high Density from exploding
   const wall = fnstate(10) // px from a side wall within which lava is eased away from it; the walls also take the momentum carried into them
+  const skin = fnstate(0.8) // a particle counts as skin, and takes the kick, below this fraction of the lava's mean density; 0 is the lamp's rule, pressure below zero
   const size = fnstate(3)
   const smooth = fnstate(5) // edge smoothing radius, px
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
@@ -101,7 +102,7 @@ export function start () {
       // would weaken by the substep count; scaling the stiffnesses up by it keeps the liquid.
       particleCount: count(), interactionRadius: radius(), stiffness: stiffness() * substeps(), stiffnessNear: near() * substeps(), restDensity: density(),
       maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
-      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: settle(), viscosity: viscosity(), reach: reach(), wallPush: wall()
+      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: settle(), viscosity: viscosity(), reach: reach(), wallPush: wall(), kickBelow: skin()
     }
   }
 
@@ -109,7 +110,7 @@ export function start () {
   // clipboard button in the lab so I can share tweaks with you easier next time").
   const copied = fnstate(false)
   const states = {
-    wobble, kick, cap, gloop, stiff: stiffness, near, density, radius, settle, viscosity, substeps, reach, wall,
+    wobble, kick, cap, gloop, stiff: stiffness, near, density, radius, settle, viscosity, substeps, reach, wall, skin,
     lava: count, warm, pulse, gap, heat, finger, maxHeat, size, smooth, from, every: interval, frames,
     view, slow
   }
@@ -268,7 +269,8 @@ export function start () {
         knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1, scales: DECADES }, () => 32),
         knob('Substeps', 'substeps', substeps, { min: 1, max: 4, step: 1, scales: DECADES }, () => 1),
         knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01, scales: DECADES }, () => 0.2, v => `${Number(v).toFixed(2)} r`),
-        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1, scales: DECADES }, () => 10, v => `${v} px`)
+        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1, scales: DECADES }, () => 10, v => `${v} px`),
+        knob('Skin', 'skin', skin, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 0.8, v => Number(v).toFixed(2))
       ),
       hint(help, [
         ['Stiff', 'pressure pushing particles apart when they crowd past the rest density.'],
@@ -279,6 +281,7 @@ export function start () {
         ['Viscosity', 'how much neighbours slow each other as they close in (the paper\'s sigma): necks thin and tails pull in more slowly. Needs Wobble above 0.'],
         ['Reach', 'the most the pressure step may move a particle, in radii. Low keeps a high Density from flying apart; the lamp runs at 1.'],
         ['Wall', 'lava this close to a side wall is eased away from it, px, a glass the wax does not wet. The walls also absorb the momentum carried into them, at any setting.'],
+        ['Skin', 'which particles count as skin and take the Kick: those below this fraction of the lava\'s mean density. 0 is the lamp\'s rule, pressure below zero, which in this liquid is every particle, so the cold pool churned and climbed.'],
         ['Substeps', 'physics steps per frame. Finer grain (smaller Radius, more Lava) needs 2 or more or the lava breaks into droplets; each one costs the whole physics again.']
       ])),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
