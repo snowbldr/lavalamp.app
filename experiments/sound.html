@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>sound board</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script type="importmap">
+    { "imports": { "@srfnstack/fntags": "https://cdn.jsdelivr.net/npm/@srfnstack/fntags@1.3.0/index.js" } }
+    </script>
+    <link rel="stylesheet" href="../src/ui/panel.css">
+    <style>
+      body { margin: 0; background: #1c1c1e; color: #ececec; font: 13px system-ui, sans-serif; display: flex; gap: 16px; padding: 16px; box-sizing: border-box; min-height: 100vh; }
+      .board { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; }
+      .lamp { background: #000; width: 600px; height: 900px; position: relative; border-radius: 6px; overflow: hidden; }
+      .lamp canvas { position: absolute; left: 0; top: 0; }
+      .panel { position: relative; width: 380px; max-height: none; }
+      .readout { font-variant-numeric: tabular-nums; color: rgba(236,236,236,0.7); white-space: pre; }
+      .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+      .pending .toggle { animation: pending 0.7s ease-in-out infinite alternate; }
+    </style>
+</head>
+<body>
+<script type="module">
+  import { start } from './sound.js'
+  start()
+</script>
+</body>
+</html>

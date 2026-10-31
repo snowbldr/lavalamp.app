@@ -221,7 +221,7 @@ export const showCups = fnstate(false)
 // Sound from the lava, synthesised as it moves. Not saved: browsers want a click before audio anyway.
 export const sound = fnstate(false)
 export const soundPending = fnstate(false) // on while the audio is starting, for the switch to show it
-export const soundBeds = ['simmer', 'noise', 'hum', 'none']
+export const soundBeds = ['simmer', 'glug', 'noise', 'hum', 'none']
 export const soundBed = fnstate('simmer')
 // What a finger on the lamp does. Not saved.
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
