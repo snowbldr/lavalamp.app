@@ -214,6 +214,21 @@ const TOUCH_MIN = 80
 const TOUCH_PUSH = 250 // px/s at the centre
 const TOUCH_SPIN = 300 // px/s at the edge of the core
 const TOUCH_HEAT = 12 // px/s of temperature per step
+// Stirring overrides inertia. Where a finger or a strong eddy is at work the carried velocity is
+// replaced by the buoyancy drift (the Wobble 0 lamp, which is where the fingers and the tornadoes
+// were tuned) and the stirring moves the lava on top of that. Without this the pool's skin fought
+// every finger: the particles at a pushed hole's edge, and across the raised surface around it,
+// read as skin, their moves back were carried six times over at up to Cap gravities (2200 px/s
+// against the finger's 250), and a push held two seconds in the cold pool changed nothing; with
+// the kick off, 70% of the lava under the finger was gone. Fading the kick alone, by the local
+// stirring speed (0 to 21%) or by the finger's weight however wide (15 to 24%), was not enough:
+// the recoil arrives from the whole surface. A finger's override follows its weight: `finger`
+// times exp(-q^2), full to q 1.2, gone by 2.5. An eddy overrides where it is fast (its local speed
+// over `speed` px/s) and only when it is strong: its peak speed between `peak`. The defaults
+// (drifter cores up to 146 px/s, stationary eddies 45) sit at the bottom of that range, so the
+// lamp at rest is close to untouched; at the top of the Turbulence slider (drifters 375 px/s) the
+// tornadoes win. One mutable object so a lab or the console can tune it live.
+export const STIR_OVERRIDE = { finger: 4, speed: 100, peak: [120, 240] }
 // Turbulence: now and then an eddy appears at a random spot, a slow vortex that fades in and out
 // over a few seconds, spinning either way. Each is a Gaussian vortex, so it is divergence free
 // and moves the lava around without squashing it. The gap between eddies, their size and their
@@ -527,6 +542,68 @@ export function createSimulation ({ width, height, params }) {
     return heat
   }
 
+  // The strength gate of an eddy with this peak speed, 0 to 1 (see STIR_OVERRIDE.peak).
+  function overrideGate (peak) {
+    return Math.min(1, Math.max(0, (peak - STIR_OVERRIDE.peak[0]) / (STIR_OVERRIDE.peak[1] - STIR_OVERRIDE.peak[0])))
+  }
+
+  // Whether any eddy is strong enough to override at all this step.
+  function overrideActive () {
+    const strength = Math.abs(params.turbulence || 0)
+    if (strength === 0) return false
+    for (const e of eddies) if (overrideGate(strength * Math.sin(Math.PI * (time - e.start) / e.life)) > 0) return true
+    for (const e of drifting) { const age = time - e.start; if (overrideGate(e.gain * strength * Math.min(1, age) * (1 - age / e.life)) > 0) return true }
+    return false
+  }
+
+  // How much the eddies at a point override the inertia, 0 to 1 (see STIR_OVERRIDE.peak).
+  function overrideAt (px, py) {
+    const strength = Math.abs(params.turbulence || 0)
+    if (strength === 0) return 0
+    let fade = 0
+    for (let k = 0; k < eddies.length && fade < 1; k++) {
+      const e = eddies[k]
+      const dx = (px - e.x) / e.radius
+      const dy = (py - e.y) / e.radius
+      const envelope = Math.sin(Math.PI * (time - e.start) / e.life)
+      const peak = strength * envelope
+      const gate = overrideGate(peak)
+      if (gate === 0) continue
+      const rho = Math.sqrt(dx * dx + dy * dy)
+      const speed = peak / EDDY_PEAK * rho * Math.exp(-rho * rho)
+      fade = Math.max(fade, gate * Math.min(1, speed / STIR_OVERRIDE.speed))
+    }
+    for (let k = 0; k < drifting.length && fade < 1; k++) {
+      const e = drifting[k]
+      const age = time - e.start
+      const envelope = Math.min(1, age) * (1 - age / e.life)
+      const peak = e.gain * strength * envelope
+      const gate = overrideGate(peak)
+      if (gate === 0) continue
+      const r = Math.hypot(px - e.x, py - e.y)
+      const q = r / e.core
+      const speed = peak * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
+      fade = Math.max(fade, gate * Math.min(1, speed / STIR_OVERRIDE.speed))
+    }
+    return fade
+  }
+
+  // How much the stirring at a point overrides the inertia: the eddies above, or a moving finger
+  // (push, pull, spin) by its weight.
+  function stirFree (px, py) {
+    let fade = overrideAt(px, py)
+    if (touches.length && fade < 1) {
+      const radius = touchRadiusNow > 0 ? touchRadiusNow : Math.max(TOUCH_MIN, TOUCH_RADIUS * Math.min(width, height))
+      for (let k = 0; k < touches.length; k++) {
+        const t = touches[k]
+        if (t.mode === 'heat' || t.mode === 'cool') continue
+        const q = Math.hypot(px - t.x, py - t.y) / radius
+        fade = Math.max(fade, Math.min(1, STIR_OVERRIDE.finger * Math.exp(-q * q)))
+      }
+    }
+    return fade
+  }
+
   // Move every particle by a function of its position. Used when the lamp turns to follow gravity.
   function transform (fn) {
     const { x, y } = state
@@ -759,6 +836,7 @@ export function createSimulation ({ width, height, params }) {
     const eddy = [0, 0]
     const finger = [0, 0]
     const touching = touches.length > 0
+    const overriding = touching || overrideActive()
 
     const cell = Math.max(MIN_CELL, interactionRadius * CELL_FRACTION)
     if (hash.cellSize !== cell) hash.resize(width, height, cell)
@@ -779,8 +857,17 @@ export function createSimulation ({ width, height, params }) {
       // fully overdamped. The paper recomputes velocity from the previous position (Algorithm 1,
       // line 20); dropping that is what turns splashing water into wax.
       eddyVelocity(x[i], y[i], turbulence, eddy)
-      const driftX = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
-      const driftY = gravity + fy - temp[i] + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
+      // The stirring (the roll, the eddies, the fingers, a shake of the phone) is a velocity
+      // imposed on the lava, a spoon in the wax, and moves it this step at full strength. Only
+      // buoyancy goes through the inertia below. Eased in with the drift as it was, a finger or
+      // an eddy added a fraction of a pixel a step and the pressure pass undid it every time
+      // (push held two seconds in the pool: no change at Wobble 0.87, half the lava under the
+      // finger gone at Wobble 0; Robert: "the touch controls on GPU are super weak ... the
+      // eddies are also too weak now").
+      const stirX = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
+      const stirY = fy + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
+      const driftX = 0
+      const driftY = gravity - temp[i]
       if (wobble > 0) {
         // Inertia (Robert, with a video of a real lamp: "it's that snap back effect. and the
         // stretchiness and jiggle. we don't have those... This is a miss in our physics
@@ -791,14 +878,19 @@ export function createSimulation ({ width, height, params }) {
         const ease = Math.min(1, dt / wobble)
         vx[i] += (driftX - vx[i]) * ease
         vy[i] += (driftY - vy[i]) * ease
+        // Under a finger or inside a strong eddy the lava has no memory: see STIR_OVERRIDE.
+        if (overriding) {
+          const f = stirFree(x[i], y[i])
+          if (f > 0) { vx[i] += (driftX - vx[i]) * f; vy[i] += (driftY - vy[i]) * f }
+        }
       } else {
         vx[i] = driftX
         vy[i] = driftY
       }
-      px[i] = x[i] + vx[i] * dt
-      py[i] = y[i] + vy[i] * dt
-      x[i] += vx[i] * dt
-      y[i] += vy[i] * dt
+      px[i] = x[i] + (vx[i] + stirX) * dt
+      py[i] = y[i] + (vy[i] + stirY) * dt
+      x[i] = px[i]
+      y[i] = py[i]
     }
     hash.build(x, y, alive)
     reorder()
@@ -1300,6 +1392,7 @@ export function createSimulation ({ width, height, params }) {
     setTouches,
     transform,
     flowAt,
+    overrideAt,
     heaterAt,
     heaterElements,
     ceilingAt,

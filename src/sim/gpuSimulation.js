@@ -34,7 +34,7 @@
 //   conduct    temperature eased toward the neighbours' mean
 // density and relax repeat for each extra Settle pass.
 
-import { createSimulation } from './simulation.js'
+import { createSimulation, STIR_OVERRIDE } from './simulation.js'
 
 const WORKGROUP = 64
 const MAX_TOUCHES = 4
@@ -101,6 +101,7 @@ struct Params {
   floorBottles: u32,
   relaxCap: f32,
   gridTop: f32,
+  fingerOverride: f32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -310,21 +311,25 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     let d2 = (dx * dx + fromFloor * fromFloor) / (er * er);
     if (d2 < 4.0) { t = min(P.maxTemp, t + heat * exp(-d2)); }
   }
-  // The stirring at this point, from the grid, bilinear.
+  // The stirring at this point, from the grid, bilinear: velocity and how much the eddies here
+  // override the inertia (simulation.js overrideAt), three floats a point.
   var stir = vec2f(P.impulseX, P.impulseY);
+  var stirred = 0.0; // how much the stirring here overrides the inertia (override is a WGSL keyword)
   if (P.gridCols > 1u && P.gridRows > 1u) {
     let gx = clamp(p.x / P.gridCell, 0.0, f32(P.gridCols - 1u) - 0.001);
     let gy = clamp(p.y / P.gridCell, 0.0, f32(P.gridRows - 1u) - 0.001);
     let x0 = u32(floor(gx)); let y0 = u32(floor(gy));
     let fx = gx - f32(x0); let fy = gy - f32(y0);
     let at = P.flowAt;
-    let i00 = at + (x0 + y0 * P.gridCols) * 2u;
-    let i10 = i00 + 2u;
-    let i01 = i00 + P.gridCols * 2u;
-    let i11 = i01 + 2u;
-    let v00 = vec2f(WLD[i00], WLD[i00 + 1u]); let v10 = vec2f(WLD[i10], WLD[i10 + 1u]);
-    let v01 = vec2f(WLD[i01], WLD[i01 + 1u]); let v11 = vec2f(WLD[i11], WLD[i11 + 1u]);
-    stir += mix(mix(v00, v10, fx), mix(v01, v11, fx), fy);
+    let i00 = at + (x0 + y0 * P.gridCols) * 3u;
+    let i10 = i00 + 3u;
+    let i01 = i00 + P.gridCols * 3u;
+    let i11 = i01 + 3u;
+    let v00 = vec3f(WLD[i00], WLD[i00 + 1u], WLD[i00 + 2u]); let v10 = vec3f(WLD[i10], WLD[i10 + 1u], WLD[i10 + 2u]);
+    let v01 = vec3f(WLD[i01], WLD[i01 + 1u], WLD[i01 + 2u]); let v11 = vec3f(WLD[i11], WLD[i11 + 1u], WLD[i11 + 2u]);
+    let s = mix(mix(v00, v10, fx), mix(v01, v11, fx), fy);
+    stir += s.xy;
+    stirred = s.z;
   }
   // Fingers: heat, cool, push, pull, spin.
   var finger = vec2f(0.0, 0.0);
@@ -337,17 +342,21 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     let w = exp(-q * q);
     if (tc.mode == 3u) { t += P.touchHeat * w; }
     else if (tc.mode == 4u) { t -= P.touchHeat * w; }
-    else if (tc.mode == 0u) { let u = select(vec2f(0.0), d / r, r > 0.0); finger += (250.0 * u + vec2f(tc.vx, tc.vy)) * w; }
+    else { stirred = max(stirred, min(1.0, P.fingerOverride * w)); } // a moving finger overrides the inertia by its weight, simulation.js STIR_OVERRIDE.finger
+    if (tc.mode == 0u) { let u = select(vec2f(0.0), d / r, r > 0.0); finger += (250.0 * u + vec2f(tc.vx, tc.vy)) * w; }
     else if (tc.mode == 1u) { if (r > 0.0) { let speed = min(250.0 * w, r / P.dt); finger += -d / r * speed + vec2f(tc.vx, tc.vy) * w; } }
     else if (tc.mode == 2u) { let core = P.touchRadius * 0.5; let c = r / core; let speed = 300.0 * 2.0 * c / (1.0 + c * c) * exp(-(q * q) / 4.0); if (r > 0.0) { finger += vec2f(-d.y, d.x) / r * speed + vec2f(tc.vx, tc.vy) * w; } }
   }
   t = clamp(t, 0.0, P.maxTemp);
   F[TEMP(i)] = t;
-  let drift = vec2f(finger.x + stir.x, P.gravity - t + finger.y + stir.y);
+  // Buoyancy goes through the inertia; the stirring (roll, eddies, fingers, impulse) moves the
+  // lava at full strength this step, and under a finger or inside a strong eddy the carried
+  // velocity gives way to the drift (no memory there), as simulation.js STIR_OVERRIDE.
+  let drift = vec2f(0.0, P.gravity - t);
   var v = V[VEL(i)];
-  if (P.wobble > 0.0) { v += (drift - v) * min(1.0, P.dt / P.wobble); } else { v = drift; }
+  if (P.wobble > 0.0) { v += (drift - v) * max(min(1.0, P.dt / P.wobble), stirred); } else { v = drift; }
   V[VEL(i)] = v;
-  p += v * P.dt;
+  p += (v + finger + stir) * P.dt;
   // Kept inside the box here and after every relaxation pass, not only at the end of the step:
   // with the floor enforced once, each pass pushed the bottom row through it and back and 300
   // particles sat on the floor line (the CPU keeps 17), took the floor's contact heat, and the
@@ -644,14 +653,14 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 48 // the Params struct, 47 fields, padded to 192 bytes
+const PARAM_FLOATS = 48 // the Params struct, 48 fields, 192 bytes
 const POWER_COLUMNS = 256
 const MAX_ELEMENTS = 32
 const ELEMENTS_AT = POWER_COLUMNS
 const FLOW_AT = POWER_COLUMNS + MAX_ELEMENTS * 8
 const FLOW_CELL = 24 // px between stirring samples
 const MAX_FLOW_POINTS = 16384
-const WORLD_FLOATS = FLOW_AT + MAX_FLOW_POINTS * 2
+const WORLD_FLOATS = FLOW_AT + MAX_FLOW_POINTS * 3 // vx, vy, override a point
 
 export function isWebGpuAvailable () {
   return typeof navigator !== 'undefined' && !!navigator.gpu
@@ -889,6 +898,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pu[44] = floor.length
     pf[45] = RELAX_CAP
     pf[46] = gridTop
+    pf[47] = STIR_OVERRIDE.finger
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
@@ -1043,22 +1053,27 @@ export function createGpuLamp ({ device, width, height, params }) {
     const stirring = (params.stir || 0) !== 0 || (params.turbulence || 0) !== 0
     for (let gy = 0; gy < gridRows; gy++) {
       for (let gx = 0; gx < gridCols; gx++) {
-        const o = FLOW_AT + (gx + gy * gridCols) * 2
-        if (stirring) { const [vx, vy] = shell.flowAt(gx * gridCell, gy * gridCell); floats[o] = vx; floats[o + 1] = vy } else { floats[o] = 0; floats[o + 1] = 0 }
+        const o = FLOW_AT + (gx + gy * gridCols) * 3
+        if (stirring) { const [vx, vy] = shell.flowAt(gx * gridCell, gy * gridCell); floats[o] = vx; floats[o + 1] = vy; floats[o + 2] = shell.overrideAt(gx * gridCell, gy * gridCell) } else { floats[o] = 0; floats[o + 1] = 0; floats[o + 2] = 0 }
       }
     }
     gpu.setWorld(floats, { elementCount: n, gridCols, gridRows, gridCell })
   }
+  // The fingers act on the GPU side, so the shell steps and is sampled without them (they would
+  // land twice through the flow grid); they are given back to it after, so the flow field drawn
+  // from shell.flowAt shows them, as the CPU lamp's does.
+  let fingers = []
   return {
     step (dt) {
-      shell.setTouches([]) // the fingers act on the GPU side
+      shell.setTouches([])
       shell.step(dt)
       sample()
       gpu.step(dt)
+      shell.setTouches(fingers)
     },
     resize (w, h) { shell.resize(w, h); gpu.resize(w, h) },
     push: gpu.push,
-    setTouches: gpu.setTouches,
+    setTouches (list) { fingers = list || []; gpu.setTouches(fingers) },
     transform: gpu.transform,
     flowAt: shell.flowAt,
     heaterAt: shell.heaterAt,
