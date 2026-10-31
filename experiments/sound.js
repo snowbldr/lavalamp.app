@@ -3,7 +3,7 @@
 // board experiment for playing with the sounds along with the lava"). Buttons play each voice by
 // hand, a readout counts what the lava fired, Copy settings gives the tune as one line of JSON
 // to paste back, and the last tune is kept in this browser.
-import { button, div, fnstate, span } from '@srfnstack/fntags'
+import { a, button, div, fnstate, input, span } from '@srfnstack/fntags'
 import { createGpuLamp, getGpuDevice } from '../src/sim/gpuSimulation.js'
 import { createSimulation } from '../src/sim/simulation.js'
 import { seedRandom } from '../src/sim/random.js'
@@ -11,6 +11,7 @@ import { createRenderer } from '../src/render/renderer.js'
 import { createPointerInput } from '../src/input/pointer.js'
 import { BEDS, EVENTS, TUNE, createGloop } from '../src/audio/gloop.js'
 import { DECADES, hint, knob, knobs, row, segmented, toggle } from '../src/ui/components.js'
+import { DEFAULTS as SAMPLE_DEFAULTS, SAMPLE_EVENTS, createSamplePlayer } from './samplePlayer.js'
 import {
   GPU_PARTICLES, GPU_REACH, setParticleBudget,
   computeDefaultParticleCount, computeDefaultInteractionRadius, computeDefaultParticleSize, computeDefaultSmooth, computeDefaultBlend,
@@ -108,7 +109,58 @@ export async function start () {
   const bed = fnstate('simmer')
   const ticks = fnstate(false)
   ticks.subscribe(on => gloop.setTicks(on))
+  // Recorded samples, each tied to an event (see samplePlayer.js), from experiments/samples/
+  // and from files dropped in. Their settings are kept in this browser by name.
+  const player = createSamplePlayer(() => gloop.context, () => gloop.master)
+  const SAMPLE_STORE = 'sound-board-samples'
+  const sampleSettings = (() => { try { return JSON.parse(localStorage.getItem(SAMPLE_STORE) || '{}') } catch (e) { return {} } })()
+  const saveSamples = () => { for (const s of player.samples) sampleSettings[s.name] = s.settings; localStorage.setItem(SAMPLE_STORE, JSON.stringify(sampleSettings)) }
+  const sampleList = div({ class: 'samples' })
+  const SAMPLE_KNOBS = [
+    ['gain', 'Gain', 0, 1, 0.01, 2], ['pitch', 'Pitch', -36, 36, 1, 0], ['stretch', 'Stretch', 0.1, 6, 0.05, 2],
+    ['start', 'Start', 0, 1, 0.01, 2], ['end', 'End', 0, 1, 0.01, 2], ['pitchBySize', 'Pitch/size', -36, 36, 1, 0], ['stretchBySize', 'Stretch/size', -4, 4, 0.1, 1], ['cooldown', 'Cooldown', 0, 2, 0.05, 2]
+  ]
+  function addSample (name, buffer, meta) {
+    const sample = player.add(name, buffer, meta, sampleSettings[name] || {})
+    const states = {}
+    for (const [key] of SAMPLE_KNOBS) { states[key] = fnstate(sample.settings[key]); states[key].subscribe(v => { sample.settings[key] = Number(v); saveSamples() }) }
+    const event = fnstate(sample.settings.event)
+    event.subscribe(v => { sample.settings.event = v; saveSamples() })
+    const card = div({ class: 'sample' },
+      div({ class: 'sample-title' },
+        button({ class: 'small', onclick: () => player.play(sample, { size: 0.5 }) }, '▶'),
+        ' ', span(name), ' ',
+        span({ class: 'readout' }, `${buffer.duration.toFixed(2)} s`), ' ',
+        meta.source ? a({ href: meta.source, target: '_blank', rel: 'noopener', style: { color: '#9ab' } }, meta.license || 'source') : ''
+      ),
+      div({ class: 'buttons' },
+        button({ class: 'small', onclick: () => player.play(sample, { size: 0.1 }) }, 'small'),
+        button({ class: 'small', onclick: () => player.play(sample, { size: 0.9 }) }, 'big')
+      ),
+      row('Event', segmented(`${name}-event`, event, SAMPLE_EVENTS)),
+      knobs(...SAMPLE_KNOBS.map(([key, label, min, max, step, digits]) => knob(label, `${name}-${key}`, states[key], { min, max, step, scales: DECADES }, () => SAMPLE_DEFAULTS[key], fixed(digits))))
+    )
+    sampleList.appendChild(card)
+  }
+  async function loadSample (name, url, meta) {
+    const context = gloop.context
+    if (!context) return
+    const bytes = await (await fetch(url)).arrayBuffer()
+    const buffer = await context.decodeAudioData(bytes)
+    addSample(name, buffer, meta)
+  }
+  let manifestLoaded = false
+  async function loadManifest () {
+    if (manifestLoaded || !gloop.context) return
+    manifestLoaded = true
+    try {
+      const list = await (await fetch('./samples/manifest.json', { cache: 'no-cache' })).json()
+      for (const item of list) await loadSample(item.name, `./samples/${item.file}`, item).catch(err => console.warn('sample', item.file, err))
+    } catch (e) { console.warn('no samples manifest', e) }
+  }
+  const filePicker = input({ type: 'file', accept: 'audio/*', multiple: true, onchange: async ev => { for (const file of ev.target.files) { const buffer = await gloop.context.decodeAudioData(await file.arrayBuffer()); addSample(file.name.replace(/\.[^.]+$/, ''), buffer, { source: '', license: 'your file' }) } } })
   gloop.onEvent = e => {
+    player.trigger(e)
     live.push({ ...e, at: performance.now() })
     recent.unshift(`${e.time.toFixed(1).padStart(6)}s  ${e.type.padEnd(5)}  x ${(e.x * 100).toFixed(0).padStart(3)}%  y ${(e.y * 100).toFixed(0).padStart(3)}%  size ${e.size.toFixed(2)}`)
     if (recent.length > 12) recent.pop()
@@ -147,7 +199,7 @@ export async function start () {
   for (const k in states) { gloop.tune[k] = states[k](); states[k].subscribe(v => { gloop.tune[k] = Number(v); save() }) }
   gloop.setBed(bed())
   bed.subscribe(name => { gloop.setBed(name); save() })
-  sound.subscribe(on => { pending(!!on); gloop.set(on).then(() => pending(false)) })
+  sound.subscribe(on => { pending(!!on); gloop.set(on).then(() => { pending(false); loadManifest() }) })
   const copied = fnstate(false)
   function copy () {
     const out = { bed: bed() }
@@ -198,6 +250,10 @@ export async function start () {
     div({ class: 'readout' }, readout.bindAs(() => readout())),
     hint(help, 'The lamp runs on the left with the lamp\'s own defaults. Turn Sound on, pick a Bed, and turn the numbers while it plays; the buttons play each voice by hand at a small and a big size. Fast is the speed, in gravities, above which a particle counts as moving; Burst the jump in a column\'s moving count that fires a bloop, as a share of the lava. Every change is kept in this browser.'),
     ...groups,
+    div({ class: 'row-label', style: { marginTop: '12px', opacity: 0.7 } }, 'Samples'),
+    hint(help, 'Recorded sounds, from experiments/samples and any files you add. Each plays by hand (small and big) and fires on the event it is set to, pitched by Pitch plus Pitch/size times the event\'s size (negative is bigger lower), stretched without changing pitch by Stretch (grains), trimmed by Start and End. Settings are kept by name in this browser. Sound has to be on to load them.'),
+    row('Add files', filePicker),
+    sampleList,
     div({ class: 'actions' },
       button({ onclick: copy }, copied.bindAs(() => copied() ? 'Copied' : 'Copy settings')),
       button({ onclick: reset }, 'Reset')

@@ -373,6 +373,9 @@ export function createGloop (tune = {}) {
     tune: T,
     get bed () { return bed },
     get enabled () { return enabled },
-    get stats () { return { ...stats, bed, state: context ? context.state : 'off' } }
+    get stats () { return { ...stats, bed, state: context ? context.state : 'off' } },
+    // The audio graph, for the sound board's sample player.
+    get context () { return context },
+    get master () { return master }
   }
 }
