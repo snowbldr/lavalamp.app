@@ -166,13 +166,13 @@ export function createSettingsPanel () {
       hint(help, 'The colours follow the view: the heat map gradient from coldest, sinking lava to hottest while the heat map is on, the lava and its lit underside while it is off, and the slowest to fastest arrow while the flow field is on.'),
       knobs(
         knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
-        knob('Gloop', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction, fixed(2)),
+        knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction, fixed(2)),
         knob('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir),
         knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
       ),
       hint(help, [
         ['Heat', 'Seconds between heating elements lighting under the lava; 0 keeps the whole floor warm instead.'],
-        ['Gloop', 'How fast heat spreads between touching lava, so a blob warms and lifts as one; higher is gloopier.'],
+        ['Conduct', 'How fast heat spreads between touching lava. High and a blob warms and lifts as one; too high and a rising blob heats the pool below it through its neck and feeds the stretch.'],
         ['Stir', 'Speed of the slow convection roll, up the middle and down the walls; negative runs it backwards.'],
         ['Pace', 'Slow motion for the whole lamp.']
       ]),

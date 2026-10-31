@@ -261,13 +261,13 @@ export async function start () {
         knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02, scales: DECADES }, () => 0.87, v => `${v} s`),
         knob('Kick', 'kick', kick, { min: 0, max: 3, step: 0.1, scales: DECADES }, () => 6),
         knob('Cap', 'cap', cap, { min: 0.5, max: 5, step: 0.1, scales: DECADES }, () => 3.4, v => `${v} g`),
-        knob('Gloop', 'gloop', gloop, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 0.55, v => Number(v).toFixed(4))
+        knob('Conduct', 'gloop', gloop, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 0.55, v => Number(v).toFixed(4))
       ),
       hint(help, [
         ['Wobble', 'inertia: seconds for a particle to ease onto its drift. 0 is the overdamped wax with no snap at all.'],
         ['Kick', 'how much of the surface tension pull on a stretched neck or a blob skin is carried on as velocity.'],
         ['Cap', 'the fastest that carried velocity may get, in gravities.'],
-        ['Gloop', 'heat conduction between touching particles: high is lava that warms and lifts as one piece.']
+        ['Conduct', 'heat conduction between touching particles: high is lava that warms and lifts as one piece.']
       ]),
       knobs(
         knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1, scales: DECADES }, () => 7.5),
