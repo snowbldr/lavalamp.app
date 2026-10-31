@@ -9,6 +9,7 @@ import { random, randomBetween, randomNormal, randomRange } from './random.js'
 // hundreds of candidates for 35 neighbours, and findNeighbours was two thirds of a 52 ms step at
 // 6000 particles. Never below MIN_CELL, or the grid itself gets huge and clearing it is the cost.
 const MIN_CELL = 8
+const WALL_PUSH_RATE = 2 // px/s of velocity away from the wall per px inside the wallPush margin, per step
 const RELAX_REACH = Infinity // the most a relaxation step may move a particle, in interaction radii (params.reach); the lamp runs uncapped
 const CELL_FRACTION = 0.75 // cell size as a fraction of the radius: smaller cells mean fewer candidates but more cells to walk; 0.75 measured best for the lamp (6.7 ms against 7.8 at 1 and 7.5 at 0.5)
 // How the lava arrives on load: all at once, as a warm slab already lying on the floor.
@@ -232,7 +233,7 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii)
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -263,6 +264,7 @@ export function createSimulation ({ width, height, params }) {
   let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
   let touchHeatNow = TOUCH_HEAT // params.touchHeat as of the last step
   let touchRadiusNow = 0 // params.touchRadius as of the last step, px; 0 means the TOUCH_RADIUS fraction
+  let wallPushNow = 0 // params.wallPush as of the last step, px
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -579,10 +581,11 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0 } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
+    wallPushNow = wallPush
     if (cups.length === 0) layoutCups()
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
     // params.particleCount is the visible lava; the floor's reservoirs fill themselves on top of
@@ -899,17 +902,27 @@ export function createSimulation ({ width, height, params }) {
     return out
   }
 
+  // A particle at a wall loses the velocity it carried into it: the wall took that momentum. Left
+  // in, a carried velocity pressed the particle into the wall every frame and the wall became the
+  // thing the lava stuck to (Robert, with the liquid otherwise right: "We have a mad bad wall
+  // climbing problem"; measured at his line, 27% of the lava above the pool was within 25 px of a
+  // wall, two and a half times the lava in the next 25 px; at Wobble 0, where velocity is rebuilt
+  // every frame anyway, 8% and 1.1 times). With `wallPush`, lava within that many px of a wall is
+  // also eased away from it, a glass that wax does not wet. The lamp's defaults (Wobble 0, no push)
+  // are untouched by either.
   function contain (i) {
-    const { x, y } = state
-    if (x[i] < 0) x[i] = 0
-    else if (x[i] > width) x[i] = width
+    const { x, y, vx, vy } = state
+    if (x[i] < 0) { x[i] = 0; if (vx[i] < 0) vx[i] = 0 } else if (x[i] > width) { x[i] = width; if (vx[i] > 0) vx[i] = 0 }
+    if (wallPushNow > 0) {
+      if (x[i] < wallPushNow) vx[i] += (wallPushNow - x[i]) * WALL_PUSH_RATE
+      else if (x[i] > width - wallPushNow) vx[i] -= (x[i] - (width - wallPushNow)) * WALL_PUSH_RATE
+    }
     if (cupDepthNow > 0) {
       if (y[i] > height) containIn(floorBottleList(), i)
       else if (y[i] < CUP_LIP * Math.min(width, height)) containIn(ceilingBottleList(), i)
       else state.home[i] = -1
     } else {
-      if (y[i] < 0) y[i] = 0
-      else if (y[i] > height) y[i] = height
+      if (y[i] < 0) { y[i] = 0; if (vy[i] < 0) vy[i] = 0 } else if (y[i] > height) { y[i] = height; if (vy[i] > 0) vy[i] = 0 }
     }
   }
 
