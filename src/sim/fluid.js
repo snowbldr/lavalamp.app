@@ -8,17 +8,56 @@
 // g = 1 - r/h in state.g, indexed by the neighbour. The weights are scratch space, valid only
 // until the next particle is processed, and so is the array returned: it is the same array
 // every call, emptied and refilled, which spares the garbage collector one array per particle
-// per step (a measurable share of the step on a phone).
+// per step (a measurable share of the step on a phone). Walks the hash's cells directly, columns
+// outer and rows inner as the old query did, so the neighbours come in the same order.
 const neighbours = []
 export function findNeighbours (state, hash, i, radius) {
-  const candidates = hash.query(state.x[i], state.y[i], radius)
-  const radiusSq = radius * radius
   const xi = state.x[i]
   const yi = state.y[i]
+  const radiusSq = radius * radius
+  const { start, indices, cols } = hash
+  const left = hash.cellX(xi - radius)
+  const right = hash.cellX(xi + radius)
+  const top = hash.cellY(yi - radius)
+  const bottom = hash.cellY(yi + radius)
+  const x = state.x
+  const y = state.y
+  const g = state.g
   neighbours.length = 0
-  for (let k = 0; k < candidates.length; k++) {
-    const n = candidates[k]
-    if (n === i) continue
+  for (let cx = left; cx <= right; cx++) {
+    for (let cy = top; cy <= bottom; cy++) {
+      const c = cx + cy * cols
+      const end = start[c + 1]
+      for (let k = start[c]; k < end; k++) {
+        const n = indices[k]
+        if (n === i) continue
+        const dx = xi - x[n]
+        const dy = yi - y[n]
+        const distSq = dx * dx + dy * dy
+        if (distSq > radiusSq) continue
+        const w = 1 - Math.sqrt(distSq) / radius
+        if (w === 0) continue
+        g[n] = w
+        neighbours.push(n)
+      }
+    }
+  }
+  return neighbours
+}
+
+// The neighbours found for particle i in the pressure pass, kept (indices only) so the viscosity
+// and settle passes of the same step can reuse them instead of asking the hash again: the kernel
+// weights are recomputed from the current positions and a neighbour that has since left the
+// radius is dropped. One that has since entered it is missed until next step, which the
+// relaxation's small shifts make rare. Saves two of the three neighbour searches a step
+// (findNeighbours was two thirds of the step at 6000 particles).
+export function reuseNeighbours (state, list, start, end, i, radius) {
+  const xi = state.x[i]
+  const yi = state.y[i]
+  const radiusSq = radius * radius
+  neighbours.length = 0
+  for (let k = start; k < end; k++) {
+    const n = list[k]
     const dx = xi - state.x[n]
     const dy = yi - state.y[n]
     const distSq = dx * dx + dy * dy

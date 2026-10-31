@@ -1,9 +1,15 @@
 import { SpatialHash } from './spatialHash.js'
-import { RELAX_CAP, findNeighbours, relax, updatePressure, viscosity } from './fluid.js'
+import { RELAX_CAP, findNeighbours, relax, reuseNeighbours, updatePressure, viscosity } from './fluid.js'
 import { nextTemperature } from './heat.js'
 import { random, randomBetween, randomNormal, randomRange } from './random.js'
 
-const CELL_SIZE = 50
+// The spatial hash's cell is the interaction radius, so a neighbour query touches nine cells of
+// the right size whatever the radius. It was a fixed 50 px, tuned for the lamp's radius 60: at
+// Robert's fine grained radius 8 every query then swept up to four 50 px cells of a packed pool,
+// hundreds of candidates for 35 neighbours, and findNeighbours was two thirds of a 52 ms step at
+// 6000 particles. Never below MIN_CELL, or the grid itself gets huge and clearing it is the cost.
+const MIN_CELL = 8
+const CELL_FRACTION = 0.75 // cell size as a fraction of the radius: smaller cells mean fewer candidates but more cells to walk; 0.75 measured best for the lamp (6.7 ms against 7.8 at 1 and 7.5 at 0.5)
 // How the lava arrives on load: all at once, as a warm slab already lying on the floor.
 // SPAWN_HEAT is the fraction of gravity each particle starts at. Cold lava falls at full gravity
 // into the stack every frame and pressure has to push it back apart, which jitters at 5x the
@@ -227,9 +233,12 @@ const DRIFT_VARIETY = [0.7, 1.3]
 // `params` is a plain object the caller keeps up to date:
 //   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, settle, viscosity
 export function createSimulation ({ width, height, params }) {
-  const hash = new SpatialHash(width, height, CELL_SIZE)
+  const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
   let state = allocate(params.particleCount)
+  // Each particle's neighbours from the pressure pass, flat: nbStart[i] to nbStart[i + 1] in nbList.
+  let nbList = new Int32Array(params.particleCount * 16)
+  let nbStart = new Int32Array(params.particleCount + 1)
   // The live count follows params.particleCount; particles added later appear in the slab too.
   let alive = 0
   let heaterTime = 0
@@ -628,7 +637,8 @@ export function createSimulation ({ width, height, params }) {
     const finger = [0, 0]
     const touching = touches.length > 0
 
-    hash.clear()
+    const cell = Math.max(MIN_CELL, interactionRadius * CELL_FRACTION)
+    if (hash.cellSize !== cell) hash.resize(width, height, cell)
     for (let i = 0; i < alive; i++) {
       temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, heater ? powerAt(x[i]) : 0, HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
       if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || ELEMENTS_ARE_CUPS || y[i] <= height)) {
@@ -666,15 +676,25 @@ export function createSimulation ({ width, height, params }) {
       py[i] = y[i] + vy[i] * dt
       x[i] += vx[i] * dt
       y[i] += vy[i] * dt
-      hash.add(x[i], y[i], i)
     }
+    hash.build(x, y, alive)
 
     const { g, shared, home } = state
+    if (nbStart.length < alive + 1) nbStart = new Int32Array(alive + 1)
+    let nbUsed = 0
     for (let i = 0; i < alive; i++) {
       const neighbours = findNeighbours(state, hash, i, interactionRadius)
+      nbStart[i] = nbUsed
+      if (nbUsed + neighbours.length > nbList.length) {
+        const bigger = new Int32Array(Math.max(nbList.length * 2, nbUsed + neighbours.length))
+        bigger.set(nbList)
+        nbList = bigger
+      }
+      for (let k = 0; k < neighbours.length; k++) nbList[nbUsed++] = neighbours[k]
       updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
       let weight = 0
       let heat = 0
+      const inBottle = home[i] >= 0
       for (let k = 0; k < neighbours.length; k++) {
         const n = neighbours[k]
         // Heat crossing from one bottle to another goes through glass: GLASS_CONDUCTION of the
@@ -682,7 +702,7 @@ export function createSimulation ({ width, height, params }) {
         // which is kinda good because it makes neighbor bottles interact and drop together, but i
         // think we should model this intentionally and make the heat conduction less effective
         // if it's crossing between bottles"). Through a mouth it is full.
-        const w = home[i] >= 0 && home[n] >= 0 && home[i] !== home[n] ? g[n] * GLASS_CONDUCTION : g[n]
+        const w = inBottle && home[n] >= 0 && home[i] !== home[n] ? g[n] * GLASS_CONDUCTION : g[n]
         weight += w
         heat += w * temp[n]
       }
@@ -702,14 +722,14 @@ export function createSimulation ({ width, height, params }) {
       }
       contain(i)
     }
+    nbStart[alive] = nbUsed
     // Viscosity (section 5.3) on the carried velocity, so it damps the kicks just given as well as
     // the drift: approaching neighbours slow each other, separating ones do not. Only meaningful
     // when velocity is carried (wobble > 0); at 0 the velocity is rebuilt next frame anyway, so
-    // the pass is skipped. Neighbours come from the hash built before the relaxation shifts, which
-    // are small; the distance check in findNeighbours is exact.
+    // the pass is skipped. Neighbours are the pressure pass's, reweighted at the current positions.
     if (sigma > 0 && wobble > 0) {
       for (let i = 0; i < alive; i++) {
-        const neighbours = findNeighbours(state, hash, i, interactionRadius)
+        const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbStart[i + 1], i, interactionRadius)
         viscosity(state, i, neighbours, dt, sigma)
       }
     }
@@ -721,10 +741,8 @@ export function createSimulation ({ width, height, params }) {
     // might be worth a knob". Viscosity (easing each velocity toward the neighbours' mean) was
     // tried first and roughened the skin instead. No conduction or kick in these passes.
     for (let pass = 1; pass < settle; pass++) {
-      hash.clear()
-      for (let i = 0; i < alive; i++) hash.add(x[i], y[i], i)
       for (let i = 0; i < alive; i++) {
-        const neighbours = findNeighbours(state, hash, i, interactionRadius)
+        const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbStart[i + 1], i, interactionRadius)
         updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
         relax(state, i, neighbours, dt, home[i] >= 0 ? RELAX_CAP : Infinity)
         contain(i)
