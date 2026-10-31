@@ -13,6 +13,7 @@ const ALPHA_THRESHOLD = 70 // of 255, as in the canvas renderer
 // at full resolution for free, but the stretch softens the blob edges by a pixel or two and that
 // softness is part of how the lamp looks.
 const PIXEL_BUDGET = 1_000_000
+const MIN_VIEW_DISC = 2 // the smallest disc radius drawn in the Reservoirs view, in bitmap px
 const HEAT_STEPS = 48
 const MAX_HIGHLIGHT = 32 // shader loop bound, in bitmap pixels
 // The smoothing pass: a separable Gaussian blur of the density field before the threshold, so
@@ -289,9 +290,14 @@ export function createGlRenderer (canvas, look) {
     // threshold between particles and the lava fills with holes (Robert: "there's like, random
     // holes all over and weird wrong color edges"). Discs and the blur shrink with the square root
     // of the view's scale instead, so they stay fat relative to the spacing.
+    // On a big window the pixel budget already draws the lamp at about half resolution, and in
+    // the Reservoirs view on top of that a Size 3 disc came out 1.2 bitmap px across: a field of
+    // single pixels that no longer joined up (Robert: "when viewing reservoirs, it seems like the
+    // dots are sampled. Looks like some kind of zoom artifact"). In that view, which is a way of
+    // looking and not the tuned look, a disc is never drawn under MIN_VIEW_DISC bitmap px.
     const discScale = Math.sqrt(view.k) * scale
     const disc = look.particleSize
-    gl.uniform1f(pLoc.uSize, disc * discScale)
+    gl.uniform1f(pLoc.uSize, view.k < 1 ? Math.max(MIN_VIEW_DISC, disc * discScale) : disc * discScale)
     gl.drawArrays(gl.TRIANGLES, 0, count * 6)
     gl.disableVertexAttribArray(pLoc.aColor)
     gl.disableVertexAttribArray(pLoc.aCorner)
