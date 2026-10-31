@@ -65,6 +65,7 @@ import {
   showHeater,
   settle,
   smooth,
+  blend,
   stiffness,
   stiffnessNear,
   stir,
@@ -159,6 +160,7 @@ export async function start () {
   mirror(showHeater, look, 'showHeater')
   mirror(showCups, look, 'showCups')
   mirror(smooth, look, 'smooth')
+  mirror(blend, look, 'blend')
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
   let edge = 'bottom' // the page edge the lamp's floor sits on

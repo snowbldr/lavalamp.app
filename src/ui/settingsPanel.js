@@ -9,6 +9,8 @@ import {
   defaultWobble,
   defaultSmooth,
   smooth,
+  defaultBlend,
+  blend,
   defaultSettle,
   defaultViscosity,
   defaultWobbleKick,
@@ -206,7 +208,8 @@ export function createSettingsPanel () {
         knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters),
         knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
         knob('Wobble', 'wobble', wobble, { min: 0, max: 2, step: 0.01 }, () => defaultWobble, seconds),
-        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth())
+        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth()),
+        knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend)
       ),
       knobs(
         knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),
@@ -241,7 +244,8 @@ export function createSettingsPanel () {
         ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
         ['Bottles', 'How big the bottles above and the pots below are, as a fraction of their width; 0 is a flat ceiling and floor.'],
         ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.'],
-        ['Smooth', 'Rounds off the bumps along every edge by blurring the lava field before it is cut, by this many pixels. 0 is the raw metaballs.'],
+        ['Smooth', 'Rounds off the bumps along every edge by blurring the lava\'s shape before it is cut, by this many pixels. 0 is the raw metaballs.'],
+        ['Blend', 'How far the colours inside the lava blur into each other, in pixels, without touching the edge; below Smooth it does nothing extra.'],
         ['Settle', 'Pressure passes per frame. 2 spaces the particles more evenly so the surface is less bumpy, for most of a step\'s time again.'],
         ['Viscosity', 'How much neighbouring particles slow each other as they close in, so necks thin and tails pull in more slowly. Needs Wobble above 0.'],
         ['Kick', 'How much of the surface tension pull on a neck or a skin is carried on as velocity: the recoil when blobs part or merge.'],

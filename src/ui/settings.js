@@ -162,6 +162,12 @@ export const wobble = fnstate(defaultWobble)
 export const wobbleKick = fnstate(defaultWobbleKick)
 export const wobbleMax = fnstate(defaultWobbleMax)
 export const smooth = fnstate(defaultSmooth())
+// Blend: the blur on the colour inside the lava, separate from Smooth, which is the blur on the
+// shape (Robert: "can we separately change the smooth/fuzz factor for the inside and outside of
+// the lava? Inside a big smooth like 20 or 24 looks really good, but it makes the edges too fuzzy
+// instead of crisp"). In lamp px, like Smooth.
+export const defaultBlend = 20
+export const blend = fnstate(defaultBlend)
 export const settle = fnstate(defaultSettle)
 export const viscosity = fnstate(defaultViscosity)
 export const reach = fnstate(defaultReach())
@@ -204,9 +210,9 @@ export const touchMode = fnstate('push')
 
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'wall', 'floorHeat', 'floorGlow'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow'])
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -238,6 +244,7 @@ const defaults = () => ({
   wobbleKick: defaultWobbleKick,
   wobbleMax: defaultWobbleMax,
   smooth: defaultSmooth(),
+  blend: defaultBlend,
   settle: defaultSettle,
   viscosity: defaultViscosity,
   reach: defaultReach(),

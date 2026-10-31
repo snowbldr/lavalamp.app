@@ -20,7 +20,11 @@ const MAX_HIGHLIGHT = 32 // shader loop bound, in bitmap pixels
 // the bumps of the individual discs round off before the edge is cut (Robert: "mainly just that
 // rough edge... could we do like an edge smoothing pass like we did with the highlight?").
 // look.smooth is its radius in lamp px, 0 for none. MAX_BLUR bounds the shader loop, in bitmap px.
-const MAX_BLUR = 24
+// look.blend is a second, usually wider, blur on the colour alone (Robert: "can we separately
+// change the smooth/fuzz factor for the inside and outside of the lava? Inside a big smooth like
+// 20 or 24 looks really good, but it makes the edges too fuzzy instead of crisp"): the shape is
+// cut from the field blurred by Smooth, the heat colour is read from the field blurred by Blend.
+const MAX_BLUR = 48
 
 const PARTICLE_VERTEX = `
 attribute vec2 aCentre;
@@ -80,6 +84,7 @@ const COMPOSITE_FRAGMENT = `
 precision mediump float;
 varying vec2 vUv;
 uniform sampler2D uAccum;
+uniform sampler2D uBlend;
 uniform vec2 uTexel;
 uniform float uThreshold;
 uniform float uSoft;
@@ -92,7 +97,8 @@ void main () {
   vec4 c = texture2D(uAccum, vUv);
   float coverage = smoothstep(uThreshold - uSoft, uThreshold + uSoft, c.a);
   if (coverage <= 0.0) { gl_FragColor = vec4(0.0); return; }
-  vec3 rgb = uHeat > 0.5 ? c.rgb / c.a : uLava;
+  vec4 b = texture2D(uBlend, vUv);
+  vec3 rgb = uHeat > 0.5 ? b.rgb / max(b.a, 1e-5) : uLava;
   if (uHeat < 0.5) {
     float amount = 0.0;
     for (int j = 0; j < ${MAX_HIGHLIGHT}; j++) {
@@ -140,7 +146,7 @@ export function createGlRenderer (canvas, look) {
     return out
   }
   const pLoc = loc(particles, ['aCentre', 'aCorner', 'aColor', 'uResolution', 'uSize'])
-  const cLoc = loc(composite, ['aPosition', 'uAccum', 'uTexel', 'uThreshold', 'uSoft', 'uLava', 'uHighlight', 'uSteps', 'uHeat', 'uRows'])
+  const cLoc = loc(composite, ['aPosition', 'uAccum', 'uBlend', 'uTexel', 'uThreshold', 'uSoft', 'uLava', 'uHighlight', 'uSteps', 'uHeat', 'uRows'])
   const bLoc = loc(blur, ['aPosition', 'uSource', 'uStep', 'uRadius'])
 
   // Particle vertices: six per particle, each centre x, y, corner x, y, colour r, g, b.
@@ -164,6 +170,7 @@ export function createGlRenderer (canvas, look) {
   }
   const accumTarget = makeTarget()
   const scratchTarget = makeTarget()
+  const blendTarget = makeTarget() // the field blurred by Blend, for the colour
   const accum = accumTarget.texture
   const framebuffer = accumTarget.framebuffer
 
@@ -202,7 +209,7 @@ export function createGlRenderer (canvas, look) {
     // the premultiplied colour at a blurred edge has only a few levels left once it is divided by
     // its small alpha, and the heat view showed it as a jagged band of the wrong colour along
     // every edge (Robert: "what are these messed up heated areas? ... it's wrong").
-    for (const target of [accumTarget, scratchTarget]) {
+    for (const target of [accumTarget, scratchTarget, blendTarget]) {
       gl.bindTexture(gl.TEXTURE_2D, target.texture)
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer)
       let ok = false
@@ -304,23 +311,32 @@ export function createGlRenderer (canvas, look) {
     let t1 = now(); profile.discs = t1 - t; t = t1
     gl.disable(gl.BLEND)
     gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
-    // Pass 2, when look.smooth is set: blur the field, across then down.
+    // Pass 2, when look.smooth is set: blur the field, across then down. First, when the heat
+    // colours are showing and Blend is wider than Smooth, the same blur at Blend's radius from
+    // the raw field into the blend target, which the composite reads the colour from; the shape
+    // still comes from the field blurred by Smooth alone.
     const radius = Math.min(MAX_BLUR, (look.smooth || 0) * discScale)
-    if (radius >= 0.5) {
+    const blendRadius = Math.min(MAX_BLUR, (look.blend ?? look.smooth ?? 0) * discScale)
+    const separate = heat && blendRadius >= radius + 0.5
+    const blurInto = (source, target, r) => {
+      gl.uniform1f(bLoc.uRadius, r)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, scratchTarget.framebuffer)
+      gl.bindTexture(gl.TEXTURE_2D, source)
+      gl.uniform2f(bLoc.uStep, 1 / width, 0)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer)
+      gl.bindTexture(gl.TEXTURE_2D, scratchTarget.texture)
+      gl.uniform2f(bLoc.uStep, 0, 1 / height)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+    }
+    if (radius >= 0.5 || separate) {
       gl.useProgram(blur)
       gl.enableVertexAttribArray(bLoc.aPosition)
       gl.vertexAttribPointer(bLoc.aPosition, 2, gl.FLOAT, false, 0, 0)
       gl.activeTexture(gl.TEXTURE0)
       gl.uniform1i(bLoc.uSource, 0)
-      gl.uniform1f(bLoc.uRadius, radius)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, scratchTarget.framebuffer)
-      gl.bindTexture(gl.TEXTURE_2D, accum)
-      gl.uniform2f(bLoc.uStep, 1 / width, 0)
-      gl.drawArrays(gl.TRIANGLES, 0, 3)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
-      gl.bindTexture(gl.TEXTURE_2D, scratchTarget.texture)
-      gl.uniform2f(bLoc.uStep, 0, 1 / height)
-      gl.drawArrays(gl.TRIANGLES, 0, 3)
+      if (separate) blurInto(accum, blendTarget, blendRadius)
+      if (radius >= 0.5) blurInto(accum, accumTarget, radius)
     }
     t1 = now(); profile.smooth = t1 - t; t = t1
     // Pass 3: threshold and highlight, to the screen.
@@ -332,6 +348,10 @@ export function createGlRenderer (canvas, look) {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, accum)
     gl.uniform1i(cLoc.uAccum, 0)
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, separate ? blendTarget.texture : accum)
+    gl.uniform1i(cLoc.uBlend, 1)
+    gl.activeTexture(gl.TEXTURE0)
     gl.uniform2f(cLoc.uTexel, 1 / width, 1 / height)
     gl.uniform1f(cLoc.uThreshold, (ALPHA_THRESHOLD + 0.5) / 255)
     // About one bitmap pixel of alpha slope at a lone disc's edge, wider when the field is blurred.
