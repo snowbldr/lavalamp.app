@@ -134,7 +134,9 @@ const CUP_LIP = 0
 // back out through the mouth. Containment is "inside some bottle, or below the lip", so bulbs
 // at different heights may overlap.
 const BOTTLE_MOUTH = 0.6
-const BOTTLE_NECK = [0.05, 0.4]
+// Half what they were ([0.05, 0.4]); Robert, 2026-10-31, with the reservoirs on the GPU: "let's
+// make the necks on the bottles on the top about 1/2 as long so that it spills over more often".
+const BOTTLE_NECK = [0.025, 0.2]
 // Bottles in the floor too, hidden below the screen like the base of the lamp (Robert: "what
 // if, we have hidden cups on the bottom too? ... enough lava to fill all the cups and still
 // leave a visible layer on the bottom that's slightly smaller", then, once the ceiling had

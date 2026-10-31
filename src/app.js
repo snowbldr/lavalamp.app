@@ -168,7 +168,14 @@ export async function start () {
   const sim = device ? createGpuLamp({ device, width, height, params }) : createSimulation({ width, height, params })
   const renderer = createRenderer(lamp, look)
   const motion = createMotionInput()
-  const toLamp = (px, py) => pageToLamp(turns, pageWidth, pageHeight, width, height, px, py)
+  // In the Reservoirs view the lamp is drawn scaled down and shifted (see `view` in frame), so a
+  // finger on the glass has to be mapped back through that as well, or it lands below where it
+  // touched (Robert: "touch controls dont' seem to be workign on gpu", with the view on).
+  let shownView = null
+  const toLamp = (px, py) => {
+    const [lx, ly] = pageToLamp(turns, pageWidth, pageHeight, width, height, px, py)
+    return shownView ? [(lx - shownView.ox) / shownView.k, (ly - shownView.oy) / shownView.k] : [lx, ly]
+  }
   const pointer = createPointerInput(lamp, toLamp)
   const settingsPanel = createSettingsPanel()
 
@@ -339,6 +346,7 @@ export async function start () {
       const glow = showHeater() ? sim.heaterElements().map(el => el.glow) : null
       view = { k, ox: (width - width * k) / 2, oy: -minY * k, ceilingAt: sim.ceilingAt, floorAt: sim.floorAt, bottles: sim.bottles(), floorBottles: sim.floorBottles(), glow, look }
     }
+    shownView = view
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view })
     if (profiling) {
       const t2 = performance.now()

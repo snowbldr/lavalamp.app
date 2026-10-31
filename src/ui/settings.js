@@ -39,8 +39,9 @@ export const computeDefaultParticleCount = (width, height) => Math.min(Math.trun
 export const computeDefaultInteractionRadius = (width, height) => Math.round(20 * liquidScale(width, height))
 // Size 6 and Smooth 4 at radius 20 are Robert's lamp defaults of 2026-10-31 ("let's make these the
 // new defaults", a share link); the lab draws its own at 3 and 3.
-export const computeDefaultParticleSize = (width, height) => Math.round(6 * liquidScale(width, height))
-export const computeDefaultSmooth = (width, height) => Math.round(4 * liquidScale(width, height))
+// Robert, 2026-10-31, with the reservoirs back on the GPU: "size and smooth should default to 3 also" (were 6 and 4).
+export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height))
+export const computeDefaultSmooth = (width, height) => Math.round(3 * liquidScale(width, height))
 export const computeDefaultMaxTemp = height => Math.round(5030 * height / 900)
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
