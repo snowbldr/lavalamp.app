@@ -55,7 +55,9 @@ export const computeDefaultSmooth = (width, height) => Math.round(7 * liquidScal
 // phone and every desktop window on the GPU, nothing changes.
 export const computeDefaultStiffness = (width, height) => Math.round(7.5 * liquidScale(width, height) * 10) / 10
 export const computeDefaultStiffnessNear = (width, height) => Math.round(1101 * liquidScale(width, height))
-export const computeDefaultBlend = (width, height) => Math.round(28 * liquidScale(width, height))
+// Blend 0 (Robert, once the heat table had 2048 steps: "set default blend to 0. not sure we even need
+// blend anymore, it's insanely smooth at 2048"); the bands it blurred away were the 48 step table.
+export const computeDefaultBlend = (width, height) => 0
 export const computeDefaultMaxTemp = height => Math.round(5030 * height / 900)
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
