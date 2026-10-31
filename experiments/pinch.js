@@ -3,7 +3,7 @@
 // single simulation version that was not random and reproduced that snap in the video? That'd
 // inform us on the properties of the liquid we need to get it right". Knobs for the liquid,
 // Replay, and a filmstrip of frames at a fixed interval after the pulse, to lay beside the stills.
-import { button, div, fnstate, span } from '@srfnstack/fntags'
+import { button, div, fnstate, option, select, span } from '@srfnstack/fntags'
 import { createSimulation } from '../src/sim/simulation.js'
 import { seedRandom } from '../src/sim/random.js'
 import { createRenderer } from '../src/render/renderer.js'
@@ -102,13 +102,68 @@ export function start () {
   // Every knob, the view and slow motion as one line of JSON (Robert: "add a copy settings to
   // clipboard button in the lab so I can share tweaks with you easier next time").
   const copied = fnstate(false)
-  function settings () {
-    return {
-      wobble: wobble(), kick: kick(), cap: cap(), gloop: gloop(), stiff: stiffness(), near: near(), density: density(), radius: radius(), settle: settle(), viscosity: viscosity(), substeps: substeps(), reach: reach(),
-      lava: count(), warm: warm(), pulse: pulse(), gap: gap(), heat: heat(), finger: finger(), maxHeat: maxHeat(), size: size(), smooth: smooth(), from: from(), every: interval(), frames: frames(),
-      view: view(), slow: slow()
-    }
+  const states = {
+    wobble, kick, cap, gloop, stiff: stiffness, near, density, radius, settle, viscosity, substeps, reach,
+    lava: count, warm, pulse, gap, heat, finger, maxHeat, size, smooth, from, every: interval, frames,
+    view, slow
   }
+  function settings () {
+    const out = {}
+    for (const k in states) out[k] = states[k]()
+    return out
+  }
+  function apply (saved) {
+    for (const k in states) if (k in saved) states[k](saved[k])
+  }
+
+  // Every change is saved to local storage, in versions (Robert: "let's make all changes saved to
+  // local state so I never lose my settings. let's add versioning there too, so instead of clear,
+  // we create a new version from defaults"). The store is { versions: [{ name, created, settings }],
+  // current }. The knobs always edit the current version; New version starts one from the defaults
+  // written in this file, Copy version starts one from the current knobs.
+  const STORE = 'pinch-lab-versions'
+  const DEFAULTS = settings()
+  const store = fnstate(loadStore())
+  let applying = false
+  function loadStore () {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORE))
+      if (saved && Array.isArray(saved.versions) && saved.versions.length) return saved
+    } catch (e) { /* unreadable: start over */ }
+    return { versions: [{ name: 'v1', created: Date.now(), settings: { ...DEFAULTS } }], current: 0 }
+  }
+  function saveStore () { localStorage.setItem(STORE, JSON.stringify(store())) }
+  function currentVersion () { return store().versions[store().current] }
+  function useVersion (index) {
+    const s = store()
+    s.current = index
+    applying = true
+    apply(s.versions[index].settings)
+    applying = false
+    store({ ...s })
+    saveStore()
+    reset()
+  }
+  function newVersion (from) {
+    const s = store()
+    s.versions.push({ name: `v${s.versions.length + 1}`, created: Date.now(), settings: { ...from } })
+    useVersion(s.versions.length - 1)
+  }
+  for (const k in states) {
+    states[k].subscribe(() => {
+      if (applying) return
+      currentVersion().settings = settings()
+      saveStore()
+    })
+  }
+  applying = true
+  apply(currentVersion().settings)
+  applying = false
+  const when = t => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const versionPicker = () => select(
+    { id: 'version', onchange: e => useVersion(Number(e.target.value)) },
+    ...store().versions.map((v, i) => option({ value: String(i), selected: i === store().current }, `${v.name} · ${when(v.created)}`))
+  )
   function copySettings () {
     navigator.clipboard.writeText(JSON.stringify(settings())).then(() => {
       copied(true)
@@ -254,8 +309,14 @@ export function start () {
       button({ id: 'film', class: 'primary', onclick: film }, 'Filmstrip now'),
       clock),
     div({ class: 'actions' },
-      button({ id: 'copy', onclick: copySettings }, copied.bindAs(() => copied() ? 'Copied' : 'Copy settings')),
-      hint(help, 'Copy settings puts every knob, the view and slow motion on the clipboard as one line of JSON, to paste into a chat or a log.'))
+      button({ id: 'copy', onclick: copySettings }, copied.bindAs(() => copied() ? 'Copied' : 'Copy settings'))),
+    hint(help, 'Copy settings puts every knob, the view and slow motion on the clipboard as one line of JSON, to paste into a chat or a log.'),
+    div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Versions')),
+      row('Version', store.bindAs(versionPicker)),
+      div({ class: 'actions' },
+        button({ id: 'new-version', onclick: () => newVersion(DEFAULTS) }, 'New from defaults'),
+        button({ id: 'copy-version', onclick: () => newVersion(settings()) }, 'Copy version')),
+      hint(help, 'Every knob change is saved in the browser, in the version shown. New from defaults starts a fresh version at the lab\'s built in settings; Copy version starts one from the knobs as they are. Older versions stay in the list.'))
   )
 
   // Lamp, knobs, then the filmstrip, so the strip filling in never moves the knobs (Robert: "it's
