@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>sounds</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body { margin: 0; background: #1c1c1e; color: #ececec; font: 15px system-ui, sans-serif; padding: 24px; }
+      h1 { font-size: 16px; font-weight: 600; margin: 0 0 16px; opacity: 0.8; }
+      .pads { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; max-width: 900px; }
+      button { min-height: 64px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.08); color: #ececec; font: inherit; cursor: pointer; padding: 8px; text-align: center; }
+      button:active, button.playing { background: #f0a030; color: #1c1c1e; }
+      small { display: block; opacity: 0.6; margin-top: 4px; }
+      p { opacity: 0.6; max-width: 900px; }
+    </style>
+</head>
+<body>
+<h1>Sounds found for the lamp</h1>
+<p>Plain buttons: tap one to hear it. Twelve liquid recordings from Pixabay (Pixabay Content License, freesound_community uploads), the files in experiments/samples. The tuning and the lava are on the sound board.</p>
+<div class="pads" id="pads"></div>
+<script type="module">
+  // The simplest board there is (Robert: "I just meant like plain buttons to play the different
+  // sounds that you can find"): one audio element per recording, a button each.
+  const list = await (await fetch('./samples/manifest.json', { cache: 'no-cache' })).json()
+  const pads = document.getElementById('pads')
+  for (const item of list) {
+    const audio = new Audio(`./samples/${item.file}`)
+    const button = document.createElement('button')
+    button.innerHTML = `${item.name}<small>${item.license}</small>`
+    button.onclick = () => { audio.currentTime = 0; audio.play(); button.classList.add('playing') }
+    audio.onended = () => button.classList.remove('playing')
+    audio.onloadedmetadata = () => { button.querySelector('small').textContent = `${audio.duration.toFixed(1)} s` }
+    pads.appendChild(button)
+  }
+</script>
+</body>
+</html>
