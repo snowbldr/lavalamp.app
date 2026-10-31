@@ -17,17 +17,17 @@ const SEED = 1
 
 export function start () {
   // The liquid.
-  const wobble = fnstate(0.46)
-  const kick = fnstate(1.6)
+  const wobble = fnstate(0.87)
+  const kick = fnstate(6)
   const cap = fnstate(3.4)
-  // Robert's liquid, pasted from Copy settings on 2026-10-30 ("this one is by FAR the best one yet"):
+  // Robert's liquid, pasted from Copy settings on 2026-10-30 ("this is the new default setting... for sure"):
   // 3050 particles at radius 20 drawn at size 3 with Smooth 3 ("size 3, smooth 3 looks fucking amazing"); Stiff 7.5 against Density 360, so
   // the pull is a near constant cohesion; Gloop 0.7, so a lump warms as one; Skin 300, so every
   // particle carries its pressure move as velocity, the paper's own velocity; Max heat 6200.
   const stiffness = fnstate(7.5)
   const near = fnstate(1101)
   const density = fnstate(360.1)
-  const gloop = fnstate(0.7)
+  const gloop = fnstate(0.55)
   // Half the lamp's grain, at Robert's suggestion: "maybe we need a smaller particle size? that
   // should be fine now that we have a much faster render". Same lava, four times the particles.
   const radius = fnstate(20)
@@ -55,9 +55,9 @@ export function start () {
   const heat = fnstate(48) // finger heat per step
   const finger = fnstate(45) // radius of the heat finger, px (the lamp's is 12% of its shorter side)
   const maxHeat = fnstate(6200)
-  const interval = fnstate(0.6) // seconds between filmstrip frames
+  const interval = fnstate(0.3) // seconds between filmstrip frames
   const frames = fnstate(12)
-  const from = fnstate(14) // the filmstrip starts itself at this time after a Replay
+  const from = fnstate(8) // the filmstrip starts itself at this time after a Replay
   const slow = fnstate(false)
   // Silhouette is black on orange like the video, Lamp the lamp's own colours and lighting, Heat the heat map.
   const view = fnstate('heat')
@@ -248,10 +248,10 @@ export function start () {
     button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the knobs do' }, '?'),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Liquid')),
       knobs(
-        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02, scales: DECADES }, () => 0.46, v => `${v} s`),
-        knob('Kick', 'kick', kick, { min: 0, max: 3, step: 0.1, scales: DECADES }, () => 1.6),
+        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02, scales: DECADES }, () => 0.87, v => `${v} s`),
+        knob('Kick', 'kick', kick, { min: 0, max: 3, step: 0.1, scales: DECADES }, () => 6),
         knob('Cap', 'cap', cap, { min: 0.5, max: 5, step: 0.1, scales: DECADES }, () => 3.4, v => `${v} g`),
-        knob('Gloop', 'gloop', gloop, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 0.7, v => Number(v).toFixed(4))
+        knob('Gloop', 'gloop', gloop, { min: 0, max: 1, step: 0.01, scales: DECADES }, () => 0.55, v => Number(v).toFixed(4))
       ),
       hint(help, [
         ['Wobble', 'inertia: seconds for a particle to ease onto its drift. 0 is the overdamped wax with no snap at all.'],
@@ -312,8 +312,8 @@ export function start () {
         ['Smooth', 'edge smoothing: the lava field is blurred by this many pixels before the edge is cut, which rounds off the bumps of the particles. 0 is the raw metaballs.']
       ]),
       knobs(
-        knob('From', 'from', from, { min: 0, max: 30, step: 0.5, scales: DECADES }, () => 14, v => `${v} s`),
-        knob('Every', 'interval', interval, { min: 0.1, max: 2, step: 0.1, scales: DECADES }, () => 0.6, v => `${v} s`),
+        knob('From', 'from', from, { min: 0, max: 30, step: 0.5, scales: DECADES }, () => 8, v => `${v} s`),
+        knob('Every', 'interval', interval, { min: 0.1, max: 2, step: 0.1, scales: DECADES }, () => 0.3, v => `${v} s`),
         knob('Frames', 'frames', frames, { min: 4, max: 24, step: 1, scales: DECADES }, () => 12)
       ),
       hint(help, [

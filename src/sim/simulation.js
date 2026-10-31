@@ -266,6 +266,7 @@ export function createSimulation ({ width, height, params }) {
   let touchHeatNow = TOUCH_HEAT // params.touchHeat as of the last step
   let touchRadiusNow = 0 // params.touchRadius as of the last step, px; 0 means the TOUCH_RADIUS fraction
   let wallPushNow = 0 // params.wallPush as of the last step, px
+  let spawnAreaNow = params.spawnArea || SPAWN_AREA // floor area per settled particle, px², for the spawn slab and the reservoirs
   let meanDensity = 0 // the lava's mean density as of the last step, for the kick's surface test
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
@@ -430,7 +431,7 @@ export function createSimulation ({ width, height, params }) {
   function reserveFill () {
     let area = 0
     for (const b of floorBottleList()) area += bottleArea(b) * (b.cx <= 0 || b.cx >= width ? 0.5 : 1)
-    return Math.round(area / SPAWN_AREA)
+    return Math.round(area / spawnAreaNow)
   }
 
   // Bring the live count to the target, all at once: the floor bottles' worth inside them and
@@ -439,7 +440,7 @@ export function createSimulation ({ width, height, params }) {
     if (alive > target) alive = target
     if (alive === target) return
     const hidden = Math.min(target, reserveFill())
-    const depth = Math.max(0, SPAWN_AREA * (target - hidden) / width)
+    const depth = Math.max(0, spawnAreaNow * (target - hidden) / width)
     const start = alive
     while (alive < target) {
       const i = alive++
@@ -623,6 +624,7 @@ export function createSimulation ({ width, height, params }) {
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
     wallPushNow = wallPush
+    spawnAreaNow = params.spawnArea || SPAWN_AREA
     if (cups.length === 0) layoutCups()
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
     // params.particleCount is the visible lava; the floor's reservoirs fill themselves on top of

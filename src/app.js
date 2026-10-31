@@ -15,6 +15,17 @@ import {
   drifters,
   computeDefaultMaxTemp,
   computeDefaultParticleCount,
+  computeDefaultInteractionRadius,
+  computeDefaultParticleSize,
+  computeDefaultSmooth,
+  defaultInteractionRadius,
+  defaultParticleSize,
+  defaultSmooth,
+  wobbleKick,
+  wobbleMax,
+  reach,
+  skin,
+  wall,
   defaultGravityStrength,
   defaultMaxTemp,
   defaultParticleCount,
@@ -98,6 +109,16 @@ export function start () {
   mirror(wobble, params, 'wobble')
   mirror(settle, params, 'settle')
   mirror(viscosity, params, 'viscosity')
+  mirror(wobbleKick, params, 'wobbleKick')
+  mirror(wobbleMax, params, 'wobbleMax')
+  mirror(reach, params, 'reach')
+  mirror(skin, params, 'kickBelow')
+  mirror(wall, params, 'wallPush')
+  // The floor area a settled particle takes up, for the spawn slab: 7 px² at radius 20 in the lab,
+  // scaling with the radius squared; the old liquid's 400 px² at radius 60.
+  mirror(interactionRadius, params, 'spawnArea', r => 7 * (r / 20) * (r / 20))
+  // Finger heat per step, the lab's 48 (the lamp's old 12 was for Max heat 2000).
+  params.touchHeat = 48
 
   const look = {}
   mirror(lavaColor, look, 'lavaColor')
@@ -139,6 +160,9 @@ export function start () {
     followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(width, height))
     followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
     followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
+    followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
+    followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))
+    followWindow(defaultSmooth, smooth, computeDefaultSmooth(width, height))
   }
   fit()
   window.addEventListener('resize', fit)

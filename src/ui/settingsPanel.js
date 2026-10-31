@@ -11,8 +11,18 @@ import {
   smooth,
   defaultSettle,
   defaultViscosity,
+  defaultWobbleKick,
+  defaultWobbleMax,
+  defaultReach,
+  defaultSkin,
+  defaultWall,
   settle,
   viscosity,
+  wobbleKick,
+  wobbleMax,
+  reach,
+  skin,
+  wall,
   defaultDrifters,
   defaultHeatSpots,
   defaultPace,
@@ -142,7 +152,7 @@ export function createSettingsPanel () {
       hint(help, 'The colours follow the view: the heat map gradient from coldest, sinking lava to hottest while the heat map is on, the lava and its lit underside while it is off, and the slowest to fastest arrow while the flow field is on.'),
       knobs(
         knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
-        knob('Gloop', 'conduction', conduction, { min: 0, max: 0.04, step: 0.0005 }, () => defaultConduction, fixed(4)),
+        knob('Gloop', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction, fixed(2)),
         knob('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir),
         knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
       ),
@@ -170,23 +180,28 @@ export function createSettingsPanel () {
     section(
       'Physics', physicsOpen,
       knobs(
-        knob('Size', 'particleSize', particleSize, { min: 5, max: 50, step: 1 }, () => defaultParticleSize),
+        knob('Size', 'particleSize', particleSize, { min: 1, max: 50, step: 1 }, () => defaultParticleSize()),
         knob('Count', 'particle-count', particleCount, { min: 5, max: () => Math.trunc(defaultParticleCount()) * 2, step: 1 }, defaultParticleCount, whole),
-        knob('Radius', 'interaction-radius', interactionRadius, { min: 30, max: 100, step: 1 }, () => defaultInteractionRadius),
+        knob('Radius', 'interaction-radius', interactionRadius, { min: 5, max: 100, step: 1 }, () => defaultInteractionRadius()),
         knob('Stiff', 'stiffness', stiffness, { min: 1, max: 6500, step: 1 }, () => defaultStiffness),
         knob('Near', 'stiffness-near', stiffnessNear, { min: 1, max: 40000, step: 10 }, () => defaultStiffnessNear),
-        knob('Density', 'rest-density', restDensity, { min: 0.01, max: 7, step: 0.01 }, () => defaultRestDensity, fixed(2)),
+        knob('Density', 'rest-density', restDensity, { min: 0.1, max: 1000, step: 0.1 }, () => defaultRestDensity, fixed(1)),
         knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
         knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
         knob('Turb', 'turbulence', turbulence, { min: 0, max: 150, step: 1 }, () => defaultTurbulence),
         knob('Eddies', 'drifters', drifters, { min: 0, max: 6, step: 1 }, () => defaultDrifters),
         knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
-        knob('Wobble', 'wobble', wobble, { min: 0, max: 1, step: 0.02 }, () => defaultWobble, seconds),
-        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth)
+        knob('Wobble', 'wobble', wobble, { min: 0, max: 2, step: 0.01 }, () => defaultWobble, seconds),
+        knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth())
       ),
       knobs(
         knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),
-        knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity)
+        knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity),
+        knob('Kick', 'wobble-kick', wobbleKick, { min: 0, max: 10, step: 0.1 }, () => defaultWobbleKick),
+        knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax, v => `${v} g`),
+        knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01 }, () => defaultReach, v => `${Number(v).toFixed(2)} r`),
+        knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
+        knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
       ),
       hint(help, [
         ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
@@ -203,7 +218,12 @@ export function createSettingsPanel () {
         ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.'],
         ['Smooth', 'Rounds off the bumps along every edge by blurring the lava field before it is cut, by this many pixels. 0 is the raw metaballs.'],
         ['Settle', 'Pressure passes per frame. 2 spaces the particles more evenly so the surface is less bumpy, for most of a step\'s time again.'],
-        ['Viscosity', 'How much neighbouring particles slow each other as they close in, so necks thin and tails pull in more slowly. Needs Wobble above 0.']
+        ['Viscosity', 'How much neighbouring particles slow each other as they close in, so necks thin and tails pull in more slowly. Needs Wobble above 0.'],
+        ['Kick', 'How much of the surface tension pull on a neck or a skin is carried on as velocity: the recoil when blobs part or merge.'],
+        ['Cap', 'The fastest that carried velocity may get, in gravities.'],
+        ['Reach', 'The most the pressure step may move a particle in one go, in radii. Low keeps a high Density from flying apart.'],
+        ['Skin', 'Which particles take the Kick: those below this fraction of the mean density. 300 is all of them.'],
+        ['Wall', 'Lava this close to a side wall is eased away from it, in px; a glass the wax does not wet.']
       ])
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),
