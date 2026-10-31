@@ -212,6 +212,13 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
   if (P.wobble > 0.0) { v += (drift - v) * min(1.0, P.dt / P.wobble); } else { v = drift; }
   V[VEL(i)] = v;
   p += v * P.dt;
+  // Kept inside the box here and after every relaxation pass, not only at the end of the step:
+  // with the floor enforced once, each pass pushed the bottom row through it and back and 300
+  // particles sat on the floor line (the CPU keeps 17), took the floor's contact heat, and the
+  // pool warmed through warm up where the CPU's cooled; with it enforced every pass, 148, and the
+  // warm up matches the CPU (mean temperature 340 against 345 at six seconds).
+  p.y = clamp(p.y, 0.0, P.height);
+  p.x = clamp(p.x, 0.0, P.width);
   V[PX(i)] = p;
   V[POS(i)] = p;
 }
@@ -324,7 +331,10 @@ fn relax(@builtin(global_invocation_id) id: vec3u) {
   let cap = P.reach * P.radius * P.jacobi;
   let shift = length(delta);
   if (shift > cap) { delta *= cap / shift; }
-  V[POSOUT(i)] = p + delta;
+  var q = p + delta;
+  q.y = clamp(q.y, 0.0, P.height);
+  q.x = clamp(q.x, 0.0, P.width);
+  V[POSOUT(i)] = q;
 }
 
 @compute @workgroup_size(${WORKGROUP})
@@ -564,10 +574,11 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
   }
   const sizeGrid = () => { buffers.U = storage((2 * capacity + cellCap) * 4); buffers.A = storage((cellCap + 1) * 4) }
   sizeGrid()
-  const readPos = device.createBuffer({ size: vec2Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST })
-  const readTemp = device.createBuffer({ size: f32Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST })
-  const readPress = device.createBuffer({ size: f32Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST })
-  const readVel = device.createBuffer({ size: vec2Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST })
+  // Two sets of staging buffers for the readback: one may be mapped (being read) while the other
+  // takes the next frame's copy, so the state the CPU sees is at most a frame old. With one set,
+  // every frame while a map was pending went uncopied, and a harness stepping sixty frames in one
+  // go then read the state from the first of them.
+  const staging = [0, 1].map(() => ({ pos: device.createBuffer({ size: vec2Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), temp: device.createBuffer({ size: f32Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), press: device.createBuffer({ size: f32Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), vel: device.createBuffer({ size: vec2Bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST }), busy: false }))
   let bindGroup = makeBindGroup()
   function makeBindGroup () {
     const order = ['params', 'touches', 'V', 'F', 'U', 'A', 'WLD']
@@ -654,28 +665,26 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     device.queue.writeBuffer(buffers.touches, 0, touchData)
   }
 
-  let reading = false
   let warned = false
   let reads = 0 // readbacks landed, for debugging
-  async function readBack () {
-    if (reading) return
-    reading = true
+  async function readBack (set) {
+    set.busy = true
     try {
-      await Promise.all([readPos.mapAsync(GPUMapMode.READ), readTemp.mapAsync(GPUMapMode.READ), readPress.mapAsync(GPUMapMode.READ), readVel.mapAsync(GPUMapMode.READ)])
-      const xy = new Float32Array(readPos.getMappedRange())
-      const t = new Float32Array(readTemp.getMappedRange())
-      const pr = new Float32Array(readPress.getMappedRange())
-      const v = new Float32Array(readVel.getMappedRange())
+      await Promise.all([set.pos.mapAsync(GPUMapMode.READ), set.temp.mapAsync(GPUMapMode.READ), set.press.mapAsync(GPUMapMode.READ), set.vel.mapAsync(GPUMapMode.READ)])
+      const xy = new Float32Array(set.pos.getMappedRange())
+      const t = new Float32Array(set.temp.getMappedRange())
+      const pr = new Float32Array(set.press.getMappedRange())
+      const v = new Float32Array(set.vel.getMappedRange())
       const n = alive
       for (let i = 0; i < n; i++) { state.x[i] = xy[2 * i]; state.y[i] = xy[2 * i + 1]; state.vx[i] = v[2 * i]; state.vy[i] = v[2 * i + 1] }
       state.temp.set(t.subarray(0, n))
       state.p.set(pr.subarray(0, n))
-      readPos.unmap(); readTemp.unmap(); readPress.unmap(); readVel.unmap()
+      set.pos.unmap(); set.temp.unmap(); set.press.unmap(); set.vel.unmap()
       reads++
     } catch (err) {
       if (!warned) { warned = true; console.warn('gpu readback', err) }
     }
-    reading = false
+    set.busy = false
   }
 
   function step (dt) {
@@ -715,16 +724,17 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     run('copyVel', groups)
     run('conduct', groups)
     run('copyTemp', groups)
-    if (!reading) {
-      encoder.copyBufferToBuffer(buffers.V, 0, readPos, 0, vec2Bytes)
-      encoder.copyBufferToBuffer(buffers.F, 0, readTemp, 0, f32Bytes)
-      encoder.copyBufferToBuffer(buffers.F, 2 * f32Bytes, readPress, 0, f32Bytes)
-      encoder.copyBufferToBuffer(buffers.V, 2 * vec2Bytes, readVel, 0, vec2Bytes)
+    const set = staging.find(s => !s.busy)
+    if (set) {
+      encoder.copyBufferToBuffer(buffers.V, 0, set.pos, 0, vec2Bytes)
+      encoder.copyBufferToBuffer(buffers.F, 0, set.temp, 0, f32Bytes)
+      encoder.copyBufferToBuffer(buffers.F, 2 * f32Bytes, set.press, 0, f32Bytes)
+      encoder.copyBufferToBuffer(buffers.V, 2 * vec2Bytes, set.vel, 0, vec2Bytes)
     }
     device.pushErrorScope('validation')
     device.queue.submit([encoder.finish()])
     device.popErrorScope().then(e => { if (e && !warned) { warned = true; console.error('gpu validation', e.message) } })
-    if (!reading) readBack()
+    if (set) readBack(set)
     time += dt
   }
 
@@ -755,7 +765,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
       staging.unmap(); staging.destroy()
       return out
     },
-    debug () { return { reading, warned, reads, alive, capacity } },
+    debug () { return { warned, reads, alive, capacity } },
     gpu: true
   }
 }
