@@ -41,7 +41,9 @@ export const computeDefaultInteractionRadius = (width, height) => Math.round(20 
 // new defaults", a share link); the lab draws its own at 3 and 3.
 // Robert, 2026-10-31, with the reservoirs back on the GPU: "size and smooth should default to 3 also" (were 6 and 4).
 export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height))
-export const computeDefaultSmooth = (width, height) => Math.round(3 * liquidScale(width, height))
+// Smooth 7 and Blend 28 (Robert, 2026-10-31, with the two blurs apart: "smooth 7, blend 28"; Smooth was 3).
+export const computeDefaultSmooth = (width, height) => Math.round(7 * liquidScale(width, height))
+export const computeDefaultBlend = (width, height) => Math.round(28 * liquidScale(width, height))
 export const computeDefaultMaxTemp = height => Math.round(5030 * height / 900)
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
@@ -166,8 +168,8 @@ export const smooth = fnstate(defaultSmooth())
 // shape (Robert: "can we separately change the smooth/fuzz factor for the inside and outside of
 // the lava? Inside a big smooth like 20 or 24 looks really good, but it makes the edges too fuzzy
 // instead of crisp"). In lamp px, like Smooth.
-export const defaultBlend = 20
-export const blend = fnstate(defaultBlend)
+export const defaultBlend = fnstate(computeDefaultBlend(window.innerWidth, window.innerHeight))
+export const blend = fnstate(defaultBlend())
 export const settle = fnstate(defaultSettle)
 export const viscosity = fnstate(defaultViscosity)
 export const reach = fnstate(defaultReach())
@@ -204,6 +206,8 @@ export const showHeater = fnstate(false)
 // Pull the whole lamp into frame, hidden cups and all, scaled down, with the cup outlines drawn.
 // Not saved. Robert: "add a toggle to move the cups into the frame so I can observe their behavior".
 export const showCups = fnstate(false)
+// Sound from the lava, synthesised as it moves. Not saved: browsers want a click before audio anyway.
+export const sound = fnstate(false)
 // What a finger on the lamp does. Not saved.
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
@@ -244,7 +248,7 @@ const defaults = () => ({
   wobbleKick: defaultWobbleKick,
   wobbleMax: defaultWobbleMax,
   smooth: defaultSmooth(),
-  blend: defaultBlend,
+  blend: defaultBlend(),
   settle: defaultSettle,
   viscosity: defaultViscosity,
   reach: defaultReach(),

@@ -79,6 +79,7 @@ import {
   showFlow,
   showHeat,
   showCups,
+  sound,
   showHeater,
   touchMode,
   touchModes,
@@ -186,6 +187,8 @@ export function createSettingsPanel () {
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.']
       ]),
       pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
+      row('Sound', toggle('sound', sound)),
+      hint(help, 'Gloops and gurgles made up from the lava as it moves: a bloop where a neck snaps or a blob lands, a gurgle that follows how stirred up the lava is.'),
       hint(help, [
         ['Heater', 'Show the heater strip and its elements along the floor.'],
         ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
@@ -209,7 +212,7 @@ export function createSettingsPanel () {
         knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
         knob('Wobble', 'wobble', wobble, { min: 0, max: 2, step: 0.01 }, () => defaultWobble, seconds),
         knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth()),
-        knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend)
+        knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend())
       ),
       knobs(
         knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),

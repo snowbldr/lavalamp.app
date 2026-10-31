@@ -4,6 +4,7 @@ import { createGpuLamp, getGpuDevice } from './sim/gpuSimulation.js'
 import { createRenderer } from './render/renderer.js'
 import { createMotionInput } from './input/motion.js'
 import { createPointerInput } from './input/pointer.js'
+import { createGloop } from './audio/gloop.js'
 import { TURNS, lampSizeFor, lampToPage, pageToLamp, pageVectorToLamp } from './input/frame.js'
 import { notify } from './ui/components.js'
 import { createSettingsPanel } from './ui/settingsPanel.js'
@@ -19,6 +20,8 @@ import {
   computeDefaultInteractionRadius,
   computeDefaultParticleSize,
   computeDefaultSmooth,
+  computeDefaultBlend,
+  defaultBlend,
   setParticleBudget,
   GPU_PARTICLES,
   GPU_REACH,
@@ -62,6 +65,7 @@ import {
   showFlow,
   showHeat,
   showCups,
+  sound,
   showHeater,
   settle,
   smooth,
@@ -182,6 +186,9 @@ export async function start () {
   }
   const pointer = createPointerInput(lamp, toLamp)
   const settingsPanel = createSettingsPanel()
+  // Sound, switched on from the panel's toggle (a click, which is what the browser wants first).
+  const gloop = createGloop()
+  sound.subscribe(on => gloop.set(on))
 
   // Size the lamp to the page for the current turn, and keep the window-following defaults honest.
   function fit () {
@@ -196,6 +203,7 @@ export async function start () {
     followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
     followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))
     followWindow(defaultSmooth, smooth, computeDefaultSmooth(width, height))
+    followWindow(defaultBlend, blend, computeDefaultBlend(width, height))
   }
   fit()
   window.addEventListener('resize', fit)
@@ -282,7 +290,7 @@ export async function start () {
   // kept on window.lavaProfile, for finding what a slow device is spending its time on.
   const profiling = new URLSearchParams(window.location.search).has('profile')
   look.profile = profiling
-  if (profiling) window.lavalamp = { sim, params, look } // for timing the running lamp from the console
+  if (profiling) window.lavalamp = { sim, params, look, gloop } // for timing the running lamp from the console
   const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
   const report = () => {
     const out = {
@@ -352,6 +360,7 @@ export async function start () {
     }
     shownView = view
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view })
+    if (gloop.enabled) gloop.update(sim.state, sim.count, width, height, params.gravity, FRAME * pace())
     if (profiling) {
       const t2 = performance.now()
       tally.frames++
