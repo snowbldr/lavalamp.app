@@ -864,8 +864,14 @@ export function createSimulation ({ width, height, params }) {
       // (push held two seconds in the pool: no change at Wobble 0.87, half the lava under the
       // finger gone at Wobble 0; Robert: "the touch controls on GPU are super weak ... the
       // eddies are also too weak now").
-      const stirX = fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
-      const stirY = fy + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
+      // Lava in a bottle takes no stirring: the eddies and the roll reach past the floor line,
+      // and at full strength they packed the hidden lava against the glass (814 particles in a
+      // 20 px cell of a pot against 42 at rest, at Turbulence 150 with six drifters; every
+      // neighbour loop paid for the pile and the GPU lamp fell from 115 fps toward single
+      // digits: Robert, "something is breaking the performance").
+      const bottled = state.home[i] >= 0
+      const stirX = bottled ? 0 : fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
+      const stirY = bottled ? 0 : fy + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
       const driftX = 0
       const driftY = gravity - temp[i]
       if (wobble > 0) {
@@ -879,7 +885,7 @@ export function createSimulation ({ width, height, params }) {
         vx[i] += (driftX - vx[i]) * ease
         vy[i] += (driftY - vy[i]) * ease
         // Under a finger or inside a strong eddy the lava has no memory: see STIR_OVERRIDE.
-        if (overriding) {
+        if (overriding && !bottled) {
           const f = stirFree(x[i], y[i])
           if (f > 0) { vx[i] += (driftX - vx[i]) * f; vy[i] += (driftY - vy[i]) * f }
         }

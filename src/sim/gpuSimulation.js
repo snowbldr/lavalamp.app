@@ -349,6 +349,8 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
   }
   t = clamp(t, 0.0, P.maxTemp);
   F[TEMP(i)] = t;
+  // Lava in a bottle takes no stirring (simulation.js: the eddies packed the pots).
+  if (F[HOME(i)] >= 0.0) { finger = vec2f(0.0); stir = vec2f(0.0); stirred = 0.0; }
   // Buoyancy goes through the inertia; the stirring (roll, eddies, fingers, impulse) moves the
   // lava at full strength this step, and under a finger or inside a strong eddy the carried
   // velocity gives way to the drift (no memory there), as simulation.js STIR_OVERRIDE.
