@@ -127,6 +127,9 @@
 }
 .toggle.on { background: var(--accent); }
 .toggle.on::after { transform: translateX(18px); }
+/* A switch whose sound is still starting pulses until it runs. */
+.pending .toggle { animation: pending 0.7s ease-in-out infinite alternate; }
+@keyframes pending { from { opacity: 1; } to { opacity: 0.35; } }
 
 /* The seed field and its New button */
 .seed-row { display: flex; gap: 6px; width: 100%; }

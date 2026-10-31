@@ -20,6 +20,10 @@ import {
   computeDefaultInteractionRadius,
   computeDefaultParticleSize,
   computeDefaultSmooth,
+  computeDefaultStiffness,
+  computeDefaultStiffnessNear,
+  defaultStiffness,
+  defaultStiffnessNear,
   computeDefaultBlend,
   defaultBlend,
   setParticleBudget,
@@ -66,6 +70,8 @@ import {
   showHeat,
   showCups,
   sound,
+  soundPending,
+  soundBed,
   showHeater,
   settle,
   smooth,
@@ -188,7 +194,9 @@ export async function start () {
   const settingsPanel = createSettingsPanel()
   // Sound, switched on from the panel's toggle (a click, which is what the browser wants first).
   const gloop = createGloop()
-  sound.subscribe(on => gloop.set(on))
+  gloop.setBed(soundBed())
+  soundBed.subscribe(name => gloop.setBed(name))
+  sound.subscribe(on => { soundPending(!!on); gloop.set(on).then(() => soundPending(false)) })
 
   // Size the lamp to the page for the current turn, and keep the window-following defaults honest.
   function fit () {
@@ -203,6 +211,8 @@ export async function start () {
     followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
     followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))
     followWindow(defaultSmooth, smooth, computeDefaultSmooth(width, height))
+    followWindow(defaultStiffness, stiffness, computeDefaultStiffness(width, height))
+    followWindow(defaultStiffnessNear, stiffnessNear, computeDefaultStiffnessNear(width, height))
     followWindow(defaultBlend, blend, computeDefaultBlend(width, height))
   }
   fit()

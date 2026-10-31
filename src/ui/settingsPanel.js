@@ -80,6 +80,9 @@ import {
   showHeat,
   showCups,
   sound,
+  soundPending,
+  soundBed,
+  soundBeds,
   showHeater,
   touchMode,
   touchModes,
@@ -187,8 +190,9 @@ export function createSettingsPanel () {
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.']
       ]),
       pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
-      row('Sound', toggle('sound', sound)),
-      hint(help, 'Gloops and gurgles made up from the lava as it moves: a bloop where a neck snaps or a blob lands, a gurgle that follows how stirred up the lava is.'),
+      row('Sound', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
+      row('Bed', segmented('bed', soundBed, soundBeds)),
+      hint(help, 'Gloops made up from the lava as it moves: a bloop where a neck snaps or a blob lands, pitched by how much lava moved, and a bed that follows how stirred up the lava is: Simmer is a scatter of tiny pops, Noise a low rumble, Hum a drone.'),
       hint(help, [
         ['Heater', 'Show the heater strip and its elements along the floor.'],
         ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
@@ -202,8 +206,8 @@ export function createSettingsPanel () {
         knob('Size', 'particleSize', particleSize, { min: 1, max: 50, step: 1 }, () => defaultParticleSize()),
         knob('Count', 'particle-count', particleCount, { min: 5, max: () => Math.trunc(defaultParticleCount()) * 2, step: 1 }, defaultParticleCount, whole),
         knob('Radius', 'interaction-radius', interactionRadius, { min: 5, max: 100, step: 1 }, () => defaultInteractionRadius()),
-        knob('Stiff', 'stiffness', stiffness, { min: 1, max: 6500, step: 1 }, () => defaultStiffness),
-        knob('Near', 'stiffness-near', stiffnessNear, { min: 1, max: 40000, step: 10 }, () => defaultStiffnessNear),
+        knob('Stiff', 'stiffness', stiffness, { min: 1, max: 6500, step: 1 }, () => defaultStiffness()),
+        knob('Near', 'stiffness-near', stiffnessNear, { min: 1, max: 40000, step: 10 }, () => defaultStiffnessNear()),
         knob('Density', 'rest-density', restDensity, { min: 0.1, max: 1000, step: 0.1 }, () => defaultRestDensity, fixed(1)),
         knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
         knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),

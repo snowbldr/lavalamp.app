@@ -28,7 +28,11 @@ import { seedRandom } from '../sim/random.js'
 // that's the whole reason we get too aggressive rises", then his share link at 7233 for a 1294 px
 // window), 5030 at 900 px.
 export const LAB_AREA_PER_PARTICLE = 360 * 900 / 3050
-export const CPU_PARTICLES = 6000
+// 3000 visible (was 6000): with the fine liquid the pots below hold about as much again, and a
+// CPU lamp carrying 12300 particles on a desktop window ran at 14 fps and a tenth of its speed
+// (Robert, of the ?cpu lamp: "the cpu one looks really bad"). The CPU is the fallback for
+// browsers without WebGPU: fewer, coarser particles at full speed.
+export const CPU_PARTICLES = 3000
 // On the GPU backend the budget is ten times the CPU's: 60000 particles is about 12 ms a step
 // on Robert's Apple GPU, and a desktop window wants 30000 at the lab's own grain.
 export const GPU_PARTICLES = 60000
@@ -43,6 +47,14 @@ export const computeDefaultInteractionRadius = (width, height) => Math.round(20 
 export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height))
 // Smooth 7 and Blend 28 (Robert, 2026-10-31, with the two blurs apart: "smooth 7, blend 28"; Smooth was 3).
 export const computeDefaultSmooth = (width, height) => Math.round(7 * liquidScale(width, height))
+// Stiff and Near scale with the grain as well. Clavet's displacement per neighbour is dt² times
+// stiffness times a dimensionless kernel sum, so in px it does not grow with the radius while
+// the spacing does: at radius 43 the liquid tuned at 20 relaxed at less than half its strength
+// against its own spacing, soft and slow (the CPU lamp on a desktop window). Scaling both with
+// the radius keeps each step's move the same fraction of the spacing. At scale 1, which is every
+// phone and every desktop window on the GPU, nothing changes.
+export const computeDefaultStiffness = (width, height) => Math.round(7.5 * liquidScale(width, height) * 10) / 10
+export const computeDefaultStiffnessNear = (width, height) => Math.round(1101 * liquidScale(width, height))
 export const computeDefaultBlend = (width, height) => Math.round(28 * liquidScale(width, height))
 export const computeDefaultMaxTemp = height => Math.round(5030 * height / 900)
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
@@ -70,8 +82,8 @@ export const defaultFlowFast = { r: 255, g: 0, b: 0 }
 // Stiff 7.5 against Density 360: the pull on every particle is close to their product, a constant
 // cohesion, and Near is what holds the particles apart (Robert: "Ok, big finding, stiff has a
 // relationship with density"). The old liquid was 4000, 25000 and 4.25 at radius 60.
-export const defaultStiffness = 7.5
-export const defaultStiffnessNear = 1101
+export const defaultStiffness = fnstate(computeDefaultStiffness(window.innerWidth, window.innerHeight))
+export const defaultStiffnessNear = fnstate(computeDefaultStiffnessNear(window.innerWidth, window.innerHeight))
 export const defaultRestDensity = 360.1
 // Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
 export const defaultStir = 20
@@ -147,8 +159,8 @@ export const flowSlow = fnstate({ ...defaultFlowSlow })
 export const flowFast = fnstate({ ...defaultFlowFast })
 export const interactionRadius = fnstate(defaultInteractionRadius())
 export const gravityStrength = fnstate(defaultGravityStrength())
-export const stiffness = fnstate(defaultStiffness)
-export const stiffnessNear = fnstate(defaultStiffnessNear)
+export const stiffness = fnstate(defaultStiffness())
+export const stiffnessNear = fnstate(defaultStiffnessNear())
 export const restDensity = fnstate(defaultRestDensity)
 export const maxTemp = fnstate(defaultMaxTemp())
 export const particleCount = fnstate(defaultParticleCount())
@@ -208,6 +220,9 @@ export const showHeater = fnstate(false)
 export const showCups = fnstate(false)
 // Sound from the lava, synthesised as it moves. Not saved: browsers want a click before audio anyway.
 export const sound = fnstate(false)
+export const soundPending = fnstate(false) // on while the audio is starting, for the switch to show it
+export const soundBeds = ['simmer', 'noise', 'hum', 'none']
+export const soundBed = fnstate('simmer')
 // What a finger on the lamp does. Not saved.
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
@@ -231,8 +246,8 @@ const defaults = () => ({
   flowFast: { ...defaultFlowFast },
   interactionRadius: defaultInteractionRadius(),
   gravityStrength: defaultGravityStrength(),
-  stiffness: defaultStiffness,
-  stiffnessNear: defaultStiffnessNear,
+  stiffness: defaultStiffness(),
+  stiffnessNear: defaultStiffnessNear(),
   restDensity: defaultRestDensity,
   maxTemp: defaultMaxTemp(),
   particleCount: defaultParticleCount(),
