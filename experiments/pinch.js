@@ -48,6 +48,7 @@ export function start () {
   const pulse = fnstate(0.6) // seconds of finger heat per pulse
   const gap = fnstate(1.5) // seconds between pulses
   const heat = fnstate(20) // finger heat per step
+  const finger = fnstate(43) // radius of the heat finger, px (the lamp's is 12% of its shorter side)
   const maxHeat = fnstate(1690)
   const interval = fnstate(0.6) // seconds between filmstrip frames
   const frames = fnstate(12)
@@ -93,7 +94,7 @@ export function start () {
     return {
       particleCount: count(), interactionRadius: radius(), stiffness: stiffness(), stiffnessNear: near(), restDensity: density(),
       maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
-      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), settle: settle(), viscosity: viscosity()
+      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: settle(), viscosity: viscosity()
     }
   }
 
@@ -103,7 +104,7 @@ export function start () {
   function settings () {
     return {
       wobble: wobble(), kick: kick(), cap: cap(), gloop: gloop(), stiff: stiffness(), near: near(), density: density(), radius: radius(), settle: settle(), viscosity: viscosity(), substeps: substeps(),
-      lava: count(), warm: warm(), pulse: pulse(), gap: gap(), heat: heat(), maxHeat: maxHeat(), size: size(), smooth: smooth(), from: from(), every: interval(), frames: frames(),
+      lava: count(), warm: warm(), pulse: pulse(), gap: gap(), heat: heat(), finger: finger(), maxHeat: maxHeat(), size: size(), smooth: smooth(), from: from(), every: interval(), frames: frames(),
       view: view(), slow: slow()
     }
   }
@@ -221,6 +222,7 @@ export function start () {
       knobs(
         knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1 }, () => 20),
         knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 3000, step: 10 }, () => 1690),
+        knob('Finger', 'finger', finger, { min: 5, max: 180, step: 1 }, () => 43, v => `${v} px`),
         knob('Size', 'size', size, { min: 1, max: 50, step: 1 }, () => 2),
         knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => 0)
       ),
@@ -236,6 +238,7 @@ export function start () {
         knob('Frames', 'frames', frames, { min: 4, max: 24, step: 1 }, () => 12)
       ),
       hint(help, [
+        ['Finger', 'radius of the heat pulse on the floor, in px: how much lava one pulse warms, so how big a lump lifts.'],
         ['From', 'the filmstrip starts itself this many seconds after a Replay.'],
         ['Every', 'seconds between filmstrip frames.'],
         ['Frames', 'how many frames the strip takes before it stops.']

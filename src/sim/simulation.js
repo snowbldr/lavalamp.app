@@ -231,14 +231,21 @@ const DRIFT_VARIETY = [0.7, 1.3]
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, settle, viscosity
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
   let state = allocate(params.particleCount)
   // Each particle's neighbours from the pressure pass, flat: nbStart[i] to nbStart[i + 1] in nbList.
   let nbList = new Int32Array(params.particleCount * 16)
-  let nbStart = new Int32Array(params.particleCount + 1)
+  let nbStart = new Int32Array(params.particleCount)
+  let nbEnd = new Int32Array(params.particleCount)
+  // Scratch for sorting the particle arrays into cell order (see reorder).
+  let scratchF = new Float32Array(params.particleCount)
+  let scratchI = new Int16Array(params.particleCount)
+  let sweep = false // which way the relaxation walks the sorted particles this step
+  let visit = new Int32Array(0) // the order the relaxation visits the particles in this step
+  let cellOrder = new Int32Array(0) // a fixed shuffle of the hash's cells
   // The live count follows params.particleCount; particles added later appear in the slab too.
   let alive = 0
   let heaterTime = 0
@@ -254,6 +261,7 @@ export function createSimulation ({ width, height, params }) {
   let kicked = false // whether the kick-off lighting has happened
   let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
   let touchHeatNow = TOUCH_HEAT // params.touchHeat as of the last step
+  let touchRadiusNow = 0 // params.touchRadius as of the last step, px; 0 means the TOUCH_RADIUS fraction
   const eddies = []
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
@@ -455,7 +463,7 @@ export function createSimulation ({ width, height, params }) {
     out[0] = 0
     out[1] = 0
     let heat = 0
-    const radius = Math.max(TOUCH_MIN, TOUCH_RADIUS * Math.min(width, height))
+    const radius = touchRadiusNow > 0 ? touchRadiusNow : Math.max(TOUCH_MIN, TOUCH_RADIUS * Math.min(width, height))
     for (let k = 0; k < touches.length; k++) {
       const t = touches[k]
       const dx = px - t.x
@@ -512,10 +520,68 @@ export function createSimulation ({ width, height, params }) {
     }
   }
 
+  // Sort the particle arrays into the hash's cell order, so that a particle's neighbours sit near
+  // it in memory and the neighbour loops stop jumping about: at 50000 particles that was the
+  // step, 125 ms with no single hot function left (Robert: "let's see if we can make it work at
+  // 50k"). The hash has just been built, so its indices array is the order; afterwards it is the
+  // identity. Every array indexed by particle moves: positions, velocities, temperature, the
+  // pre-relaxation positions and the bottle. Scratch arrays (pressure, weights, shared heat) are
+  // recomputed each step and need not. The relaxation then walks the particles in cell order,
+  // which is a sweep across the lamp rather than the random order they were spawned in, so the
+  // step alternates direction (sweep) to keep the sweep from pushing the lava one way. Same
+  // statistics as before, different frames: a seed reproduces a lamp within a version, not
+  // across this change.
+  // The order the relaxation visits the particles: cell by cell, the cells in a fixed shuffle,
+  // the particles of a cell together. Walking the sorted particles straight through was fastest
+  // (93 ms at 50000 against 125 unsorted) but is a sweep across the lamp, and even alternating
+  // its direction each step changed the liquid (max speed at Robert's settings 1664 to 1128, the
+  // pinch never parting): a sweep lets one step's pressure travel across the pool. Visiting them
+  // in a random order kept the liquid and gave back all the speed (121 ms). Cell blocks in random
+  // order keep the random statistics at any scale above a cell and the memory locality within one.
+  function planVisit () {
+    const cells = hash.start.length - 1
+    if (cellOrder.length !== cells) cellOrder = shuffledOrder(cells)
+    if (visit.length < alive) visit = new Int32Array(alive)
+    const start = hash.start
+    let s = 0
+    for (let k = 0; k < cells; k++) {
+      const c = cellOrder[k]
+      for (let i = start[c], end = start[c + 1]; i < end; i++) visit[s++] = i
+    }
+  }
+
+  // A fixed shuffle of 0 to n - 1 from its own little generator, so the lamp's seeded randomness
+  // is untouched.
+  function shuffledOrder (n) {
+    const order = new Int32Array(n)
+    for (let i = 0; i < n; i++) order[i] = i
+    let seed = 12345
+    for (let i = n - 1; i > 0; i--) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff
+      const j = seed % (i + 1)
+      const t = order[i]; order[i] = order[j]; order[j] = t
+    }
+    return order
+  }
+
+  function reorder () {
+    const order = hash.indices
+    if (scratchF.length < alive) { scratchF = new Float32Array(alive); scratchI = new Int16Array(alive) }
+    const { x, y, vx, vy, temp, px, py, home } = state
+    for (const a of [x, y, vx, vy, temp, px, py]) {
+      for (let k = 0; k < alive; k++) scratchF[k] = a[order[k]]
+      a.set(scratchF.subarray(0, alive))
+    }
+    for (let k = 0; k < alive; k++) scratchI[k] = home[order[k]]
+    home.set(scratchI.subarray(0, alive))
+    for (let k = 0; k < alive; k++) order[k] = k
+  }
+
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, settle = 1, viscosity: sigma = 0 } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0 } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
+    touchRadiusNow = touchRadius
     if (cups.length === 0) layoutCups()
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
     // params.particleCount is the visible lava; the floor's reservoirs fill themselves on top of
@@ -678,11 +744,15 @@ export function createSimulation ({ width, height, params }) {
       y[i] += vy[i] * dt
     }
     hash.build(x, y, alive)
+    reorder()
+    sweep = !sweep
+    planVisit()
 
     const { g, shared, home } = state
-    if (nbStart.length < alive + 1) nbStart = new Int32Array(alive + 1)
+    if (nbStart.length < alive) { nbStart = new Int32Array(alive); nbEnd = new Int32Array(alive) }
     let nbUsed = 0
-    for (let i = 0; i < alive; i++) {
+    for (let s = 0; s < alive; s++) {
+      const i = visit[s]
       const neighbours = findNeighbours(state, hash, i, interactionRadius)
       nbStart[i] = nbUsed
       if (nbUsed + neighbours.length > nbList.length) {
@@ -691,6 +761,7 @@ export function createSimulation ({ width, height, params }) {
         nbList = bigger
       }
       for (let k = 0; k < neighbours.length; k++) nbList[nbUsed++] = neighbours[k]
+      nbEnd[i] = nbUsed
       updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
       let weight = 0
       let heat = 0
@@ -722,14 +793,14 @@ export function createSimulation ({ width, height, params }) {
       }
       contain(i)
     }
-    nbStart[alive] = nbUsed
     // Viscosity (section 5.3) on the carried velocity, so it damps the kicks just given as well as
     // the drift: approaching neighbours slow each other, separating ones do not. Only meaningful
     // when velocity is carried (wobble > 0); at 0 the velocity is rebuilt next frame anyway, so
     // the pass is skipped. Neighbours are the pressure pass's, reweighted at the current positions.
     if (sigma > 0 && wobble > 0) {
-      for (let i = 0; i < alive; i++) {
-        const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbStart[i + 1], i, interactionRadius)
+      for (let s = 0; s < alive; s++) {
+        const i = visit[s]
+        const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbEnd[i], i, interactionRadius)
         viscosity(state, i, neighbours, dt, sigma)
       }
     }
@@ -741,8 +812,9 @@ export function createSimulation ({ width, height, params }) {
     // might be worth a knob". Viscosity (easing each velocity toward the neighbours' mean) was
     // tried first and roughened the skin instead. No conduction or kick in these passes.
     for (let pass = 1; pass < settle; pass++) {
-      for (let i = 0; i < alive; i++) {
-        const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbStart[i + 1], i, interactionRadius)
+      for (let s = 0; s < alive; s++) {
+        const i = visit[s]
+        const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbEnd[i], i, interactionRadius)
         updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
         relax(state, i, neighbours, dt, home[i] >= 0 ? RELAX_CAP : Infinity)
         contain(i)
