@@ -18,6 +18,10 @@
       .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
       .pending .toggle { animation: pending 0.7s ease-in-out infinite alternate; }
       .sample { border-top: 1px solid rgba(255,255,255,0.1); padding: 8px 0; }
+      .pads { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+      .pad { min-height: 52px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.08); color: #ececec; font: inherit; cursor: pointer; padding: 6px; }
+      .pad:active { background: var(--accent); color: #1c1c1e; }
+      .pad.on { border-color: var(--accent); }
       .sample-title { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
       .samples input[type=file] { color: #ccc; font: inherit; }
     </style>

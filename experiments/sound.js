@@ -116,6 +116,8 @@ export async function start () {
   const sampleSettings = (() => { try { return JSON.parse(localStorage.getItem(SAMPLE_STORE) || '{}') } catch (e) { return {} } })()
   const saveSamples = () => { for (const s of player.samples) sampleSettings[s.name] = s.settings; localStorage.setItem(SAMPLE_STORE, JSON.stringify(sampleSettings)) }
   const sampleList = div({ class: 'samples' })
+  const pads = div({ class: 'pads' }) // one big button per sample, the board itself
+  const selected = fnstate('')
   const SAMPLE_KNOBS = [
     ['gain', 'Gain', 0, 1, 0.01, 2], ['pitch', 'Pitch', -36, 36, 1, 0], ['stretch', 'Stretch', 0.1, 6, 0.05, 2],
     ['start', 'Start', 0, 1, 0.01, 2], ['end', 'End', 0, 1, 0.01, 2], ['pitchBySize', 'Pitch/size', -36, 36, 1, 0], ['stretchBySize', 'Stretch/size', -4, 4, 0.1, 1], ['cooldown', 'Cooldown', 0, 2, 0.05, 2]
@@ -126,7 +128,8 @@ export async function start () {
     for (const [key] of SAMPLE_KNOBS) { states[key] = fnstate(sample.settings[key]); states[key].subscribe(v => { sample.settings[key] = Number(v); saveSamples() }) }
     const event = fnstate(sample.settings.event)
     event.subscribe(v => { sample.settings.event = v; saveSamples() })
-    const card = div({ class: 'sample' },
+    pads.appendChild(button({ class: selected.bindAttr(() => selected() === name ? 'pad on' : 'pad'), onclick: () => { player.play(sample, { size: 0.5 }); selected(name) } }, name))
+    const card = div({ class: 'sample', style: { display: selected.bindStyle(() => selected() === name ? 'block' : 'none') } },
       div({ class: 'sample-title' },
         button({ class: 'small', onclick: () => player.play(sample, { size: 0.5 }) }, '▶'),
         ' ', span(name), ' ',
@@ -232,6 +235,10 @@ export async function start () {
   const panel = div(
     { class: 'panel' },
     row('Sound', div({ class: pending.bindAttr(() => pending() ? 'pending' : '') }, toggle('sound', sound))),
+    hint(help, 'Turn Sound on and the pads load: one per recorded sound in experiments/samples (Pixabay, Pixabay Content License) plus any files you add. Tap a pad to hear it; its settings open underneath: which lava event fires it, pitch, stretch, trim, and how the event\'s size bends the pitch and the stretch.'),
+    pads,
+    row('Add files', filePicker),
+    sampleList,
     row('Bed', segmented('bed', bed, BEDS)),
     row('Ticks', toggle('ticks', ticks)),
     div({ class: 'buttons' }, ...EVENTS.map((type, k) => button({ class: 'small', style: { color: EVENT_COLOURS[type] }, onclick: () => gloop.playTick(type) }, `${k + 1} ${type}`))),
@@ -250,10 +257,6 @@ export async function start () {
     div({ class: 'readout' }, readout.bindAs(() => readout())),
     hint(help, 'The lamp runs on the left with the lamp\'s own defaults. Turn Sound on, pick a Bed, and turn the numbers while it plays; the buttons play each voice by hand at a small and a big size. Fast is the speed, in gravities, above which a particle counts as moving; Burst the jump in a column\'s moving count that fires a bloop, as a share of the lava. Every change is kept in this browser.'),
     ...groups,
-    div({ class: 'row-label', style: { marginTop: '12px', opacity: 0.7 } }, 'Samples'),
-    hint(help, 'Recorded sounds, from experiments/samples and any files you add. Each plays by hand (small and big) and fires on the event it is set to, pitched by Pitch plus Pitch/size times the event\'s size (negative is bigger lower), stretched without changing pitch by Stretch (grains), trimmed by Start and End. Settings are kept by name in this browser. Sound has to be on to load them.'),
-    row('Add files', filePicker),
-    sampleList,
     div({ class: 'actions' },
       button({ onclick: copy }, copied.bindAs(() => copied() ? 'Copied' : 'Copy settings')),
       button({ onclick: reset }, 'Reset')

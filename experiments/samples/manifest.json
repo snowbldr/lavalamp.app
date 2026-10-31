@@ -1,8 +1,86 @@
 [
   {
-    "name": "test blup (synthetic stand-in)",
-    "file": "test-blup.wav",
-    "source": "",
-    "license": "made here"
+    "name": "viscous liquid fall in",
+    "file": "viscous-liquid-fall-in.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-viscous-liquid-fall-in-83980/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "soft plop",
+    "file": "soft-plop.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-soft-plop-97691/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "pop or bloop",
+    "file": "pop-or-bloop.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-pop-or-bloop-7008/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "mouth plops",
+    "file": "mouth-plops.mp3",
+    "source": "https://pixabay.com/sound-effects/people-mouth-plops-6688/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "plopping plop popping",
+    "file": "plopping-plop-popping.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-plopping-plop-popping-41836/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "squishy oobleck goo",
+    "file": "squishy-oobleck-goo.mp3",
+    "source": "https://pixabay.com/sound-effects/people-squishy-oobleck-goo-105001/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "soup slopping",
+    "file": "soup-slopping.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-soup-slopping-43006/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "water gloops and glops",
+    "file": "water-gloops-and-glops.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-022962-water-gloops-amp-glopswav-69143/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "hot bubbling mud",
+    "file": "hot-bubbling-mud.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-hot-bubbling-mud-99785/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "bubbling sauce",
+    "file": "bubbling-sauce.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-bubbling-sauce-82030/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "ambient bubbling liquid",
+    "file": "ambient-bubbling-liquid.mp3",
+    "source": "https://pixabay.com/sound-effects/film-special-effects-ambient-bubbling-liquid-61254/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
+  },
+  {
+    "name": "gunk bubbling in cave",
+    "file": "gunk-bubbling-in-cave.mp3",
+    "source": "https://pixabay.com/sound-effects/nature-gunk-bubbling-in-cave-18880/",
+    "license": "Pixabay Content License",
+    "author": "freesound_community via Pixabay"
   }
 ]
