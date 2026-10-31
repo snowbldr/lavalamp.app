@@ -20,16 +20,23 @@ export function start () {
   const wobble = fnstate(0.3)
   const kick = fnstate(1)
   const cap = fnstate(2)
-  const stiffness = fnstate(4000)
-  const near = fnstate(25000)
-  const density = fnstate(4.25)
+  // Robert's liquid of 2026-10-30, found at the knobs once viscosity was in ("low values for near and
+  // high density. that allows for getting very smooth stretchy globs at particle size 7").
+  const stiffness = fnstate(2130)
+  const near = fnstate(1000) // Robert had 7011, then asked for the knob to run 1 to 1000
+  const density = fnstate(7)
   const gloop = fnstate(0.02)
   // Half the lamp's grain, at Robert's suggestion: "maybe we need a smaller particle size? that
   // should be fine now that we have a much faster render". Same lava, four times the particles.
   const radius = fnstate(30)
   const settle = fnstate(2) // relaxation passes a frame
-  const viscosity = fnstate(0) // the paper's sigma; set after the sweep
-  const size = fnstate(15)
+  const viscosity = fnstate(40) // the paper's sigma
+  // Physics steps per 60 Hz frame. Finer grain needs them: at half the radius the same frame moves
+  // particles twice as many spacings, and the pressure step over corrects; at radius 15 with four
+  // times the particles one step a frame left the lava in droplets and sheets, two steps a frame
+  // pinched with a neck that lived 2.4 s (the video's 2.4 s). Each step costs the whole physics again.
+  const substeps = fnstate(1)
+  const size = fnstate(7)
   const smooth = fnstate(8) // edge smoothing radius, px
   // The experiment. Robert, on the first strip: "the blob go too hot and stuck to the ceiling and
   // had too much momentum taking off from the initial heating. maybe warm the whole bottom first,
@@ -90,6 +97,23 @@ export function start () {
     }
   }
 
+  // Every knob, the view and slow motion as one line of JSON (Robert: "add a copy settings to
+  // clipboard button in the lab so I can share tweaks with you easier next time").
+  const copied = fnstate(false)
+  function settings () {
+    return {
+      wobble: wobble(), kick: kick(), cap: cap(), gloop: gloop(), stiff: stiffness(), near: near(), density: density(), radius: radius(), settle: settle(), viscosity: viscosity(), substeps: substeps(),
+      lava: count(), warm: warm(), pulse: pulse(), gap: gap(), heat: heat(), maxHeat: maxHeat(), size: size(), smooth: smooth(), from: from(), every: interval(), frames: frames(),
+      view: view(), slow: slow()
+    }
+  }
+  function copySettings () {
+    navigator.clipboard.writeText(JSON.stringify(settings())).then(() => {
+      copied(true)
+      setTimeout(() => copied(false), 1500)
+    })
+  }
+
   function reset () {
     seedRandom(SEED)
     live = params()
@@ -126,7 +150,8 @@ export function start () {
       const on = since >= 0 && since % (pulse() + gap()) < pulse()
       sim.setTouches(on ? [{ x: W / 2, y: H - 30, vx: 0, vy: 0, mode: 'heat' }] : [])
       Object.assign(live, params()) // the knobs apply live; the simulation reads this object
-      sim.step(FRAME)
+      const n = substeps()
+      for (let s = 0; s < n; s++) sim.step(FRAME / n)
       time += FRAME
     }
     renderer.render(sim.state, sim.count, { neutral: 500 }) // neutral buoyancy is the gravity, 500
@@ -161,25 +186,28 @@ export function start () {
         ['Gloop', 'heat conduction between touching particles: high is lava that warms and lifts as one piece.']
       ]),
       knobs(
-        knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1 }, () => 4000),
-        knob('Near', 'near', near, { min: 1, max: 40000, step: 10 }, () => 25000),
-        knob('Density', 'density', density, { min: 0.01, max: 7, step: 0.01 }, () => 4.25, v => Number(v).toFixed(2)),
-        knob('Radius', 'radius', radius, { min: 15, max: 100, step: 1 }, () => 30)
+        knob('Stiff', 'stiff', stiffness, { min: 1, max: 6500, step: 1 }, () => 2130),
+        knob('Near', 'near', near, { min: 1, max: 1000, step: 1 }, () => 1000),
+        knob('Density', 'density', density, { min: 0.1, max: 15, step: 0.1 }, () => 7, v => Number(v).toFixed(1)),
+        knob('Radius', 'radius', radius, { min: 5, max: 100, step: 1 }, () => 30)
       ),
       knobs(
         knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => 2),
-        knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => 0)
+        knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => 40),
+        knob('Substeps', 'substeps', substeps, { min: 1, max: 4, step: 1 }, () => 1)
       ),
       hint(help, [
         ['Stiff', 'pressure pushing particles apart when they crowd past the rest density.'],
         ['Near', 'the short range push that stops particles stacking; also the surface tension.'],
         ['Density', 'the rest density the pressure aims for: lower is a looser, more stretchy liquid.'],
         ['Radius', 'how far a particle feels its neighbours, in pixels.'],
-        ['Settle', 'pressure passes per frame. 1 is the lamp; 2 spaces the particles more evenly so the skin is less bumpy to begin with.']
+        ['Settle', 'pressure passes per frame. 1 is the lamp; 2 spaces the particles more evenly so the skin is less bumpy to begin with.'],
+        ['Viscosity', 'how much neighbours slow each other as they close in (the paper\'s sigma): necks thin and tails pull in more slowly. Needs Wobble above 0.'],
+        ['Substeps', 'physics steps per frame. Finer grain (smaller Radius, more Lava) needs 2 or more or the lava breaks into droplets; each one costs the whole physics again.']
       ])),
     div({ class: 'panel-section' }, div({ class: 'panel-section-title plain' }, span('Experiment')),
       knobs(
-        knob('Lava', 'count', count, { min: 50, max: 1200, step: 10 }, () => 640),
+        knob('Lava', 'count', count, { min: 50, max: 6000, step: 10 }, () => 640),
         knob('Warm', 'warm', warm, { min: 0, max: 20, step: 0.5 }, () => 6, v => `${v} s`),
         knob('Pulse', 'pulse', pulse, { min: 0.1, max: 4, step: 0.1 }, () => 0.6, v => `${v} s`),
         knob('Gap', 'gap', gap, { min: 0.1, max: 6, step: 0.1 }, () => 1.5, v => `${v} s`)
@@ -193,7 +221,7 @@ export function start () {
       knobs(
         knob('Heat', 'heat', heat, { min: 1, max: 30, step: 1 }, () => 20),
         knob('Max heat', 'maxHeat', maxHeat, { min: 500, max: 2000, step: 10 }, () => 800),
-        knob('Size', 'size', size, { min: 5, max: 50, step: 1 }, () => 15),
+        knob('Size', 'size', size, { min: 2, max: 50, step: 1 }, () => 7),
         knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => 8)
       ),
       hint(help, [
@@ -218,7 +246,10 @@ export function start () {
     div({ class: 'actions' },
       button({ id: 'replay', onclick: reset }, 'Replay'),
       button({ id: 'film', class: 'primary', onclick: film }, 'Filmstrip now'),
-      clock)
+      clock),
+    div({ class: 'actions' },
+      button({ id: 'copy', onclick: copySettings }, copied.bindAs(() => copied() ? 'Copied' : 'Copy settings')),
+      hint(help, 'Copy settings puts every knob, the view and slow motion on the clipboard as one line of JSON, to paste into a chat or a log.'))
   )
 
   document.body.append(div({ class: 'lab' }, lamp, strip), panel)
