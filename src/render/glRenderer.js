@@ -270,7 +270,13 @@ export function createGlRenderer (canvas, look) {
     gl.enableVertexAttribArray(pLoc.aColor)
     gl.vertexAttribPointer(pLoc.aColor, 3, gl.FLOAT, false, bytes, 16)
     gl.uniform2f(pLoc.uResolution, width, height)
-    gl.uniform1f(pLoc.uSize, look.particleSize * view.k * scale)
+    // In the Reservoirs view (view.k under 1) the lava is drawn scaled down, and a disc scaled
+    // down with it drops below the particle spacing: the metaball field then falls under the
+    // threshold between particles and the lava fills with holes (Robert: "there's like, random
+    // holes all over and weird wrong color edges"). Discs and the blur shrink with the square root
+    // of the view's scale instead, so they stay fat relative to the spacing.
+    const discScale = Math.sqrt(view.k) * scale
+    gl.uniform1f(pLoc.uSize, look.particleSize * discScale)
     gl.drawArrays(gl.TRIANGLES, 0, count * 6)
     gl.disableVertexAttribArray(pLoc.aColor)
     gl.disableVertexAttribArray(pLoc.aCorner)
@@ -278,7 +284,7 @@ export function createGlRenderer (canvas, look) {
     gl.disable(gl.BLEND)
     gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
     // Pass 2, when look.smooth is set: blur the field, across then down.
-    const radius = Math.min(MAX_BLUR, (look.smooth || 0) * view.k * scale)
+    const radius = Math.min(MAX_BLUR, (look.smooth || 0) * discScale)
     if (radius >= 0.5) {
       gl.useProgram(blur)
       gl.enableVertexAttribArray(bLoc.aPosition)
@@ -308,7 +314,7 @@ export function createGlRenderer (canvas, look) {
     gl.uniform2f(cLoc.uTexel, 1 / width, 1 / height)
     gl.uniform1f(cLoc.uThreshold, (ALPHA_THRESHOLD + 0.5) / 255)
     // About one bitmap pixel of alpha slope at a lone disc's edge, wider when the field is blurred.
-    const sizePx = Math.max(1, look.particleSize * view.k * scale)
+    const sizePx = Math.max(1, look.particleSize * discScale)
     gl.uniform1f(cLoc.uSoft, Math.min(0.12, Math.max(0.004, 0.7 / sizePx)))
     gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
     const hl = look.highlightColor
