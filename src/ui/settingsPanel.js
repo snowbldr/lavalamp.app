@@ -1,4 +1,4 @@
-import { button, div, fnstate, input } from '@srfnstack/fntags'
+import { button, div, fnstate, input, span } from '@srfnstack/fntags'
 import { hint, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle } from './components.js'
 import {
   bgColor,
@@ -80,6 +80,8 @@ import {
   showHeat,
   showCups,
   sound,
+  themes,
+  applyTheme,
   soundPending,
   soundBed,
   soundBeds,
@@ -169,7 +171,16 @@ export function createSettingsPanel () {
         swatch('Slow', 'flowSlow', flowSlow),
         swatch('Fast', 'flowFast', flowFast)
       ),
-      hint(help, 'The colours follow the view: the heat map gradient from coldest, sinking lava to hottest while the heat map is on, the lava and its lit underside while it is off, and the slowest to fastest arrow while the flow field is on.'),
+      div({ class: 'swatch-row' },
+        div({ class: 'swatch-caption' }, 'Themes'),
+        div({ class: 'themes' }, ...themes.map(theme => button({
+          class: 'theme',
+          title: theme.name,
+          style: { background: `linear-gradient(90deg, ${['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak'].map(k => `rgb(${theme[k].r},${theme[k].g},${theme[k].b})`).join(', ')})` },
+          onclick: () => applyTheme(theme)
+        }, span(theme.name))))
+      ),
+      hint(help, 'The colours follow the view: the heat map gradient from coldest, sinking lava to hottest while the heat map is on, the lava and its lit underside while it is off, and the slowest to fastest arrow while the flow field is on. A theme sets all of them at once; the swatches above still change any one.'),
       knobs(
         knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
         knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction, fixed(2)),

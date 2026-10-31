@@ -229,6 +229,23 @@ export const soundBed = fnstate('simmer')
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
 
+// Themes: a name and every colour at once, heat gradient, lava, glow, back and the flow arrows
+// (Robert: "themes that set all of the colors", six of them, one row of buttons under the
+// swatches). Weather is the defaults above; the rest are Claude's first draft for Robert to
+// repaint. Applying one just sets the colour states, so Save and Share carry the result.
+const rgb = (r, g, b) => ({ r, g, b })
+export const themes = [
+  { name: 'Weather', heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), lavaColor: rgb(133, 0, 204), lavaHighlight: rgb(182, 124, 254), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40) },
+  { name: 'Lava', heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(8, 4, 4), lavaColor: rgb(220, 60, 0), lavaHighlight: rgb(255, 180, 80), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120) },
+  { name: 'Ocean', heatCold: rgb(0, 10, 60), heatCool: rgb(0, 90, 140), heatWarm: rgb(0, 190, 200), heatHot: rgb(120, 240, 255), heatPeak: rgb(240, 255, 255), bgColor: rgb(0, 5, 20), lavaColor: rgb(0, 120, 200), lavaHighlight: rgb(140, 220, 255), flowSlow: rgb(0, 60, 120), flowFast: rgb(200, 255, 255) },
+  { name: 'Sunset', heatCold: rgb(40, 0, 80), heatCool: rgb(170, 30, 140), heatWarm: rgb(255, 100, 60), heatHot: rgb(255, 200, 60), heatPeak: rgb(255, 245, 200), bgColor: rgb(15, 0, 25), lavaColor: rgb(230, 70, 130), lavaHighlight: rgb(255, 200, 150), flowSlow: rgb(80, 0, 120), flowFast: rgb(255, 220, 120) },
+  { name: 'Acid', heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), lavaColor: rgb(90, 220, 0), lavaHighlight: rgb(220, 255, 120), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100) },
+  { name: 'Violet', heatCold: rgb(10, 0, 30), heatCool: rgb(60, 20, 120), heatWarm: rgb(150, 80, 220), heatHot: rgb(230, 160, 255), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), lavaColor: rgb(150, 90, 255), lavaHighlight: rgb(230, 200, 255), flowSlow: rgb(50, 0, 100), flowFast: rgb(255, 230, 255) }
+]
+export const applyTheme = theme => {
+  for (const [key, state] of Object.entries(colorSettings)) if (theme[key]) state({ ...theme[key] })
+}
+
 // These keys are the saved and shared JSON format, so they must not change.
 const colorSettings = { bgColor, lavaColor, lavaHighlight: highlightColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, seed }
