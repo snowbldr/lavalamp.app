@@ -33,12 +33,16 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
   const scale = scales ? fnstate(scales.find(s => s >= Math.max(typeof max === 'function' ? max() : max, state())) || scales[scales.length - 1]) : null
   const maxOf = () => scale ? scale() : typeof max === 'function' ? max() : max
   const stepOf = () => scale ? scale() / 100 : step
-  const fraction = () => Math.max(0, Math.min(1, (state() - min) / (maxOf() - min)))
+  // On a decade scale the minimum comes down with it, to one step, or a knob whose own minimum is
+  // 1 (Stiff, Near) would be stuck on the 0 to 1 scale (Robert: "the 0-1 range slider doesn't work").
+  const minOf = () => scale && min > 0 ? Math.min(min, stepOf()) : min
+  const fraction = () => Math.max(0, Math.min(1, (state() - minOf()) / (maxOf() - minOf())))
   const clamp = v => {
     const top = maxOf()
     const st = stepOf()
-    v = Math.round((v - min) / st) * st + min
-    v = Math.max(min, Math.min(top, v))
+    const lo = minOf()
+    v = Math.round((v - lo) / st) * st + lo
+    v = Math.max(lo, Math.min(top, v))
     return Number(v.toFixed(6))
   }
   const nudge = steps => state(clamp(state() + steps * stepOf()))
@@ -51,7 +55,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
       tabindex: 0,
       role: 'slider',
       'aria-label': title,
-      'aria-valuemin': min,
+      'aria-valuemin': scale ? scale.bindAttr(() => minOf()) : min,
       'aria-valuemax': scale ? scale.bindAttr(() => maxOf()) : state.bindAttr(() => maxOf()),
       'aria-valuenow': state.bindAttr(),
       'aria-valuetext': state.bindAttr(() => format(state())),
@@ -66,7 +70,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
         if (!drag) return
         const travel = (e.clientX - drag.x) + (drag.y - e.clientY)
         const sweep = e.shiftKey ? KNOB_SWEEP * 10 : KNOB_SWEEP
-        state(clamp(drag.value + travel / sweep * (maxOf() - min)))
+        state(clamp(drag.value + travel / sweep * (maxOf() - minOf())))
       },
       onpointerup: () => { drag = null; dial.classList.remove('turning') },
       onpointercancel: () => { drag = null; dial.classList.remove('turning') },
@@ -78,7 +82,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
       onkeydown: e => {
         const keys = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10 }
         if (e.key in keys) nudge(keys[e.key])
-        else if (e.key === 'Home') state(min)
+        else if (e.key === 'Home') state(minOf())
         else if (e.key === 'End') state(maxOf())
         else return
         e.preventDefault()

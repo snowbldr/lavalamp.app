@@ -100,9 +100,9 @@ export function start () {
     return {
       // Substeps shrink the relaxation's move by dt squared, so the pressure correction per frame
       // would weaken by the substep count; scaling the stiffnesses up by it keeps the liquid.
-      particleCount: count(), interactionRadius: radius(), stiffness: stiffness() * substeps(), stiffnessNear: near() * substeps(), restDensity: density(),
+      particleCount: count(), interactionRadius: radius(), stiffness: stiffness() * Math.max(1, Math.round(substeps())), stiffnessNear: near() * Math.max(1, Math.round(substeps())), restDensity: density(),
       maxTemp: maxHeat(), gravity: 500, particleSize: size(), stir: 0, conduction: gloop(), turbulence: 0, drifters: 0, heatSpots: 0, cupDepth: 0,
-      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: settle(), viscosity: viscosity(), reach: reach(), wallPush: wall(), kickBelow: skin()
+      wobble: wobble(), wobbleKick: kick(), wobbleMax: cap(), heater: time < warm(), touchHeat: heat(), touchRadius: finger(), settle: Math.max(1, Math.round(settle())), viscosity: viscosity(), reach: reach(), wallPush: wall(), kickBelow: skin()
     }
   }
 
@@ -214,7 +214,7 @@ export function start () {
       const on = since >= 0 && since % (pulse() + gap()) < pulse()
       sim.setTouches(on ? [{ x: W / 2, y: H - 30, vx: 0, vy: 0, mode: 'heat' }] : [])
       Object.assign(live, params()) // the knobs apply live; the simulation reads this object
-      const n = substeps()
+      const n = Math.max(1, Math.round(substeps()))
       for (let s = 0; s < n; s++) sim.step(FRAME / n)
       time += FRAME
     }
