@@ -310,8 +310,24 @@ export async function start () {
   look.profile = profiling
   if (profiling) window.lavalamp = { sim, params, look, gloop } // for timing the running lamp from the console
   const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
+  // The busiest 20 px cell, in particles: 40 or so is lava at rest, hundreds is a pile the
+  // solver's neighbour loops pay for (the eddies packing the pots was 814, and single digit fps).
+  const crowd = () => {
+    const { x, y } = sim.state
+    const cols = Math.ceil(sim.width / 20) + 1
+    const counts = new Map()
+    let max = 0
+    for (let i = 0; i < sim.count; i++) {
+      const k = Math.floor(x[i] / 20) + Math.floor(y[i] / 20) * cols
+      const c = (counts.get(k) || 0) + 1
+      counts.set(k, c)
+      if (c > max) max = c
+    }
+    return max
+  }
   const report = () => {
     const out = {
+      crowd: crowd(),
       fps: (tally.frames / (tally.span / 1000)).toFixed(1),
       frameMs: (tally.span / tally.frames).toFixed(2),
       simMs: (tally.sim / tally.frames).toFixed(2),
