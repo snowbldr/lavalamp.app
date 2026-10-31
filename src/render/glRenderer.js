@@ -14,7 +14,7 @@ const ALPHA_THRESHOLD = 70 // of 255, as in the canvas renderer
 // softness is part of how the lamp looks.
 const PIXEL_BUDGET = 1_000_000
 const MIN_VIEW_DISC = 2 // the smallest disc radius drawn in the Reservoirs view, in bitmap px
-const HEAT_STEPS = 48
+const HEAT_STEPS = 512 // was 48, which banded the heat colours in tens of px wide steps (Robert: "can we add more gradient steps for the color?")
 const MAX_HIGHLIGHT = 32 // shader loop bound, in bitmap pixels
 // The smoothing pass: a separable Gaussian blur of the density field before the threshold, so
 // the bumps of the individual discs round off before the edge is cut (Robert: "mainly just that
