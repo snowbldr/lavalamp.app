@@ -258,7 +258,9 @@ export function start () {
       hint(help, 'Copy settings puts every knob, the view and slow motion on the clipboard as one line of JSON, to paste into a chat or a log.'))
   )
 
-  document.body.append(div({ class: 'lab' }, lamp, strip), panel)
+  // Lamp, knobs, then the filmstrip, so the strip filling in never moves the knobs (Robert: "it's
+  // annoying when it loads and moves the controls").
+  document.body.append(div({ class: 'lab' }, lamp, panel, strip))
   reset()
   frame()
 }
