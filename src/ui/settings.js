@@ -108,7 +108,13 @@ export const defaultViscosity = 32
 // from flying apart); which particles count as skin and take the kick, as a fraction of the mean
 // density (300: all of them, the paper's own velocity); and the margin from a side wall within
 // which lava is eased off it, px.
-export const defaultReach = 1
+// A fnstate because the backend sets it: 1 radius on the CPU, GPU_REACH on the GPU. On the GPU
+// a cold pool held up by pressure exploded in pulses (the two half Jacobi moves resolve the
+// floor's push only a few rows up, the column compresses and bursts, and Kick carries it);
+// capping each pass at half a radius stopped it at no cost, measured 979 to 0 particles over
+// 700 px/s. Robert: "rep, reach 0.5 fixed it. nice".
+export const defaultReach = fnstate(1)
+export const GPU_REACH = 0.5
 export const defaultSkin = 300
 export const defaultWall = 0
 // The heater's elements against the new liquid (Robert: "the launching strips are back without
@@ -156,7 +162,7 @@ export const wobbleMax = fnstate(defaultWobbleMax)
 export const smooth = fnstate(defaultSmooth())
 export const settle = fnstate(defaultSettle)
 export const viscosity = fnstate(defaultViscosity)
-export const reach = fnstate(defaultReach)
+export const reach = fnstate(defaultReach())
 export const skin = fnstate(defaultSkin)
 export const wall = fnstate(defaultWall)
 export const elementHeat = fnstate(defaultElementHeat)
@@ -232,7 +238,7 @@ const defaults = () => ({
   smooth: defaultSmooth(),
   settle: defaultSettle,
   viscosity: defaultViscosity,
-  reach: defaultReach,
+  reach: defaultReach(),
   skin: defaultSkin,
   wall: defaultWall,
   elementHeat: defaultElementHeat,

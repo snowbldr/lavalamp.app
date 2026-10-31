@@ -21,6 +21,8 @@ import {
   computeDefaultSmooth,
   setParticleBudget,
   GPU_PARTICLES,
+  GPU_REACH,
+  defaultReach,
   defaultInteractionRadius,
   defaultParticleSize,
   defaultSmooth,
@@ -103,7 +105,7 @@ export async function start () {
   // The GPU backend when the browser has WebGPU and the URL does not say ?cpu; it carries ten
   // times the particles, so the window-following defaults move with it before anything is sized.
   const device = new URLSearchParams(window.location.search).has('cpu') ? null : await getGpuDevice().catch(() => null)
-  if (device) setParticleBudget(GPU_PARTICLES)
+  if (device) { setParticleBudget(GPU_PARTICLES); followWindow(defaultReach, reach, GPU_REACH) }
 
   const params = {}
   mirror(particleCount, params, 'particleCount', Math.trunc)
