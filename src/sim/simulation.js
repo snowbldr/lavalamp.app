@@ -9,6 +9,7 @@ import { random, randomBetween, randomNormal, randomRange } from './random.js'
 // hundreds of candidates for 35 neighbours, and findNeighbours was two thirds of a 52 ms step at
 // 6000 particles. Never below MIN_CELL, or the grid itself gets huge and clearing it is the cost.
 const MIN_CELL = 8
+const WALL_CONTACT = 2 // px: a particle this close to a side wall is in contact with it
 const WALL_PUSH_RATE = 2 // px/s of velocity away from the wall per px inside the wallPush margin, per step
 const RELAX_REACH = Infinity // the most a relaxation step may move a particle, in interaction radii (params.reach); the lamp runs uncapped
 const CELL_FRACTION = 0.75 // cell size as a fraction of the radius: smaller cells mean fewer candidates but more cells to walk; 0.75 measured best for the lamp (6.7 ms against 7.8 at 1 and 7.5 at 0.5)
@@ -839,7 +840,13 @@ export function createSimulation ({ width, height, params }) {
       // the pool at 12), so pressure is negative everywhere and the whole cold pool was kicked
       // every frame, 91 px/s of carried velocity in lava that should lie still, and climbed the
       // walls on it ("with heat off, the fluid should be completely static").
-      const surface = kickBelow > 0 ? state.p[i] / stiffness + restDensity < kickBelow * meanDensity : state.p[i] < 0
+      // A particle in contact with a side wall is never skin: the wall takes half its neighbours,
+      // so its density reads low, and its pressure move, with the inward part clamped, is along
+      // the wall. Kicked, those moves carried a one particle film up both walls in a cold pool
+      // (Robert: "just a smidge of climbing still"; 15 particles 39 px up the wall, none with
+      // this; the pinch unchanged).
+      const onWall = x[i] < WALL_CONTACT || x[i] > width - WALL_CONTACT
+      const surface = !onWall && (kickBelow > 0 ? state.p[i] / stiffness + restDensity < kickBelow * meanDensity : state.p[i] < 0)
       // Carrying the bulk pressure's kicks as well made the whole pool slosh like water even at a
       // tenth of a second. Walls and glass never kick: contain comes after.
       if (wobble > 0 && surface) {
