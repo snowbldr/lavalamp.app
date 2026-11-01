@@ -39,6 +39,20 @@ export const TUNE = {
   fast: 0.5, // a particle is fast above this many gravities
   burst: 0.0006, // of the visible count: the jump in fast particles in a column that is a bloop
   cooldown: 0.16, // seconds between bloops in one column
+  // Pours and spills count the net crossing of the line in a column (down minus up), not every
+  // crossing: a pool resting on the floor line breathes particles across it all the time, and
+  // every breath was a pour (Robert: "all of the audio generations have this horrible knocking
+  // sound. there's something getting recorded as an event that's causing a tapping effect that
+  // does not belong"; the lab's clip had 13 pours of size 0.08 in six seconds, all at the pool's
+  // foot). A pour is now at least `pour` of the lava crossing one way, and no event under
+  // `minSize` fires at all.
+  pour: 0.004, // of the visible count: the net crossings in a column that make a pour or a spill
+  minSize: 0.12, // events smaller than this are specks, not sounds
+  // A burst is a jump in a column's fast count above its recent level, eased over this many
+  // seconds, not above last frame's: the GPU lamp's state comes back about twice a second, so
+  // against last frame every readback of a steadily rising blob was a fresh jump and every
+  // column knocked twice a second (the lab's lump rising: 37 lifts in 20 s, most at size 1).
+  baseline: 0.4,
   bloopLevel: 0.5,
   bloopLow: 48, // Hz, the floor of the bloop's pitch (a big snap)
   bloopSpan: 300, // Hz above it for a speck
@@ -82,7 +96,7 @@ export function createGloop (tune = {}) {
   let primed = false
   let ready = null // resolves the promise from set() once sound is running
   const fast = new Float32Array(COLUMNS)
-  const prevFast = new Float32Array(COLUMNS)
+  const baseFast = new Float32Array(COLUMNS) // each column's fast count, eased over T.baseline seconds: a burst is a jump above this
   const lastBloop = new Float64Array(COLUMNS)
   let time = 0
   let lastGlug = -1
@@ -95,8 +109,8 @@ export function createGloop (tune = {}) {
   const up = new Float32Array(COLUMNS) // this frame's fast particles rising, per column
   const down = new Float32Array(COLUMNS)
   const sumY = new Float32Array(COLUMNS) // and where they are
-  const crossFloor = new Float32Array(COLUMNS)
-  const crossLip = new Float32Array(COLUMNS)
+  const crossFloor = new Float32Array(COLUMNS) // net crossings of the floor line, down minus up
+  const crossLip = new Float32Array(COLUMNS) // and of the lip, up minus down
   const lastCross = new Float64Array(COLUMNS * 2)
   const stats = { bloops: 0, pops: 0, glugs: 0, galoops: 0, agitation: 0, snap: 0, lift: 0, land: 0, pour: 0, spill: 0, merge: 0 } // for the sound board's readout
 
@@ -434,8 +448,8 @@ export function createGloop (tune = {}) {
       const b = id ? id[i] : i
       if (prevStamp[b] === lastStamp) {
         const was = prevY[b]
-        if ((was <= height) !== (py <= height)) crossFloor[c]++
-        if ((was < 0) !== (py < 0)) crossLip[c]++
+        if ((was <= height) !== (py <= height)) crossFloor[c] += py > height ? 1 : -1
+        if ((was < 0) !== (py < 0)) crossLip[c] += py < 0 ? 1 : -1
       }
       prevY[b] = py
       prevStamp[b] = frameStamp
@@ -487,18 +501,28 @@ export function createGloop (tune = {}) {
     // particles are going. And the line crossings, pours and spills.
     const minBurst = Math.max(3, T.burst * visible)
     for (let c = 0; c < COLUMNS; c++) {
-      const burst = fast[c] - prevFast[c]
+      const burst = fast[c] - baseFast[c]
       if (burst >= minBurst && time - lastBloop[c] >= T.cooldown) {
         lastBloop[c] = time
         const size = Math.min(1, fast[c] / (0.02 * visible)) // 0 a speck, 1 two percent of the lava moving at once
         const strength = Math.min(1, burst / (minBurst * 6))
         const meanY = sumY[c] / fast[c] / height
         const type = up[c] > 2 * down[c] ? 'lift' : down[c] > 2 * up[c] ? 'land' : 'snap'
-        fire(type, c, meanY, size, strength)
+        if (size >= T.minSize) fire(type, c, meanY, size, strength)
+        baseFast[c] = fast[c]
       }
-      prevFast[c] = fast[c]
-      if (crossFloor[c] >= minBurst && time - lastCross[c] >= T.cooldown) { lastCross[c] = time; fire('pour', c, 1, Math.min(1, crossFloor[c] / (0.02 * visible)), 1) }
-      if (crossLip[c] >= minBurst && time - lastCross[COLUMNS + c] >= T.cooldown) { lastCross[COLUMNS + c] = time; fire('spill', c, 0, Math.min(1, crossLip[c] / (0.02 * visible)), 1) }
+      baseFast[c] += (fast[c] - baseFast[c]) * Math.min(1, dt / T.baseline)
+      const minPour = Math.max(6, T.pour * visible)
+      const poured = Math.abs(crossFloor[c])
+      if (poured >= minPour && time - lastCross[c] >= T.cooldown) {
+        const size = Math.min(1, poured / (0.02 * visible))
+        if (size >= T.minSize) { lastCross[c] = time; fire('pour', c, 1, size, 1) }
+      }
+      const spilled = Math.abs(crossLip[c])
+      if (spilled >= minPour && time - lastCross[COLUMNS + c] >= T.cooldown) {
+        const size = Math.min(1, spilled / (0.02 * visible))
+        if (size >= T.minSize) { lastCross[COLUMNS + c] = time; fire('spill', c, 0, size, 1) }
+      }
     }
   }
 
