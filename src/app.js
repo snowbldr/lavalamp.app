@@ -28,7 +28,11 @@ import {
   defaultStiffnessNear,
   computeDefaultBlend,
   defaultBlend,
-  setParticleBudget,
+  setBackend,
+  computeDefaultRestDensity,
+  computeDefaultConduction,
+  defaultRestDensity,
+  defaultConduction,
   GPU_PARTICLES,
   GPU_REACH,
   defaultReach,
@@ -117,7 +121,7 @@ export async function start () {
   // The GPU backend when the browser has WebGPU and the URL does not say ?cpu; it carries ten
   // times the particles, so the window-following defaults move with it before anything is sized.
   const device = new URLSearchParams(window.location.search).has('cpu') ? null : await getGpuDevice().catch(() => null)
-  if (device) { setParticleBudget(GPU_PARTICLES); followWindow(defaultReach, reach, GPU_REACH) }
+  if (device) { setBackend('gpu'); followWindow(defaultReach, reach, GPU_REACH) }
 
   const params = {}
   mirror(particleCount, params, 'particleCount', Math.trunc)
@@ -236,6 +240,8 @@ export async function start () {
     lamp.style.transform = `rotate(${turns * 90}deg)`
     followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(width, height))
     followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
+    followWindow(defaultRestDensity, restDensity, computeDefaultRestDensity())
+    followWindow(defaultConduction, conduction, computeDefaultConduction())
     followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
     followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
     followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))

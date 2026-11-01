@@ -227,7 +227,7 @@ export function createSettingsPanel () {
         // the heater pulses and heat and such").
         knobs(
           knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
-          knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction, fixed(2)),
+          knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction(), fixed(2)),
           knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
           knob('Element', 'element-heat', elementHeat, { min: 1, max: 80, step: 1 }, () => defaultElementHeat),
           knob('Burn', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife, seconds),
@@ -257,7 +257,7 @@ export function createSettingsPanel () {
           knob('Radius', 'interaction-radius', interactionRadius, { min: 5, max: 100, step: 1 }, () => defaultInteractionRadius()),
           knob('Stiff', 'stiffness', stiffness, { min: 1, max: 6500, step: 1 }, () => defaultStiffness()),
           knob('Near', 'stiffness-near', stiffnessNear, { min: 1, max: 40000, step: 10 }, () => defaultStiffnessNear()),
-          knob('Density', 'rest-density', restDensity, { min: 0.1, max: 1000, step: 0.1 }, () => defaultRestDensity, fixed(1)),
+          knob('Density', 'rest-density', restDensity, { min: 0.1, max: 1000, step: 0.1 }, () => defaultRestDensity(), fixed(1)),
           knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
           knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
           knob('Wobble', 'wobble', wobble, { min: 0, max: 2, step: 0.01 }, () => defaultWobble, seconds),

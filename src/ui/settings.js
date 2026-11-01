@@ -37,28 +37,40 @@ export const CPU_PARTICLES = 3000
 // on Robert's Apple GPU, and a desktop window wants 30000 at the lab's own grain.
 export const GPU_PARTICLES = 60000
 let budget = CPU_PARTICLES
-export const setParticleBudget = n => { budget = n }
+// Which lamp is running: the defaults below differ by backend, since the CPU lamp is coarser
+// (its grain is liquidScale times the lab's) and Robert tuned it on its own (2026-10-31, a share
+// link at radius 69: "let's make these the cpu defaults for now"). GPU defaults are unchanged.
+let backend = 'cpu'
+export const setBackend = kind => { backend = kind; budget = kind === 'gpu' ? GPU_PARTICLES : CPU_PARTICLES }
+const cpu = () => backend === 'cpu'
 const liquidScale = (width, height) => Math.sqrt(Math.max(1, width * height / LAB_AREA_PER_PARTICLE / budget))
 export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / LAB_AREA_PER_PARTICLE), budget)
 export const computeDefaultInteractionRadius = (width, height) => Math.round(20 * liquidScale(width, height))
 // Size 6 and Smooth 4 at radius 20 are Robert's lamp defaults of 2026-10-31 ("let's make these the
 // new defaults", a share link); the lab draws its own at 3 and 3.
 // Robert, 2026-10-31, with the reservoirs back on the GPU: "size and smooth should default to 3 also" (were 6 and 4).
-export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height))
+// CPU: 1.45 per unit of scale, Robert's Size 5 at radius 69.
+export const computeDefaultParticleSize = (width, height) => Math.round((cpu() ? 1.45 : 3) * liquidScale(width, height))
 // Smooth 7 and Blend 28 (Robert, 2026-10-31, with the two blurs apart: "smooth 7, blend 28"; Smooth was 3).
-export const computeDefaultSmooth = (width, height) => Math.round(7 * liquidScale(width, height))
+// CPU: Smooth 0 (Robert's CPU share link).
+export const computeDefaultSmooth = (width, height) => cpu() ? 0 : Math.round(7 * liquidScale(width, height))
 // Stiff and Near scale with the grain as well. Clavet's displacement per neighbour is dt² times
 // stiffness times a dimensionless kernel sum, so in px it does not grow with the radius while
 // the spacing does: at radius 43 the liquid tuned at 20 relaxed at less than half its strength
 // against its own spacing, soft and slow (the CPU lamp on a desktop window). Scaling both with
 // the radius keeps each step's move the same fraction of the spacing. At scale 1, which is every
 // phone and every desktop window on the GPU, nothing changes.
-export const computeDefaultStiffness = (width, height) => Math.round(7.5 * liquidScale(width, height) * 10) / 10
-export const computeDefaultStiffnessNear = (width, height) => Math.round(1101 * liquidScale(width, height))
+// CPU: Stiff 20 and Near 2151 at radius 69 (Robert's CPU share link), 5.8 and 623.5 per unit of scale.
+export const computeDefaultStiffness = (width, height) => Math.round((cpu() ? 5.8 : 7.5) * liquidScale(width, height) * 10) / 10
+export const computeDefaultStiffnessNear = (width, height) => Math.round((cpu() ? 623.5 : 1101) * liquidScale(width, height))
 // Blend 0 (Robert, once the heat table had 2048 steps: "set default blend to 0. not sure we even need
 // blend anymore, it's insanely smooth at 2048"); the bands it blurred away were the 48 step table.
 export const computeDefaultBlend = (width, height) => 0
-export const computeDefaultMaxTemp = height => Math.round(5030 * height / 900)
+// CPU: Max Temp 12459 at a 1220 px window (Robert's CPU share link), 9190 at 900.
+export const computeDefaultMaxTemp = height => Math.round((cpu() ? 9190 : 5030) * height / 900)
+// Density and Conduct are fixed on the GPU and Robert's CPU link has them at 406 and 0.08.
+export const computeDefaultRestDensity = () => cpu() ? 406 : 360.1
+export const computeDefaultConduction = () => cpu() ? 0.08 : 0.07
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
 export const defaultBgColor = { r: 0, g: 0, b: 0 }
@@ -84,7 +96,7 @@ export const defaultFlowFast = { r: 255, g: 0, b: 0 }
 // relationship with density"). The old liquid was 4000, 25000 and 4.25 at radius 60.
 export const defaultStiffness = fnstate(computeDefaultStiffness(window.innerWidth, window.innerHeight))
 export const defaultStiffnessNear = fnstate(computeDefaultStiffnessNear(window.innerWidth, window.innerHeight))
-export const defaultRestDensity = 360.1
+export const defaultRestDensity = fnstate(computeDefaultRestDensity()) // 360.1 on the GPU, see computeDefaultRestDensity
 // Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
 export const defaultStir = 20
 // Conduction was 0.005 with a flat floor, where 0.02 was the top of the slider and a lamp that never
@@ -93,7 +105,7 @@ export const defaultStir = 20
 // 0.55 in the new liquid (was 0.02): a lump warms as one almost at once. Then 0.07 (Robert,
 // 2026-10-31, "gloop at 0.07 is really nice"): at 0.55 a rising blob heated the pool under it
 // through its neck, that lava rose after it and fed a long thin strand.
-export const defaultConduction = 0.07
+export const defaultConduction = fnstate(computeDefaultConduction()) // 0.07 on the GPU, see computeDefaultConduction
 // Robert, with the lamp beside the video: "default pace needs ot be ~0.45 or so".
 export const defaultPace = 0.45
 export const defaultTurbulence = 45
@@ -159,12 +171,12 @@ export const interactionRadius = fnstate(defaultInteractionRadius())
 export const gravityStrength = fnstate(defaultGravityStrength())
 export const stiffness = fnstate(defaultStiffness())
 export const stiffnessNear = fnstate(defaultStiffnessNear())
-export const restDensity = fnstate(defaultRestDensity)
+export const restDensity = fnstate(defaultRestDensity())
 export const maxTemp = fnstate(defaultMaxTemp())
 export const particleCount = fnstate(defaultParticleCount())
 export const particleSize = fnstate(defaultParticleSize())
 export const stir = fnstate(defaultStir)
-export const conduction = fnstate(defaultConduction)
+export const conduction = fnstate(defaultConduction())
 export const pace = fnstate(defaultPace)
 export const turbulence = fnstate(defaultTurbulence)
 export const drifters = fnstate(defaultDrifters)
@@ -298,12 +310,12 @@ const defaults = () => ({
   gravityStrength: defaultGravityStrength(),
   stiffness: defaultStiffness(),
   stiffnessNear: defaultStiffnessNear(),
-  restDensity: defaultRestDensity,
+  restDensity: defaultRestDensity(),
   maxTemp: defaultMaxTemp(),
   particleCount: defaultParticleCount(),
   particleSize: defaultParticleSize(),
   stir: defaultStir,
-  conduction: defaultConduction,
+  conduction: defaultConduction(),
   pace: defaultPace,
   turbulence: defaultTurbulence,
   drifters: defaultDrifters,
