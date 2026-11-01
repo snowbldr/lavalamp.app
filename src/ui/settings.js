@@ -65,20 +65,25 @@ export const computeDefaultSmooth = (width, height) => cpu() ? 0 : Math.round(7 
 // phone and every desktop window on the GPU, nothing changes.
 // CPU: Stiff 6 and Near 2161 at Robert's window (scale 3.45), 1.74 and 623.5 per unit of scale (Stiff was 5.8 per unit, 20).
 export const computeDefaultStiffness = (width, height) => Math.round((cpu() ? 1.74 : 7.5) * liquidScale(width, height) * 10) / 10
-export const computeDefaultStiffnessNear = (width, height) => Math.round((cpu() ? 623.5 : 1101) * liquidScale(width, height))
+export const computeDefaultStiffnessNear = (width, height) => Math.round((cpu() ? 647 : 1101) * liquidScale(width, height)) // CPU 647 per unit: Robert's Near 1941 at scale 3 (his fourth link, the "new baseline for cpu")
 // Blend 0 (Robert, once the heat table had 2048 steps: "set default blend to 0. not sure we even need
 // blend anymore, it's insanely smooth at 2048"); the bands it blurred away were the 48 step table.
 export const computeDefaultBlend = (width, height) => 0
-// CPU: Max Temp 25038 at a 1220 px window (Robert's third link), 18470 at 900 (was 12459, 9190 at 900).
-export const computeDefaultMaxTemp = height => Math.round((cpu() ? 18470 : 5030) * height / 900)
+// CPU: Max Temp 1200 at a 1226 px window (Robert's fourth link, "new baseline for cpu"), 881 at 900:
+// lava that never gets much more than one and three quarter gravities buoyant (was 25038, 18470 at 900).
+export const computeDefaultMaxTemp = height => Math.round((cpu() ? 881 : 5030) * height / 900)
 // Density and Conduct are fixed on the GPU and Robert's CPU link has them at 406 and 0.08.
 export const computeDefaultRestDensity = () => cpu() ? 406 : 360.1
-export const computeDefaultConduction = () => cpu() ? 0.04 : 0.07 // CPU 0.04 (was 0.08), Robert's third link
+export const computeDefaultConduction = () => cpu() ? 0.06 : 0.07 // CPU 0.06 (was 0.04), Robert's fourth link
 // Heat (the pulse period) and Element (an element's heat) by backend: Robert's third link has Heat
 // 33 and Element 69. Element stays at his 69: with Cap 1.5 and Lift 2, Element 8, 20, 40 and 69 all
 // read 0.6 to 1.0 lone particles a sample and all lift lava to the ceiling (two lamp minutes each).
-export const computeDefaultHeatSpots = () => cpu() ? 33 : 15
-export const computeDefaultElementHeat = () => cpu() ? 69 : 8
+export const computeDefaultHeatSpots = () => cpu() ? 8 : 15 // CPU 8 (was 33), Robert's fourth link
+export const computeDefaultElementHeat = () => cpu() ? 4 : 8 // CPU 4 (was 69), Robert's fourth link
+// Burn, Pulses and Core by backend as well, from the same link: 7.5 s, 3 and 0.08 on the CPU.
+export const computeDefaultElementLife = () => cpu() ? 7.5 : 15
+export const computeDefaultElementRate = () => cpu() ? 3 : 4
+export const computeDefaultElementCore = () => cpu() ? 0.08 : 0.1
 // Reserve: how much lava the floor pots may hold, as a multiple of the visible lava; 8 is no
 // cap. The pots are sized by the window, not the grain, so on the CPU at Robert's radius 34
 // they held 14000 particles under 3000 visible (the GPU holds 25000 under 35000) and the step
@@ -187,7 +192,7 @@ export const defaultWall = 0
 // its core and how long a lighting burns, the tops of their ranges. The lab's finger, which
 // pinches cleanly, is 48 per step for 3.4 s over 45 px; the elements were 3 to 8 for 5 to 15 s.
 export const defaultElementHeat = fnstate(computeDefaultElementHeat())
-export const defaultElementLife = 15
+export const defaultElementLife = fnstate(computeDefaultElementLife())
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
 export const defaultInteractionRadius = fnstate(computeDefaultInteractionRadius(window.innerWidth, window.innerHeight))
@@ -235,20 +240,20 @@ export const reach = fnstate(defaultReach())
 export const skin = fnstate(defaultSkin)
 export const wall = fnstate(defaultWall)
 export const elementHeat = fnstate(defaultElementHeat())
-export const elementLife = fnstate(defaultElementLife)
+export const elementLife = fnstate(defaultElementLife())
 // The rest of the heater's numbers (Robert: "the heaters get too hot for too long. We need some
 // knobs to tweak the heater pulses and heat and such"): lightings per Heat interval, how much
 // longer the biggest pot burns than the smallest, a lit pot's core width as a fraction of the
 // shorter side, the floor's idle contact heat and its boost under a lit pot. The defaults are
 // what the constants in simulation.js were.
-export const defaultElementRate = 4
+export const defaultElementRate = fnstate(computeDefaultElementRate())
 export const defaultElementLifeScale = 4
-export const defaultElementCore = 0.1
+export const defaultElementCore = fnstate(computeDefaultElementCore())
 export const defaultFloorHeat = 0.2
 export const defaultFloorGlow = 2
-export const elementRate = fnstate(defaultElementRate)
+export const elementRate = fnstate(defaultElementRate())
 export const elementLifeScale = fnstate(defaultElementLifeScale)
-export const elementCore = fnstate(defaultElementCore)
+export const elementCore = fnstate(defaultElementCore())
 export const floorHeat = fnstate(defaultFloorHeat)
 export const floorGlow = fnstate(defaultFloorGlow)
 // The random seed: every random number in the lamp comes from it, so the same seed on the same
@@ -369,10 +374,10 @@ const defaults = () => ({
   skin: defaultSkin,
   wall: defaultWall,
   elementHeat: defaultElementHeat(),
-  elementLife: defaultElementLife,
-  elementRate: defaultElementRate,
+  elementLife: defaultElementLife(),
+  elementRate: defaultElementRate(),
   elementLifeScale: defaultElementLifeScale,
-  elementCore: defaultElementCore,
+  elementCore: defaultElementCore(),
   floorHeat: defaultFloorHeat,
   floorGlow: defaultFloorGlow,
   reserve: defaultReserve(),

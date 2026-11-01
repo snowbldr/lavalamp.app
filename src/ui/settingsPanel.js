@@ -238,10 +238,10 @@ export function createSettingsPanel () {
           knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction(), fixed(2)),
           knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
           knob('Element', 'element-heat', elementHeat, { min: 1, max: 80, step: 1 }, () => defaultElementHeat()),
-          knob('Burn', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife, seconds),
+          knob('Burn', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife(), seconds),
           knob('Big Burn', 'element-life-scale', elementLifeScale, { min: 1, max: 8, step: 0.5 }, () => defaultElementLifeScale, times),
-          knob('Pulses', 'element-rate', elementRate, { min: 0.5, max: 12, step: 0.5 }, () => defaultElementRate, fixed(1)),
-          knob('Core', 'element-core', elementCore, { min: 0.02, max: 0.3, step: 0.01 }, () => defaultElementCore, fixed(2)),
+          knob('Pulses', 'element-rate', elementRate, { min: 0.5, max: 12, step: 0.5 }, () => defaultElementRate(), fixed(1)),
+          knob('Core', 'element-core', elementCore, { min: 0.02, max: 0.3, step: 0.01 }, () => defaultElementCore(), fixed(2)),
           knob('Floor', 'floor-heat', floorHeat, { min: 0, max: 1, step: 0.05 }, () => defaultFloorHeat, fixed(2)),
           knob('Glow', 'floor-glow', floorGlow, { min: 0, max: 6, step: 0.1 }, () => defaultFloorGlow, fixed(1))
         ),
