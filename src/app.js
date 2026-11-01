@@ -1,6 +1,8 @@
 import { a, canvas, div, sub } from '@srfnstack/fntags'
 import { createSimulation } from './sim/simulation.js'
 import { createGpuLamp, getGpuDevice } from './sim/gpuSimulation.js'
+import { createWorkerLamp } from './sim/workerLamp.js'
+import { FLOW_SPACING, HEATER_CELL } from './render/overlays.js'
 import { createRenderer } from './render/renderer.js'
 import { createMotionInput } from './input/motion.js'
 import { createPointerInput } from './input/pointer.js'
@@ -79,7 +81,8 @@ import {
   stir,
   touchMode,
   turbulence,
-  viscosity
+  viscosity,
+  seed
 } from './ui/settings.js'
 
 // Fixed step. The sim does not track real frame time, and the tuning assumes it does not.
@@ -168,14 +171,33 @@ export async function start () {
   mirror(smooth, look, 'smooth')
   mirror(blend, look, 'blend')
 
-  let previous = { x: new Float32Array(0), y: new Float32Array(0) } // last sim positions, for the pace interpolation
+  // The positions before the last step, by birth index, for the pace interpolation. By birth
+  // index because the CPU step sorts its particles into cell order, so a slot holds a different
+  // particle after the step; drawn slot against slot the lava flew between strangers whenever
+  // the pool moved (holes and a ragged edge: "weird pulsing and artifacts").
+  let previous = { x: new Float32Array(0), y: new Float32Array(0), count: 0 }
+  const remember = () => {
+    const { x, y, id } = sim.state
+    const n = sim.count
+    if (previous.x.length < n) previous = { x: new Float32Array(n * 2), y: new Float32Array(n * 2), count: 0 }
+    for (let k = 0; k < n; k++) { const b = id ? id[k] : k; previous.x[b] = x[k]; previous.y[b] = y[k] }
+    previous.count = n
+  }
   let edge = 'bottom' // the page edge the lamp's floor sits on
   let turns = TURNS[edge]
   let [pageWidth, pageHeight] = pageSize()
   let [width, height] = lampSizeFor(turns, pageWidth, pageHeight)
   const lamp = canvas({ id: 'lavalamp', style: { transition: 'transform 0.4s' } })
   if (device) params.capacity = GPU_PARTICLES
-  const sim = device ? createGpuLamp({ device, width, height, params }) : createSimulation({ width, height, params })
+  // Without WebGPU the simulation runs on a worker thread (see sim/cpuWorker.js), so the drawing
+  // keeps the display's rate however long a step takes; ?mainthread keeps it on the page's thread.
+  const remote = !device && typeof Worker === 'function' && !new URLSearchParams(window.location.search).has('mainthread')
+  const overlayWants = () => ({ flow: showFlow() ? FLOW_SPACING : 0, heater: showHeater() ? HEATER_CELL : 0, cups: !!showCups() })
+  const sim = device
+    ? createGpuLamp({ device, width, height, params })
+    : remote
+      ? createWorkerLamp({ width, height, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
+      : createSimulation({ width, height, params })
   const renderer = createRenderer(lamp, look)
   const motion = createMotionInput()
   // In the Reservoirs view the lamp is drawn scaled down and shifted (see `view` in frame), so a
@@ -236,7 +258,7 @@ export async function start () {
       const [px, py] = lampToPage(before.turns, before.pageWidth, before.pageHeight, before.width, before.height, x, y)
       return toLamp(px, py)
     })
-    previous = { x: sim.state.x.slice(0, sim.count), y: sim.state.y.slice(0, sim.count) }
+    if (!sim.remote) remember()
   }
 
   // Browsers only allow the wake lock and the motion sensors from inside a user gesture.
@@ -337,6 +359,11 @@ export async function start () {
       particles: sim.count,
       renderer: renderer.kind || 'canvas'
     }
+    if (sim.remote) {
+      const w = sim.profile()
+      out.workerStepMs = w.stepMs.toFixed(2)
+      out.workerGapMs = w.gap.toFixed(1)
+    }
     for (const k in tally.phases) out[k] = (tally.phases[k] / tally.frames).toFixed(2)
     window.lavaProfile = out
     console.log('[profile]', JSON.stringify(out))
@@ -357,26 +384,33 @@ export async function start () {
     // Fingers.
     const mode = touchMode()
     sim.setTouches(pointer.consume(FRAME).map(p => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, mode })))
-    due += pace()
     const t0 = profiling ? performance.now() : 0
-    while (due >= 1) {
-      due -= 1
-      // Keep the last positions for the interpolation, copying into a reused buffer.
-      if (previous.x.length !== sim.count) previous = { x: new Float32Array(sim.count), y: new Float32Array(sim.count) }
-      previous.x.set(sim.state.x.subarray(0, sim.count))
-      previous.y.set(sim.state.y.subarray(0, sim.count))
-      sim.step(FRAME)
-      tally.steps++
+    let count = 0
+    if (sim.remote) {
+      // The worker steps on its own clock; this frame hands over the inputs and draws between
+      // the last two states it sent.
+      sim.frame(pace(), overlayWants())
+      count = sim.interpolate(shown, performance.now())
+    } else {
+      due += pace()
+      while (due >= 1) {
+        due -= 1
+        remember()
+        sim.step(FRAME)
+        tally.steps++
+      }
+      const { x, y, id } = sim.state
+      count = sim.count
+      if (shown.x.length < count) { shown.x = new Float32Array(count); shown.y = new Float32Array(count) }
+      for (let i = 0; i < count; i++) {
+        const b = id ? id[i] : i
+        if (b >= previous.count) { shown.x[i] = x[i]; shown.y[i] = y[i]; continue } // born since
+        shown.x[i] = previous.x[b] + (x[i] - previous.x[b]) * due
+        shown.y[i] = previous.y[b] + (y[i] - previous.y[b]) * due
+      }
+      shown.temp = sim.state.temp
     }
     const t1 = profiling ? performance.now() : 0
-    const { x, y } = sim.state
-    const count = Math.min(sim.count, previous.x.length)
-    if (shown.x.length < count) { shown.x = new Float32Array(count); shown.y = new Float32Array(count) }
-    for (let i = 0; i < count; i++) {
-      shown.x[i] = previous.x[i] + (x[i] - previous.x[i]) * due
-      shown.y[i] = previous.y[i] + (y[i] - previous.y[i]) * due
-    }
-    shown.temp = sim.state.temp
     // The Cups view: fit everything from the top of the highest cup to the bottom of the deepest
     // into the frame, scaled down and centred, so the hidden lava can be watched.
     let view = null

@@ -6,8 +6,9 @@ const HEAT_STRIP = 10 // window px
 // Arrows on a grid this many window pixels apart. Length saturates: the typical (median) speed
 // on screen draws at half the cell, and the fastest tends toward most of it, so a tornado reads
 // as the strongest thing without shrinking the roll around it to dots.
-const FLOW_SPACING = 40
+export const FLOW_SPACING = 40
 const FLOW_ALPHA = 0.75
+export const HEATER_CELL = 4 // lamp px per column of the heater strip
 
 export const mix = (a, b, f) => [a.r + (b.r - a.r) * f, a.g + (b.g - a.g) * f, a.b + (b.b - a.b) * f].map(Math.round)
 
@@ -27,7 +28,7 @@ export const paletteKey = look => HEAT_STOPS.map(stop => { const c = look[stop];
 const ELEMENT_SHOWN = 0.4
 export function drawHeater (context, width, height, scale, look, heaterAt, elements) {
   const strip = Math.max(2, Math.round(HEAT_STRIP * scale))
-  const cell = Math.max(1, Math.round(4 * scale))
+  const cell = Math.max(1, Math.round(HEATER_CELL * scale))
   for (let x = 0; x < width; x += cell) {
     const [r, g, b] = heatColor(look, heaterAt((x + cell / 2) / scale) / 2)
     context.fillStyle = `rgb(${r},${g},${b})`
