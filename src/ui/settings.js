@@ -48,13 +48,13 @@ export const computeDefaultParticleCount = (width, height) => Math.min(Math.trun
 // CPU: 10 per unit of scale, half the lab's grain against the budget (Robert's radius 34 where the
 // formula gave 69): finer lava for the same 3000 particles, a smaller pool.
 // CPU 17.6 per unit: Robert's Radius 53 at scale 3 (2026-11-01, "these are the final settings for cpu version").
-export const computeDefaultInteractionRadius = (width, height) => Math.round((cpu() ? 17.6 : 20) * liquidScale(width, height))
+export const computeDefaultInteractionRadius = (width, height) => Math.round((cpu() ? 17.6 : 25) * liquidScale(width, height)) // GPU 25 (was 20): Robert's current settings, 2026-11-01
 // Size 6 and Smooth 4 at radius 20 are Robert's lamp defaults of 2026-10-31 ("let's make these the
 // new defaults", a share link); the lab draws its own at 3 and 3.
 // Robert, 2026-10-31, with the reservoirs back on the GPU: "size and smooth should default to 3 also" (were 6 and 4).
 // CPU: 0.87 per unit of scale, Robert's Size 3 at radius 34 (his third link, 2026-11-01: "update the
 // default to something nice similar to what I had there but fixed"; was 1.45, Size 5 at radius 69).
-export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height)) // CPU 3 per unit as well: Robert's Size 9 at scale 3 (final CPU settings; was 0.87)
+export const computeDefaultParticleSize = (width, height) => Math.round((cpu() ? 3 : 4) * liquidScale(width, height)) // CPU 3 per unit: Robert's Size 9 at scale 3 (final CPU settings; was 0.87); GPU 4 (was 3): his current settings, 2026-11-01
 // Smooth 7 and Blend 28 (Robert, 2026-10-31, with the two blurs apart: "smooth 7, blend 28"; Smooth was 3).
 // CPU: Smooth 0 (Robert's CPU share link).
 export const computeDefaultSmooth = (width, height) => Math.round((cpu() ? 4.33 : 7) * liquidScale(width, height)) // CPU 4.33 per unit: Robert's Smooth 13 at scale 3 (final CPU settings; was 0)
