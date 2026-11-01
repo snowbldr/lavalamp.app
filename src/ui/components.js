@@ -168,28 +168,78 @@ export const tooltips = root => {
   }
 }
 
-// A round swatch with the colour input hidden over it.
-export const swatch = (title, id, state) => div(
-  { class: 'swatch' },
-  div(
-    { class: 'swatch-well', style: { background: state.bindStyle(() => rgbToHex(state())) } },
-    input({
-      id,
-      type: 'color',
-      title,
-      value: state.bindAttr(() => rgbToHex(state())),
-      oninput: e => state(hexToRgb(e.target.value))
-    })
-  ),
-  label({ for: id }, title)
-)
+// A round swatch with the colour input hidden over it. The element carries its state and title
+// so a row can show and edit the hex, and so a colour can be dragged from one swatch onto
+// another: press on a swatch, let go over another, and that one takes the colour (Robert,
+// 2026-11-01: "copy from other settings buttons would also be awesome, that would make it really
+// nice to step through progressions"). The native picker opens on a plain click as before.
+let carried = null // the swatch a pointer went down on
+export const swatch = (title, id, state) => {
+  const el = div(
+    { class: 'swatch' },
+    div(
+      { class: 'swatch-well', style: { background: state.bindStyle(() => rgbToHex(state())) }, onpointerdown: () => { carried = el } },
+      input({
+        id,
+        type: 'color',
+        title,
+        value: state.bindAttr(() => rgbToHex(state())),
+        oninput: e => state(hexToRgb(e.target.value))
+      })
+    ),
+    label({ for: id }, title)
+  )
+  el.swatchState = state
+  el.swatchTitle = title
+  return el
+}
+document.addEventListener('pointerup', e => {
+  if (!carried) return
+  const from = carried
+  carried = null
+  const under = document.elementFromPoint(e.clientX, e.clientY)
+  const target = under && under.closest('.swatch')
+  if (target && target !== from && target.swatchState) {
+    target.swatchState({ ...from.swatchState() })
+    notify(`${target.swatchTitle} takes ${from.swatchTitle}'s colour`)
+  }
+})
 
-// A captioned row of swatches, shown while the boolean fnstate `view` is on (or off, if `when` is false).
-export const swatchRow = (title, view, when, ...swatches) => div(
-  { class: 'swatch-row', style: { display: view.bindStyle(() => !!view() === when ? 'block' : 'none') } },
-  div({ class: 'swatch-caption' }, title),
-  div({ class: 'swatches' }, ...swatches)
-)
+// A captioned row of swatches, shown while the boolean fnstate `view` is on (or off, if `when` is
+// false). Under the swatches, the hex of the one last hovered or pressed, in a text field that can
+// be copied from or pasted into (Robert: "color picker should default to hex so it's easier to
+// copy and paste"; the browser's own picker cannot be told which format to open in).
+export const swatchRow = (title, view, when, ...swatches) => {
+  let active = swatches[0]
+  const name = span({ class: 'swatch-hex-name' }, active ? active.swatchTitle : '')
+  const hex = input({
+    class: 'swatch-hex',
+    type: 'text',
+    spellcheck: false,
+    maxlength: 7,
+    'aria-label': `${title} hex`,
+    onfocus: e => e.target.select(),
+    oninput: e => {
+      const v = e.target.value.trim()
+      if (active && /^#?[0-9a-fA-F]{6}$/.test(v)) active.swatchState(hexToRgb(v.startsWith('#') ? v : '#' + v))
+    }
+  })
+  const refresh = () => { if (active && document.activeElement !== hex) hex.value = rgbToHex(active.swatchState()) }
+  const activate = s => { active = s; name.textContent = s.swatchTitle; refresh() }
+  for (const s of swatches) {
+    s.addEventListener('pointerenter', () => activate(s))
+    s.addEventListener('pointerdown', () => activate(s))
+    s.addEventListener('focusin', () => activate(s))
+    s.swatchState.subscribe(() => { if (s === active) refresh() })
+  }
+  refresh()
+  return div(
+    { class: 'swatch-row', style: { display: view.bindStyle(() => !!view() === when ? 'block' : 'none') } },
+    div({ class: 'swatch-caption' }, title),
+    div({ class: 'swatches' }, ...swatches),
+    div({ class: 'swatch-hexrow' }, name, hex)
+  )
+}
 
 // A segmented control for a state that takes one of a few words.
 export const segmented = (idPrefix, state, options) => div(

@@ -142,12 +142,44 @@ const followWindow = (defaultState, state, value) => {
   if (wasDefault) state(value)
 }
 
+// Move the backend- and window-following defaults to the given lamp size, carrying every setting
+// that still sits on its old default along. Run once the backend is known and before any saved
+// settings or share link load: the defaults are born with the CPU's values at module load, and
+// a loaded value that happened to equal one of those was being carried to the GPU's default by
+// the first fit (Robert's GPU link with Turb 150 and Eddies 6, the CPU defaults, came up as 45
+// and 2 on 2026-11-01). Run again by fit on every resize.
+const refitDefaults = (width, height) => {
+  followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(width, height))
+  followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
+  followWindow(defaultConduction, conduction, computeDefaultConduction())
+  followWindow(defaultTurbulence, turbulence, computeDefaultTurbulence())
+  followWindow(defaultDrifters, drifters, computeDefaultDrifters())
+  followWindow(defaultWobbleKick, wobbleKick, computeDefaultWobbleKick())
+  followWindow(defaultViscosity, viscosity, computeDefaultViscosity())
+  followWindow(defaultReserve, reserve, computeDefaultReserve())
+  followWindow(defaultLift, lift, computeDefaultLift())
+  followWindow(defaultWobbleMax, wobbleMax, computeDefaultWobbleMax())
+  followWindow(defaultHeatSpots, heatSpots, computeDefaultHeatSpots())
+  followWindow(defaultElementHeat, elementHeat, computeDefaultElementHeat())
+  followWindow(defaultElementLife, elementLife, computeDefaultElementLife())
+  followWindow(defaultElementRate, elementRate, computeDefaultElementRate())
+  followWindow(defaultElementCore, elementCore, computeDefaultElementCore())
+  followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
+  followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
+  followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))
+  followWindow(defaultSmooth, smooth, computeDefaultSmooth(width, height))
+  followWindow(defaultPull, pull, computeDefaultPull(width, height))
+  followWindow(defaultStiffnessNear, stiffnessNear, computeDefaultStiffnessNear(width, height))
+  followWindow(defaultBlend, blend, computeDefaultBlend(width, height))
+}
+
 export async function start () {
   // The GPU backend when the browser has WebGPU and the URL does not say ?cpu; it carries ten
   // times the particles, so the window-following defaults move with it before anything is sized.
   const device = new URLSearchParams(window.location.search).has('cpu') ? null : await getGpuDevice().catch(() => null)
   if (device) { setBackend('gpu'); followWindow(defaultReach, reach, GPU_REACH) }
-  // Saved settings are per backend, so they load once the backend is known.
+  refitDefaults(window.innerWidth, window.innerHeight)
+  // Saved settings are per backend, so they load once the backend is known and the defaults sit on it.
   loadSavedSettings()
 
   const params = {}
@@ -273,28 +305,7 @@ export async function start () {
     sim.resize(width, height)
     renderer.resize(width, height)
     lamp.style.transform = `rotate(${turns * 90}deg)`
-    followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(width, height))
-    followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
-    followWindow(defaultConduction, conduction, computeDefaultConduction())
-    followWindow(defaultTurbulence, turbulence, computeDefaultTurbulence())
-    followWindow(defaultDrifters, drifters, computeDefaultDrifters())
-    followWindow(defaultWobbleKick, wobbleKick, computeDefaultWobbleKick())
-    followWindow(defaultViscosity, viscosity, computeDefaultViscosity())
-    followWindow(defaultReserve, reserve, computeDefaultReserve())
-    followWindow(defaultLift, lift, computeDefaultLift())
-    followWindow(defaultWobbleMax, wobbleMax, computeDefaultWobbleMax())
-    followWindow(defaultHeatSpots, heatSpots, computeDefaultHeatSpots())
-    followWindow(defaultElementHeat, elementHeat, computeDefaultElementHeat())
-    followWindow(defaultElementLife, elementLife, computeDefaultElementLife())
-    followWindow(defaultElementRate, elementRate, computeDefaultElementRate())
-    followWindow(defaultElementCore, elementCore, computeDefaultElementCore())
-    followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
-    followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
-    followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))
-    followWindow(defaultSmooth, smooth, computeDefaultSmooth(width, height))
-    followWindow(defaultPull, pull, computeDefaultPull(width, height))
-    followWindow(defaultStiffnessNear, stiffnessNear, computeDefaultStiffnessNear(width, height))
-    followWindow(defaultBlend, blend, computeDefaultBlend(width, height))
+    refitDefaults(width, height)
   }
   fit()
   window.addEventListener('resize', fit)
