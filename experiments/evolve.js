@@ -151,8 +151,13 @@ export async function start () {
     recorder.stop()
     await new Promise(r => { recorder.onstop = r })
     clearInterval(ticker)
-    const clip = { url: URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' })), events: recording.events, agitation: recording.agitation, duration: CLIP_SECONDS }
+    const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' })
+    const clip = { url: URL.createObjectURL(blob), events: recording.events, agitation: recording.agitation, duration: CLIP_SECONDS }
     recording = null
+    addClip(clip)
+    storeClip({ blob, events: clip.events, agitation: clip.agitation, duration: clip.duration })
+  }
+  function addClip (clip) {
     clips.push(clip)
     const k = clips.length - 1
     const v = videoEl({ src: clip.url, muted: true, playsinline: true, preload: 'metadata' })
@@ -160,6 +165,32 @@ export async function start () {
     current(k)
     for (const cell of cells) cell.video.src = clip.url
     status(`Clip ${k + 1}: ${clip.events.length} events (${EVENTS.map(t => `${t} ${clip.events.filter(e => e.type === t).length}`).join(', ')}).`)
+  }
+  // Clips survive a reload: the recording and its events go into IndexedDB (Robert: "I need to
+  // be able to save my progress on the sound evolver"), and come back as the page opens.
+  const db = () => new Promise((resolve, reject) => {
+    const req = indexedDB.open('sound-evolution', 1)
+    req.onupgradeneeded = () => req.result.createObjectStore('clips', { autoIncrement: true })
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+  async function storeClip (record) {
+    try { const d = await db(); d.transaction('clips', 'readwrite').objectStore('clips').add(record) } catch (e) { console.warn('clip not stored', e) }
+  }
+  async function restoreClips () {
+    try {
+      const d = await db()
+      const all = await new Promise((resolve, reject) => { const r = d.transaction('clips').objectStore('clips').getAll(); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error) })
+      for (const rec of all) addClip({ url: URL.createObjectURL(rec.blob), events: rec.events, agitation: rec.agitation, duration: rec.duration })
+      if (all.length) status(`${all.length} clip${all.length === 1 ? '' : 's'} restored. Press Start for sound, then play the cells.`)
+    } catch (e) { console.warn('clips not restored', e) }
+  }
+  async function forgetClips () {
+    try { const d = await db(); d.transaction('clips', 'readwrite').objectStore('clips').clear() } catch (e) { /* nothing to forget */ }
+    clips.length = 0
+    clipList.replaceChildren()
+    current(-1)
+    status('Clips forgotten. Record a new one.')
   }
 
   // Genomes.
@@ -371,6 +402,33 @@ export async function start () {
     const saved = JSON.parse(localStorage.getItem(STORE) || 'null')
     if (saved && saved.population && saved.population.length === POPULATION) { generation = saved.generation; population = saved.population }
   } catch (e) { /* a bad save is no save */ }
+  // Save and load the whole state as a file, for progress that outlives the browser's storage.
+  function saveFile () {
+    const blob = new Blob([JSON.stringify({ generation, population }, null, 1)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `sound-evolution-generation-${generation}.json`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  }
+  function loadFile () {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.json,application/json'
+    input.onchange = async () => {
+      const file = input.files && input.files[0]
+      if (!file) return
+      try {
+        const saved = JSON.parse(await file.text())
+        if (!saved.population || saved.population.length !== POPULATION) throw new Error('not a population of sixteen')
+        generation = saved.generation || 1
+        population = saved.population
+        showPopulation(); save()
+        status(`Loaded ${file.name}: generation ${generation}.`)
+      } catch (e) { status(`Could not load ${file.name}: ${e.message}`) }
+    }
+    input.click()
+  }
   const copied = fnstate(false)
   function copyStarred () {
     const best = population.filter(g => g.star).map(g => ({ voices: g.voices, bed: g.bed }))
@@ -388,7 +446,10 @@ export async function start () {
           button({ onclick: newGeneration }, 'New generation'),
           button({ onclick: wildGeneration }, 'Wild generation'),
           button({ onclick: copyStarred }, copied.bindAs(() => copied() ? 'Copied' : 'Copy starred genomes')),
-          button({ onclick: stopPlaying }, 'Stop')
+          button({ onclick: stopPlaying }, 'Stop'),
+          button({ onclick: saveFile }, 'Save file'),
+          button({ onclick: loadFile }, 'Load file'),
+          button({ onclick: forgetClips }, 'Forget clips')
         ),
         div({ class: 'readout' }, status.bindAs(() => status())),
         p('Record a few clips of the lamp as it runs on the left (the picture, the events the detector fires, the agitation). Pick a clip, then press ▶ on a cell: the clip plays with that genome\'s sounds. Star the ones that sound right and Breed: the stars survive and the rest are their children, crossed layer by layer and mutated. Each genome is a voice per event, two layers mixed: a recording (viscous liquid fall in, or a short cut from water gloops and glops or the two good beds, pitched and stretched) and a gloop synth (a bending, wobbling sine with a throat, wet noise, a click and a thud), plus a bed (hot bubbling mud or ambient bubbling liquid following the agitation). New generation starts from a preset per event; Wild generation from uniform randomness.'),
@@ -399,6 +460,7 @@ export async function start () {
     grid
   ))
   if (population.length) showPopulation()
+  restoreClips()
   window.evolution = { sim, gloop, player, clips, get population () { return population } }
 
   let previous = { x: new Float32Array(0), y: new Float32Array(0) }
