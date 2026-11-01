@@ -272,7 +272,7 @@ export function createSettingsPanel () {
           knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity()),
           knob('Kick', 'wobble-kick', wobbleKick, { min: 0, max: () => Math.max(10, defaultWobbleKick() * 2), step: 0.1 }, () => defaultWobbleKick()),
           knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax(), v => `${v} g`),
-          knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01 }, defaultReach, v => `${Number(v).toFixed(2)} r`),
+          knob('Reach', 'reach', reach, { min: 0.1, max: () => defaultReach() < 1 ? 0.5 : 2, step: 0.01 }, defaultReach, v => `${Number(v).toFixed(2)} r`),
           knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
           knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
         ),
@@ -290,7 +290,7 @@ export function createSettingsPanel () {
           ['Viscosity', 'How much neighbouring particles slow each other as they close in, so necks thin and tails pull in more slowly. Needs Wobble above 0.'],
           ['Kick', 'How much of the surface tension pull on a neck or a skin is carried on as velocity: the recoil when blobs part or merge.'],
           ['Cap', 'The fastest that carried velocity may get, in gravities.'],
-          ['Reach', 'The most the pressure step may move a particle in one go, in radii. Low keeps a high Density from flying apart.'],
+          ['Reach', 'The most the pressure step may move a particle in one go, in radii. The GPU solver is capped at 0.5: above it a packed cold pool bursts or settles into a honeycomb.'],
           ['Skin', 'Which particles take the Kick: those below this fraction of the mean density. 300 is all of them.'],
           ['Wall', 'Lava this close to a side wall is eased away from it, in px; a glass the wax does not wet.']
         ])

@@ -662,7 +662,15 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 52 // the Params struct, 49 fields, padded to 208 bytes (a uniform's size is a multiple of 16)
+const PARAM_FLOATS = 52
+// The most a relaxation pass may move a particle, in radii, whatever Reach says. The Jacobi
+// solver resolves a packed cold pool only a few rows a pass, and moves of a whole radius let the
+// floor compress and burst (the GPU's Reach default has been 0.5 since that was measured, 979 to
+// 0 particles over 700 px/s) or, milder, settle into a honeycomb of rings in the coldest lava
+// (Robert, 2026-11-01: "getting this weird emergent pattern... can we not add a guard for that to
+// prevent it in code?"). His saved settings carried the CPU's Reach 1 onto the GPU once saves
+// loaded after the backend was known, and the honeycomb followed within minutes.
+const REACH_CAP = 0.5 // the honeycomb itself formed at 0.5 as well; see docs/decisions.md, 2026-11-01 // the Params struct, 49 fields, padded to 208 bytes (a uniform's size is a multiple of 16)
 const POWER_COLUMNS = 256
 const MAX_ELEMENTS = 32
 const ELEMENTS_AT = POWER_COLUMNS
@@ -886,7 +894,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[8] = dt; pf[9] = stiffness; pf[10] = stiffnessNear; pf[11] = restDensity
     pf[12] = maxTemp; pf[13] = gravity; pf[14] = particleSize; pf[15] = conduction
     pf[16] = wobble; pf[17] = wobbleKick; pf[18] = wobbleMax; pf[19] = viscosity
-    pf[20] = Number.isFinite(reach) ? reach : 1e9; pf[21] = kickBelow; pf[22] = wallPush; pf[23] = share
+    pf[20] = Math.min(REACH_CAP, Number.isFinite(reach) ? reach : 1e9); pf[21] = kickBelow; pf[22] = wallPush; pf[23] = share
     pf[24] = heater ? 1 : 0; pf[25] = Math.min(1, heaterTime / 2); pf[26] = touchHeat
     pf[27] = touchRadius > 0 ? touchRadius : Math.max(80, 0.12 * Math.min(width, height))
     pf[28] = height / 1000 // cooling scale, heat.js REFERENCE_HEIGHT

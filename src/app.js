@@ -181,6 +181,9 @@ export async function start () {
   refitDefaults(window.innerWidth, window.innerHeight)
   // Saved settings are per backend, so they load once the backend is known and the defaults sit on it.
   loadSavedSettings()
+  // The GPU solver never moves a particle more than GPU_REACH a pass (see REACH_CAP in
+  // gpuSimulation.js); a loaded Reach above it would be a lie on the knob.
+  if (device && reach() > GPU_REACH) reach(GPU_REACH)
 
   const params = {}
   mirror(particleCount, params, 'particleCount', Math.trunc)
