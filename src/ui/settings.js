@@ -271,12 +271,14 @@ export const floorGlow = fnstate(defaultFloorGlow)
 // the layout and the first lightings are already drawn by then.
 export const randomSeed = () => Math.floor(Math.random() * 1e9)
 export const seed = fnstate(randomSeed())
-// Draw the stirring as arrows over the lamp. Not saved or shared; it is a way of looking, not a look.
+// Draw the stirring as arrows over the lamp. A way of looking, not a look: not shared, but
+// remembered in this browser (see loadViews; Robert, 2026-11-01: "not all settings are being
+// preserved on reload, very annoying... i.e. reservoirs being on").
 export const showFlow = fnstate(false)
-// Draw the heater strip and the heating elements along the floor, in either view. Not saved.
+// Draw the heater strip and the heating elements along the floor, in either view. Remembered.
 export const showHeater = fnstate(false)
 // Pull the whole lamp into frame, hidden cups and all, scaled down, with the cup outlines drawn.
-// Not saved. Robert: "add a toggle to move the cups into the frame so I can observe their behavior".
+// Remembered. Robert: "add a toggle to move the cups into the frame so I can observe their behavior".
 export const showCups = fnstate(false)
 // Sound from the lava, synthesised as it moves. Not saved: browsers want a click before audio anyway.
 export const sound = fnstate(false)
@@ -346,7 +348,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow'])
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -422,8 +424,34 @@ export const resetSettings = () => applySettings(defaults())
 
 const STORAGE_KEY = 'lavalamp.app-settings'
 
-// Saved settings first, then a share link on top if the URL has one.
+// The views: ways of looking at the lamp, and the touch mode and sound bed. Not part of a save or
+// a share link (a link is a look), but remembered in this browser as soon as they change, so a
+// reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
+const VIEW_KEY = 'lavalamp.app-views'
+const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed }
+const viewChoices = { touchMode: touchModes, soundBed: soundBeds }
+const saveViews = () => {
+  try {
+    const out = {}
+    for (const [key, state] of Object.entries(viewSettings)) out[key] = state()
+    localStorage.setItem(VIEW_KEY, JSON.stringify(out))
+  } catch {}
+}
+const loadViews = () => {
+  try {
+    const views = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}')
+    for (const [key, state] of Object.entries(viewSettings)) {
+      if (!(key in views)) continue
+      const choices = viewChoices[key]
+      if (choices ? choices.includes(views[key]) : typeof views[key] === 'boolean') state(views[key])
+    }
+  } catch {}
+  for (const state of Object.values(viewSettings)) state.subscribe(saveViews)
+}
+
+// Views first, then saved settings, then a share link on top if the URL has one.
 export const loadSavedSettings = () => {
+  loadViews()
   const saved = localStorage.getItem(STORAGE_KEY)
   if (saved) {
     try {
