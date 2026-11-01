@@ -134,18 +134,22 @@ export const defaultBgColor = { r: 0, g: 0, b: 0 }
 // different versions of color. One for heatmap to pick the gradient and one for no heat map to
 // pick the static colors. the color would auto switch based on the heat map setting. could we
 // also color the flow field with a gradient as well?"
-// Robert picked these in the lamp and asked for them as the defaults: a weather map rather than
-// the infrared it started with (cold sky blue, cool green, warm orange, hot red, peak cream).
+// The Thermal theme is the default on both backends (Robert, 2026-11-01: "we need to make thermal
+// the default in both cpu and gpu"): black through violet and red to yellow and white. Before it
+// the default was Radar, the weather map Robert picked in the lamp (cold dark blue 0,20,117, cool
+// green 68,255,0, warm orange 255,126,20, hot red, peak cream 255,255,230), and before that the
+// infrared it started with; Radar stays in the themes list, second.
 export const defaultHeatColors = {
-  heatCold: { r: 0, g: 20, b: 117 }, // was sky blue 0,191,255; Robert: "just darker blue, now that we get a lot colder"
-  heatCool: { r: 68, g: 255, b: 0 },
-  heatWarm: { r: 255, g: 126, b: 20 },
-  heatHot: { r: 255, g: 0, b: 0 },
-  heatPeak: { r: 255, g: 255, b: 230 }
+  heatCold: { r: 0, g: 0, b: 0 },
+  heatCool: { r: 90, g: 0, b: 130 },
+  heatWarm: { r: 220, g: 30, b: 0 },
+  heatHot: { r: 255, g: 220, b: 0 },
+  heatPeak: { r: 255, g: 255, b: 255 }
 }
-// Robert's picks for the arrows: blue for the slowest flow through red for the fastest.
-export const defaultFlowSlow = { r: 0, g: 55, b: 255 }
-export const defaultFlowFast = { r: 255, g: 0, b: 0 }
+// The arrows follow the theme: violet for the slowest flow through yellow for the fastest
+// (Radar's were blue 0,55,255 through red).
+export const defaultFlowSlow = { r: 90, g: 0, b: 130 }
+export const defaultFlowFast = { r: 255, g: 220, b: 0 }
 // Pull, once Stiff 7.5 against Density 360: the pull on every particle is close to their product,
 // a constant cohesion, and Near is what holds the particles apart (Robert: "Ok, big finding,
 // stiff has a relationship with density"). The old liquid was 4000, 25000 and 4.25 at radius 60.
@@ -303,16 +307,16 @@ export const touchMode = fnstate('push')
 // Themes: a name and every colour at once, the heat gradient, the back and the flow arrows
 // (Robert: "themes that set all of the colors"). Six contrast presets, gradients that jump hue
 // like the defaults (Robert: "we just have 6 preset contrast themes like weather"); the two colour
-// and luminance gradients are made from a swatch or two instead, below. Radar (was Weather,
-// renamed at Robert's request) is the defaults
-// above; the rest are Claude's first draft for Robert to repaint. Applying one just sets the
-// colour states, so Save and Share carry the result.
+// and luminance gradients are made from a swatch or two instead, below. Thermal, first, is the
+// defaults above (Robert: "radar and thermal should swap spots"); Radar (was Weather, renamed at
+// Robert's request) was the default before it. The rest are Claude's first draft for Robert to
+// repaint. Applying one just sets the colour states, so Save and Share carry the result.
 const rgb = (r, g, b) => ({ r, g, b })
 export const themes = [
-  { name: 'Radar', heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40) },
+  { name: 'Thermal', heatCold: rgb(0, 0, 0), heatCool: rgb(90, 0, 130), heatWarm: rgb(220, 30, 0), heatHot: rgb(255, 220, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(90, 0, 130), flowFast: rgb(255, 220, 0) },
   { name: 'Spectrum', heatCold: rgb(30, 0, 90), heatCool: rgb(0, 170, 170), heatWarm: rgb(255, 230, 0), heatHot: rgb(230, 30, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(30, 0, 90), flowFast: rgb(255, 230, 0) },
   { name: 'Neon', heatCold: rgb(0, 40, 60), heatCool: rgb(0, 220, 255), heatWarm: rgb(255, 0, 200), heatHot: rgb(255, 230, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(5, 5, 15), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0) },
-  { name: 'Thermal', heatCold: rgb(0, 0, 0), heatCool: rgb(90, 0, 130), heatWarm: rgb(220, 30, 0), heatHot: rgb(255, 220, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(90, 0, 130), flowFast: rgb(255, 220, 0) },
+  { name: 'Radar', heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40) },
   { name: 'Lava', heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(8, 4, 4), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120) },
   { name: 'Acid', heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100) }
 ]
