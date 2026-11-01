@@ -29,7 +29,11 @@ export const BEDS = ['simmer', 'glug', 'noise', 'hum', 'none']
 // A burst is a jump in a column's count of fast particles; it is a snap when those particles
 // move both ways (a neck's recoil), a lift when they mostly rise, a land when they mostly fall.
 // Pour is lava crossing the floor line into or out of the pots, spill the same at the lip.
-export const EVENTS = ['snap', 'lift', 'land', 'pour', 'spill']
+// Merge is two blobs joining (Robert, with a picture of a blob landing on the pool's shoulder:
+// "I think this should make like a GALooooOOOOOooPP sound"): the visible lava is labelled into
+// connected components on a coarse grid twenty times a second, and a component that covers two
+// of the last labelling's, both of age and both at least `blob` of the lava, is a merge.
+export const EVENTS = ['snap', 'lift', 'land', 'pour', 'spill', 'merge']
 export const TUNE = {
   master: 0.8,
   fast: 0.5, // a particle is fast above this many gravities
@@ -51,11 +55,19 @@ export const TUNE = {
   glugSpan: 120, // Hz above it for the smallest pour
   glugSlow: 1, // stretches the glug
   glugBreath: 0.5, // the puff of air on a glug, as a share of its level
+  galoopLevel: 0.5, // the merge voice
+  galoopLow: 70, // Hz, the floor of its pitch (a big merge)
+  galoopSpan: 160, // Hz above it for a small one
+  galoopSlow: 1, // stretches it
+  blob: 0.01, // of the visible count: the smaller side of a merge must be at least this much lava
   noiseLevel: 0.22,
   humLevel: 0.16,
   agitationGain: 3 // mean speed in gravities times this is the agitation, capped at 1
 }
 const COLUMNS = 12
+const BLOB_COLS = 32 // at most this many cells across the lamp for the blob labelling; a cell is never under 1.5 particle radii, or a blob breaks into pieces between its particles
+const BLOB_EVERY = 0.05 // seconds of lamp time between labellings
+const BLOB_AGE = 6 // labellings a component must have existed before it can take part in a merge
 
 export function createGloop (tune = {}) {
   const T = { ...TUNE, ...tune }
@@ -77,14 +89,16 @@ export function createGloop (tune = {}) {
   let ticks = false // play a tick per event instead of the voices
   let silent = false // detect and report events, play nothing (the evolution page records clips this way)
   let onEvent = null // the sound board's hook: fn({ type, x, y, size, strength, time })
-  let prevY = new Float32Array(0) // last frame's y per particle, for the line crossings
+  let prevY = new Float32Array(0) // last frame's y per particle, by birth index when the state has ids (the CPU step sorts its slots every step), for the line crossings
+  let prevStamp = new Int32Array(0) // which frame each prevY entry is from
+  let frameStamp = 0
   const up = new Float32Array(COLUMNS) // this frame's fast particles rising, per column
   const down = new Float32Array(COLUMNS)
   const sumY = new Float32Array(COLUMNS) // and where they are
   const crossFloor = new Float32Array(COLUMNS)
   const crossLip = new Float32Array(COLUMNS)
   const lastCross = new Float64Array(COLUMNS * 2)
-  const stats = { bloops: 0, pops: 0, glugs: 0, agitation: 0, snap: 0, lift: 0, land: 0, pour: 0, spill: 0 } // for the sound board's readout
+  const stats = { bloops: 0, pops: 0, glugs: 0, galoops: 0, agitation: 0, snap: 0, lift: 0, land: 0, pour: 0, spill: 0, merge: 0 } // for the sound board's readout
 
   function start () {
     if (context) { if (context.state === 'suspended') context.resume(); return }
@@ -219,12 +233,48 @@ export function createGloop (tune = {}) {
     if (T.glugBreath > 0) puff(out, t, level * T.glugBreath, 0.14 * slow, 'lowpass', 500, 0.7)
   }
 
+  // The merge voice, GALooooOOOOOooPP: a breathy consonant, a sine sliding up a fifth and
+  // swelling with a second harmonic for a throat, then dropping into a low thud. Bigger merges
+  // sit lower.
+  function galoop (pan, size, strength) {
+    const t = context.currentTime + 0.01
+    const slow = T.galoopSlow
+    const f0 = T.galoopLow + T.galoopSpan * Math.exp(-size * 2.4)
+    const level = T.galoopLevel * (0.5 + 0.5 * strength)
+    const out = panner(pan)
+    puff(out, t, level * 0.5, 0.06 * slow, 'bandpass', 900, 1.2)
+    const osc = context.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(f0, t)
+    osc.frequency.exponentialRampToValueAtTime(f0 * 1.5, t + 0.45 * slow)
+    osc.frequency.exponentialRampToValueAtTime(f0 * 0.7, t + 0.6 * slow)
+    const gain = context.createGain()
+    gain.gain.setValueAtTime(0, t)
+    gain.gain.linearRampToValueAtTime(level, t + 0.08 * slow)
+    gain.gain.setValueAtTime(level, t + 0.4 * slow)
+    gain.gain.exponentialRampToValueAtTime(0.0005, t + 0.62 * slow)
+    const osc2 = context.createOscillator()
+    osc2.type = 'sine'
+    osc2.frequency.setValueAtTime(f0 * 2, t)
+    osc2.frequency.exponentialRampToValueAtTime(f0 * 3, t + 0.45 * slow)
+    const gain2 = context.createGain()
+    gain2.gain.setValueAtTime(0, t)
+    gain2.gain.linearRampToValueAtTime(level * 0.3, t + 0.1 * slow)
+    gain2.gain.exponentialRampToValueAtTime(0.0005, t + 0.5 * slow)
+    osc.connect(gain); gain.connect(out)
+    osc2.connect(gain2); gain2.connect(out)
+    osc.start(t); osc.stop(t + 0.64 * slow)
+    osc2.start(t); osc2.stop(t + 0.52 * slow)
+    puff(out, t + 0.58 * slow, level * 0.6, 0.08 * slow, 'lowpass', 300, 0.7)
+  }
+
   // The ticks, one timbre per event, short enough to place in time by ear:
   //   snap   a click, 2 kHz square, 25 ms
   //   lift   a chirp rising 400 to 900 Hz
   //   land   a chirp falling 900 to 300 Hz
   //   pour   a thud, 110 Hz sine
   //   spill  two clicks at 1.3 kHz, 70 ms apart
+  //   merge  two triangle notes, 500 then 750 Hz
   function tick (type, pan) {
     const t = context.currentTime + 0.005
     const out = panner(pan)
@@ -244,6 +294,7 @@ export function createGloop (tune = {}) {
     else if (type === 'land') tone('sine', 900, 300, 0, 0.07, 0.4)
     else if (type === 'pour') tone('sine', 110, 110, 0, 0.08, 0.5)
     else if (type === 'spill') { tone('square', 1300, 1300, 0, 0.02, 0.2); tone('square', 1300, 1300, 0.07, 0.02, 0.2) }
+    else if (type === 'merge') { tone('triangle', 500, 500, 0, 0.04, 0.3); tone('triangle', 750, 750, 0.06, 0.06, 0.3) }
   }
 
   // An event the lava fired: a tick or a voice, and the board's hook.
@@ -254,6 +305,7 @@ export function createGloop (tune = {}) {
     if (silent) { /* the hook alone */ }
     else if (ticks) tick(type, pan)
     else if (type === 'snap' || type === 'lift' || type === 'land') { bloop(pan, size, strength); stats.bloops++ }
+    else if (type === 'merge') { galoop(pan, size, strength); stats.galoops++ }
     if (onEvent) onEvent({ type, x, y, size, strength, time })
   }
 
@@ -268,7 +320,96 @@ export function createGloop (tune = {}) {
   }
 
   // Read this frame's lava. `state` has x, y, vx, vy; `count` live particles; gravity in px/s.
-  function update (state, count, width, height, gravity, dt) {
+  // Blob tracking for the merge event: the visible lava counted into a coarse grid, the
+  // occupied cells labelled into 8-connected components, each matched to the last labelling by
+  // the cells it took over. A component made of two old ones that were both blobs (at least
+  // T.blob of the lava) and both around for BLOB_AGE labellings is a merge; the event sits
+  // between their centres and its size is the smaller one's share of the lava.
+  let blobCols = 0
+  let blobRows = 0
+  let cellCount = new Float32Array(0)
+  let cellX = new Float32Array(0)
+  let cellY = new Float32Array(0)
+  let label = new Int32Array(0)
+  let prevLabel = new Int32Array(0)
+  let prevComps = []
+  let blobDue = 0
+  let lastMerge = -1
+  const stack = []
+  function trackBlobs (state, count, width, height, visible, radius) {
+    const cell = Math.max(width / BLOB_COLS, radius * 1.5)
+    const cols = Math.max(1, Math.ceil(width / cell))
+    const rows = Math.max(1, Math.ceil(height / cell))
+    if (cols !== blobCols || rows !== blobRows) {
+      blobCols = cols; blobRows = rows
+      const n = cols * rows
+      cellCount = new Float32Array(n); cellX = new Float32Array(n); cellY = new Float32Array(n)
+      label = new Int32Array(n); prevLabel = new Int32Array(n).fill(-1); prevComps = []
+    }
+    cellCount.fill(0); cellX.fill(0); cellY.fill(0)
+    const { x, y } = state
+    for (let i = 0; i < count; i++) {
+      const py = y[i]
+      if (py < 0 || py > height) continue
+      let c = Math.floor(x[i] / cell); if (c < 0) c = 0; else if (c >= cols) c = cols - 1
+      let r = Math.floor(py / cell); if (r >= rows) r = rows - 1
+      const k = c + r * cols
+      cellCount[k]++; cellX[k] += x[i]; cellY[k] += py
+    }
+    label.fill(-1)
+    const comps = []
+    for (let k0 = 0; k0 < label.length; k0++) {
+      if (cellCount[k0] === 0 || label[k0] >= 0) continue
+      const id = comps.length
+      const comp = { size: 0, x: 0, y: 0, age: 0, from: new Map() }
+      comps.push(comp)
+      stack.length = 0
+      stack.push(k0)
+      while (stack.length) {
+        const k = stack.pop()
+        if (label[k] >= 0) continue
+        label[k] = id
+        comp.size += cellCount[k]; comp.x += cellX[k]; comp.y += cellY[k]
+        const old = prevLabel[k]
+        if (old >= 0) comp.from.set(old, (comp.from.get(old) || 0) + cellCount[k])
+        const c = k % cols
+        const r = (k - c) / cols
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const cc = c + dc
+            const rr = r + dr
+            if (cc < 0 || cc >= cols || rr < 0 || rr >= rows) continue
+            const j = cc + rr * cols
+            if (cellCount[j] > 0 && label[j] < 0) stack.push(j)
+          }
+        }
+      }
+      comp.x /= comp.size; comp.y /= comp.size
+    }
+    const minBlob = Math.max(10, T.blob * visible)
+    for (const comp of comps) {
+      let age = 0
+      const parts = []
+      for (const [old, n] of comp.from) {
+        const p = prevComps[old]
+        if (!p) continue
+        if (p.age > age) age = p.age
+        if (p.size >= minBlob && n >= p.size * 0.5 && p.age >= BLOB_AGE) parts.push(p)
+      }
+      comp.age = age + 1
+      if (parts.length >= 2 && time - lastMerge >= T.cooldown * 2) {
+        parts.sort((a, b) => b.size - a.size)
+        const [a, b] = parts
+        lastMerge = time
+        let c = Math.floor((a.x + b.x) / 2 / width * COLUMNS); if (c < 0) c = 0; else if (c >= COLUMNS) c = COLUMNS - 1
+        fire('merge', c, (a.y + b.y) / 2 / height, Math.min(1, b.size / (0.1 * visible)), Math.min(1, 2 * b.size / a.size))
+      }
+    }
+    prevLabel.set(label)
+    prevComps = comps
+  }
+
+  function update (state, count, width, height, gravity, dt, radius = 20) {
     if (!enabled || !context || context.state !== 'running') return
     if (ready) { ready(); ready = null }
     time += dt
@@ -276,17 +417,28 @@ export function createGloop (tune = {}) {
     let visible = 0
     let speedSum = 0
     const thr = T.fast * gravity
-    const { x, y, vx, vy } = state
-    const tracked = prevY.length >= count
+    const { x, y, vx, vy, id } = state
+    let top = count
+    if (id) for (let i = 0; i < count; i++) if (id[i] >= top) top = id[i] + 1
+    if (prevY.length < top) {
+      const ny = new Float32Array(top * 2); ny.set(prevY)
+      const ns = new Int32Array(top * 2); ns.set(prevStamp)
+      prevY = ny; prevStamp = ns
+    }
+    const lastStamp = frameStamp
+    frameStamp++
     for (let i = 0; i < count; i++) {
       const py = y[i]
       let c = Math.floor(x[i] / width * COLUMNS)
       if (c < 0) c = 0; else if (c >= COLUMNS) c = COLUMNS - 1
-      if (tracked) {
-        const was = prevY[i]
+      const b = id ? id[i] : i
+      if (prevStamp[b] === lastStamp) {
+        const was = prevY[b]
         if ((was <= height) !== (py <= height)) crossFloor[c]++
         if ((was < 0) !== (py < 0)) crossLip[c]++
       }
+      prevY[b] = py
+      prevStamp[b] = frameStamp
       if (py < 0 || py > height) continue
       visible++
       const s = Math.hypot(vx[i], vy[i])
@@ -297,9 +449,9 @@ export function createGloop (tune = {}) {
         if (vy[i] < -thr * 0.7) up[c]++; else if (vy[i] > thr * 0.7) down[c]++
       }
     }
-    if (prevY.length < count) prevY = new Float32Array(Math.max(count, prevY.length * 2))
-    prevY.set(y.subarray(0, count))
     if (visible === 0) return
+    blobDue += dt
+    if (blobDue >= BLOB_EVERY) { blobDue = 0; trackBlobs(state, count, width, height, visible, radius) }
     // Agitation: the mean speed against gravity, eased so the bed swells and fades rather than
     // flickers; a lifting lamp sits about half way, the warm-up pins it.
     const target = Math.min(1, speedSum / visible / gravity * T.agitationGain)
@@ -384,6 +536,8 @@ export function createGloop (tune = {}) {
     get stats () { return { ...stats, bed, state: context ? context.state : 'off' } },
     // The audio graph, for the sound board's sample player.
     get context () { return context },
-    get master () { return master }
+    get master () { return master },
+    get noiseBuffer () { return noiseBuffer },
+    get blobs () { return prevComps.map(c => ({ size: Math.round(c.size), x: Math.round(c.x), y: Math.round(c.y), age: c.age })) }
   }
 }

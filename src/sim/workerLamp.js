@@ -22,10 +22,12 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let floorBottles = []
   let touches = []
   let slotOf = new Int32Array(0) // previous slot by birth index
+  let slotGen = new Int32Array(0) // which build of slotOf each entry belongs to
+  let slotBuild = 0
   let push = null
   let sentParams = ''
   const empty = new Float32Array(0)
-  const state = { x: empty, y: empty, vx: empty, vy: empty, temp: empty }
+  const state = { x: empty, y: empty, vx: empty, vy: empty, temp: empty, id: new Int32Array(0) }
 
   const affine = fn => {
     const [c, f] = fn(0, 0)
@@ -61,10 +63,13 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     // different particle from one state to the next, and interpolating slot against slot drew
     // lava flying between strangers (holes and a ragged edge whenever the pool moved).
     if (previous) {
-      if (slotOf.length < previous.count) slotOf = new Int32Array(previous.count * 2)
-      for (let k = 0; k < previous.count; k++) slotOf[previous.id[k]] = k
+      let top = 0
+      for (let k = 0; k < previous.count; k++) if (previous.id[k] > top) top = previous.id[k]
+      if (slotOf.length <= top) { slotOf = new Int32Array(top * 2 + 16); slotGen = new Int32Array(top * 2 + 16) }
+      slotBuild++
+      for (let k = 0; k < previous.count; k++) { const b = previous.id[k]; slotOf[b] = k; slotGen[b] = slotBuild }
     }
-    state.x = s.x; state.y = s.y; state.vx = s.vx; state.vy = s.vy; state.temp = s.temp
+    state.x = s.x; state.y = s.y; state.vx = s.vx; state.vy = s.vy; state.temp = s.temp; state.id = s.id
     stepMs += (m.stepMs - stepMs) * 0.1
     steps++
     width = m.width
@@ -102,11 +107,10 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       shown.temp = latest.temp
       const t = previous && previous.generation === latest.generation ? Math.min(1, Math.max(0, (now - latest.at) / gap)) : 1
       if (t >= 1) { shown.x.set(latest.x.subarray(0, n)); shown.y.set(latest.y.subarray(0, n)); return n }
-      const pc = previous.count
       const { id, x, y } = latest
       for (let i = 0; i < n; i++) {
         const b = id[i]
-        if (b >= pc) { shown.x[i] = x[i]; shown.y[i] = y[i]; continue } // born since the previous state
+        if (b >= slotOf.length || slotGen[b] !== slotBuild) { shown.x[i] = x[i]; shown.y[i] = y[i]; continue } // born since the previous state
         const k = slotOf[b]
         shown.x[i] = previous.x[k] + (x[i] - previous.x[k]) * t
         shown.y[i] = previous.y[k] + (y[i] - previous.y[k]) * t

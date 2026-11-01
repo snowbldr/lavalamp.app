@@ -179,13 +179,17 @@ export async function start () {
   // index because the CPU step sorts its particles into cell order, so a slot holds a different
   // particle after the step; drawn slot against slot the lava flew between strangers whenever
   // the pool moved (holes and a ragged edge: "weird pulsing and artifacts").
-  let previous = { x: new Float32Array(0), y: new Float32Array(0), count: 0 }
+  // Birth indices are never reused (a particle dropped on a shrink leaves a hole), so the arrays
+  // are sized by the largest one and `stamp` says which remember() an entry belongs to.
+  let previous = { x: new Float32Array(0), y: new Float32Array(0), stamp: new Int32Array(0), tick: 0 }
   const remember = () => {
     const { x, y, id } = sim.state
     const n = sim.count
-    if (previous.x.length < n) previous = { x: new Float32Array(n * 2), y: new Float32Array(n * 2), count: 0 }
-    for (let k = 0; k < n; k++) { const b = id ? id[k] : k; previous.x[b] = x[k]; previous.y[b] = y[k] }
-    previous.count = n
+    let top = n
+    if (id) for (let k = 0; k < n; k++) if (id[k] >= top) top = id[k] + 1
+    if (previous.x.length < top) previous = { x: new Float32Array(top * 2), y: new Float32Array(top * 2), stamp: new Int32Array(top * 2), tick: previous.tick }
+    previous.tick++
+    for (let k = 0; k < n; k++) { const b = id ? id[k] : k; previous.x[b] = x[k]; previous.y[b] = y[k]; previous.stamp[b] = previous.tick }
   }
   let edge = 'bottom' // the page edge the lamp's floor sits on
   let turns = TURNS[edge]
@@ -410,7 +414,7 @@ export async function start () {
       if (shown.x.length < count) { shown.x = new Float32Array(count); shown.y = new Float32Array(count) }
       for (let i = 0; i < count; i++) {
         const b = id ? id[i] : i
-        if (b >= previous.count) { shown.x[i] = x[i]; shown.y[i] = y[i]; continue } // born since
+        if (b >= previous.x.length || previous.stamp[b] !== previous.tick) { shown.x[i] = x[i]; shown.y[i] = y[i]; continue } // born since
         shown.x[i] = previous.x[b] + (x[i] - previous.x[b]) * due
         shown.y[i] = previous.y[b] + (y[i] - previous.y[b]) * due
       }
@@ -434,7 +438,7 @@ export async function start () {
     }
     shownView = view
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view })
-    if (gloop.enabled) gloop.update(sim.state, sim.count, width, height, params.gravity, FRAME * pace())
+    if (gloop.enabled) gloop.update(sim.state, sim.count, width, height, params.gravity, FRAME * pace(), params.interactionRadius)
     if (profiling) {
       const t2 = performance.now()
       tally.frames++

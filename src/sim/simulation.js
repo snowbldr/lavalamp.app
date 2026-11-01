@@ -275,6 +275,7 @@ export function createSimulation ({ width, height, params }) {
   let visitSeed = 12345 // the visiting order's own little generator, so the lamp's seeded randomness is untouched
   // The live count follows params.particleCount; particles added later appear in the slab too.
   let alive = 0
+  let nextId = 0 // birth index of the next particle spawned: never reused, so an id names one particle for the lamp's life
   let heaterTime = 0
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
@@ -320,7 +321,7 @@ export function createSimulation ({ width, height, params }) {
   function spawn (i, depth, hidden = false) {
     const list = hidden ? floorBottleList() : []
     state.home[i] = -1
-    state.id[i] = i
+    state.id[i] = nextId++
     state.x[i] = randomBetween(0, width)
     state.y[i] = randomRange(height - depth, height)
     if (list.length) {
