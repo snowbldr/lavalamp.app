@@ -10,6 +10,11 @@ import {
   defaultSmooth,
   smooth,
   defaultBlend,
+  reserve,
+  defaultReserve,
+  pixels,
+  defaultPixels,
+  backendLabel,
   blend,
   defaultSettle,
   defaultViscosity,
@@ -206,6 +211,7 @@ export function createSettingsPanel () {
     ),
     section(
       'Advanced', advancedOpen,
+      div({ class: 'panel-note' }, backendLabel.bindAs(() => `Backend: ${backendLabel()}`)),
       section(
         'Flow', flowOpen,
         knobs(
@@ -260,6 +266,7 @@ export function createSettingsPanel () {
           knob('Density', 'rest-density', restDensity, { min: 0.1, max: 1000, step: 0.1 }, () => defaultRestDensity(), fixed(1)),
           knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
           knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
+          knob('Reserve', 'reserve', reserve, { min: 0.25, max: 8, step: 0.25 }, () => defaultReserve(), v => v >= 8 ? 'all' : times(v)),
           knob('Wobble', 'wobble', wobble, { min: 0, max: 2, step: 0.01 }, () => defaultWobble, seconds),
           knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),
           knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity),
@@ -277,6 +284,7 @@ export function createSettingsPanel () {
           ['Density', 'The crowding the lava settles at; lower puffs it up, higher packs it.'],
           ['Gravity', 'How fast cold lava sinks; a particle at this temperature hovers.'],
           ['Bottles', 'How big the bottles above and the pots below are, as a fraction of their width; 0 is a flat ceiling and floor.'],
+          ['Reserve', 'How much lava the pots under the floor may hold, as a multiple of the visible lava; all is no cap. The pots are sized by the window, so at a coarse grain they can hold several times the pool and every step pays for it.'],
           ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.'],
           ['Settle', 'Pressure passes per frame. 2 spaces the particles more evenly so the surface is less bumpy, for most of a step\'s time again.'],
           ['Viscosity', 'How much neighbouring particles slow each other as they close in, so necks thin and tails pull in more slowly. Needs Wobble above 0.'],
@@ -292,13 +300,15 @@ export function createSettingsPanel () {
         knobs(
           knob('Size', 'particleSize', particleSize, { min: 1, max: 50, step: 1 }, () => defaultParticleSize()),
           knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth()),
-          knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend())
+          knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend()),
+          knob('Pixels', 'pixels', pixels, { min: 0.5, max: 4, step: 0.5 }, () => defaultPixels, v => `${Number(v).toFixed(1)} M`)
         ),
         pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
         hint(help, [
           ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
           ['Smooth', 'Rounds off the bumps along every edge by blurring the lava\'s shape before it is cut, by this many pixels. 0 is the raw metaballs.'],
           ['Blend', 'How far the colours inside the lava blur into each other, in pixels, without touching the edge; below Smooth it does nothing extra.'],
+          ['Pixels', 'The budget the lamp is drawn within, in megapixels. A big window is drawn at half resolution within one megapixel, where a Size under 4 is a single pixel dot. Not saved.'],
           ['Heater', 'Show the heater strip and its elements along the floor.'],
           ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
         ])

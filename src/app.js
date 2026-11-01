@@ -33,6 +33,11 @@ import {
   computeDefaultConduction,
   defaultRestDensity,
   defaultConduction,
+  computeDefaultReserve,
+  defaultReserve,
+  reserve,
+  pixels,
+  backendLabel,
   GPU_PARTICLES,
   GPU_REACH,
   defaultReach,
@@ -138,6 +143,7 @@ export async function start () {
   mirror(drifters, params, 'drifters')
   mirror(heatSpots, params, 'heatSpots')
   mirror(cupDepth, params, 'cupDepth')
+  mirror(reserve, params, 'reserveCap')
   mirror(wobble, params, 'wobble')
   mirror(settle, params, 'settle')
   mirror(viscosity, params, 'viscosity')
@@ -174,6 +180,7 @@ export async function start () {
   mirror(showCups, look, 'showCups')
   mirror(smooth, look, 'smooth')
   mirror(blend, look, 'blend')
+  mirror(pixels, look, 'pixels')
 
   // The positions before the last step, by birth index, for the pace interpolation. By birth
   // index because the CPU step sorts its particles into cell order, so a slot holds a different
@@ -206,6 +213,7 @@ export async function start () {
     : remote
       ? createWorkerLamp({ width, height, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
       : createSimulation({ width, height, params })
+  backendLabel(device ? 'GPU (WebGPU)' : remote ? 'CPU, simulation on a worker thread' : 'CPU, simulation on the page thread')
   const renderer = createRenderer(lamp, look)
   const motion = createMotionInput()
   // In the Reservoirs view the lamp is drawn scaled down and shifted (see `view` in frame), so a
@@ -246,6 +254,7 @@ export async function start () {
     followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
     followWindow(defaultRestDensity, restDensity, computeDefaultRestDensity())
     followWindow(defaultConduction, conduction, computeDefaultConduction())
+    followWindow(defaultReserve, reserve, computeDefaultReserve())
     followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
     followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
     followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))
@@ -256,6 +265,7 @@ export async function start () {
   }
   fit()
   window.addEventListener('resize', fit)
+  pixels.subscribe(() => renderer.resize(width, height))
 
   // Turn the lamp so its floor is on `newEdge`, carrying every particle to where it was on the
   // page, so the lava stays put and gravity simply starts pulling it toward the new floor.

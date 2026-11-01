@@ -456,7 +456,10 @@ export function createSimulation ({ width, height, params }) {
   function reserveFill () {
     let area = 0
     for (const b of floorBottleList()) area += bottleArea(b) * (b.cx <= 0 || b.cx >= width ? 0.5 : 1)
-    return Math.round(area / spawnAreaNow)
+    const worth = Math.round(area / spawnAreaNow)
+    // params.reserveCap: the pots hold at most this many times the visible lava (8 or more is no cap).
+    const cap = params.reserveCap
+    return cap > 0 && cap < 8 ? Math.min(worth, Math.round(cap * (params.particleCount || 0))) : worth
   }
 
   // Bring the live count to the target, all at once: the floor bottles' worth inside them and

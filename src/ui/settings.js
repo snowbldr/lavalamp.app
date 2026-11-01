@@ -71,6 +71,23 @@ export const computeDefaultMaxTemp = height => Math.round((cpu() ? 9190 : 5030) 
 // Density and Conduct are fixed on the GPU and Robert's CPU link has them at 406 and 0.08.
 export const computeDefaultRestDensity = () => cpu() ? 406 : 360.1
 export const computeDefaultConduction = () => cpu() ? 0.08 : 0.07
+// Reserve: how much lava the floor pots may hold, as a multiple of the visible lava; 8 is no
+// cap. The pots are sized by the window, not the grain, so on the CPU at Robert's radius 34
+// they held 14000 particles under 3000 visible (the GPU holds 25000 under 35000) and the step
+// took 55 ms against the 37 ms a pace of 0.45 allows: the lamp ran in slow motion and the heat
+// pulses came "so spaced out on cpu for some reason". CPU default 1, GPU unchanged (no cap).
+export const computeDefaultReserve = () => cpu() ? 1 : 8
+export const defaultReserve = fnstate(computeDefaultReserve())
+export const reserve = fnstate(defaultReserve())
+// Pixels: the renderer's pixel budget in megapixels. A big window is drawn at about half
+// resolution within one megapixel, which makes a Size under 4 a single pixel dot, so the knob
+// stopped doing anything there (Robert: "it seems like there's a floor on particle size,
+// anything under 4 doesn't change anything on cpu"). Not saved: a way of drawing, not a look.
+export const defaultPixels = 1
+export const pixels = fnstate(defaultPixels)
+// Which lamp is running, for the panel (Robert: "we should display which backend is being used
+// in the advance settings (so I can be sure I'm using cpu)").
+export const backendLabel = fnstate('')
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
 export const defaultBgColor = { r: 0, g: 0, b: 0 }
@@ -293,7 +310,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow'])
 
@@ -338,6 +355,7 @@ const defaults = () => ({
   elementCore: defaultElementCore,
   floorHeat: defaultFloorHeat,
   floorGlow: defaultFloorGlow,
+  reserve: defaultReserve(),
   seed: randomSeed()
 })
 

@@ -178,7 +178,7 @@ export function createGlRenderer (canvas, look) {
   function resize (newWidth, newHeight) {
     lampWidth = newWidth
     lampHeight = newHeight
-    scale = Math.min(1, Math.sqrt(PIXEL_BUDGET / (newWidth * newHeight)))
+    scale = Math.min(1, Math.sqrt(PIXEL_BUDGET * (look.pixels > 0 ? look.pixels : 1) / (newWidth * newHeight)))
     width = canvas.width = Math.max(1, Math.round(newWidth * scale))
     height = canvas.height = Math.max(1, Math.round(newHeight * scale))
     canvas.style.width = `${newWidth}px`
