@@ -26,6 +26,13 @@ export const row = (title, control, { value, reset, forId } = {}) => div(
 // a 0-1 scale too with .01 steps... all of the controls should use this same control mode"). It
 // starts on the smallest decade that holds both the given max and the current value, and the
 // decade shows under the value.
+// The dial is centred on the knob's default (2026-11-01, Robert, with Turb and Eddies pinned at
+// the top of their dials by the CPU defaults: "let's adjust all the knobs so that the default is
+// the midpoint and the range on the right and left are appropriately scaled"): the left half of
+// the sweep runs from the minimum to the default, the right half from the default to the
+// maximum, each at its own rate, so straight up is always the default and a drag either side
+// has the whole half dial to work in. A knob whose default sits at an end (Blend 0, Wall 0) is
+// plain linear. The wheel and the arrow keys still move by `step`.
 const KNOB_SWEEP = 160 // px of drag for the whole range
 const KNOB_ANGLE = 135 // degrees either side of straight up
 export const DECADES = [1, 10, 100, 1000, 10000, 100000]
@@ -36,7 +43,23 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
   // On a decade scale the minimum comes down with it, to one step, or a knob whose own minimum is
   // 1 (Stiff, Near) would be stuck on the 0 to 1 scale (Robert: "the 0-1 range slider doesn't work").
   const minOf = () => scale && min > 0 ? Math.min(min, stepOf()) : min
-  const fraction = () => Math.max(0, Math.min(1, (state() - minOf()) / (maxOf() - minOf())))
+  const unit = f => Math.max(0, Math.min(1, f))
+  // The default, when it sits strictly inside the range: the dial's centre. None on a decade dial.
+  const centreOf = () => {
+    if (scale || !resetTo) return null
+    const c = resetTo()
+    return Number.isFinite(c) && c > minOf() && c < maxOf() ? c : null
+  }
+  const fraction = () => {
+    const v = state(); const lo = minOf(); const hi = maxOf(); const c = centreOf()
+    if (c === null) return unit((v - lo) / (hi - lo))
+    return unit(v <= c ? 0.5 * (v - lo) / (c - lo) : 0.5 + 0.5 * (v - c) / (hi - c))
+  }
+  const fromFraction = f => {
+    f = unit(f); const lo = minOf(); const hi = maxOf(); const c = centreOf()
+    if (c === null) return lo + f * (hi - lo)
+    return f <= 0.5 ? lo + (f / 0.5) * (c - lo) : c + ((f - 0.5) / 0.5) * (hi - c)
+  }
   const clamp = v => {
     const top = maxOf()
     const st = stepOf()
@@ -64,7 +87,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
       'aria-valuetext': state.bindAttr(() => format(state())),
       onpointerdown: e => {
         if (scale && (e.metaKey || e.ctrlKey)) { nextScale(); e.preventDefault(); return }
-        drag = { x: e.clientX, y: e.clientY, value: state() }
+        drag = { x: e.clientX, y: e.clientY, value: state(), fraction: fraction() }
         dial.classList.add('turning')
         try { dial.setPointerCapture(e.pointerId) } catch (err) {}
         e.preventDefault()
@@ -73,7 +96,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
         if (!drag) return
         const travel = (e.clientX - drag.x) + (drag.y - e.clientY)
         const sweep = e.shiftKey ? KNOB_SWEEP * 10 : KNOB_SWEEP
-        state(clamp(drag.value + travel / sweep * (maxOf() - minOf())))
+        state(clamp(fromFraction(drag.fraction + travel / sweep)))
       },
       onpointerup: () => { drag = null; dial.classList.remove('turning') },
       onpointercancel: () => { drag = null; dial.classList.remove('turning') },

@@ -31,6 +31,14 @@ import {
   defaultBlend,
   setBackend,
   computeDefaultConduction,
+  computeDefaultTurbulence,
+  computeDefaultDrifters,
+  computeDefaultWobbleKick,
+  computeDefaultViscosity,
+  defaultTurbulence,
+  defaultDrifters,
+  defaultWobbleKick,
+  defaultViscosity,
   defaultConduction,
   computeDefaultReserve,
   defaultReserve,
@@ -135,11 +143,12 @@ const followWindow = (defaultState, state, value) => {
 }
 
 export async function start () {
-  loadSavedSettings()
   // The GPU backend when the browser has WebGPU and the URL does not say ?cpu; it carries ten
   // times the particles, so the window-following defaults move with it before anything is sized.
   const device = new URLSearchParams(window.location.search).has('cpu') ? null : await getGpuDevice().catch(() => null)
   if (device) { setBackend('gpu'); followWindow(defaultReach, reach, GPU_REACH) }
+  // Saved settings are per backend, so they load once the backend is known.
+  loadSavedSettings()
 
   const params = {}
   mirror(particleCount, params, 'particleCount', Math.trunc)
@@ -267,6 +276,10 @@ export async function start () {
     followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(width, height))
     followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
     followWindow(defaultConduction, conduction, computeDefaultConduction())
+    followWindow(defaultTurbulence, turbulence, computeDefaultTurbulence())
+    followWindow(defaultDrifters, drifters, computeDefaultDrifters())
+    followWindow(defaultWobbleKick, wobbleKick, computeDefaultWobbleKick())
+    followWindow(defaultViscosity, viscosity, computeDefaultViscosity())
     followWindow(defaultReserve, reserve, computeDefaultReserve())
     followWindow(defaultLift, lift, computeDefaultLift())
     followWindow(defaultWobbleMax, wobbleMax, computeDefaultWobbleMax())

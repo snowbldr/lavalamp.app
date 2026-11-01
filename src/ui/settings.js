@@ -47,16 +47,17 @@ const liquidScale = (width, height) => Math.sqrt(Math.max(1, width * height / LA
 export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / LAB_AREA_PER_PARTICLE), budget)
 // CPU: 10 per unit of scale, half the lab's grain against the budget (Robert's radius 34 where the
 // formula gave 69): finer lava for the same 3000 particles, a smaller pool.
-export const computeDefaultInteractionRadius = (width, height) => Math.round((cpu() ? 10 : 20) * liquidScale(width, height))
+// CPU 17.6 per unit: Robert's Radius 53 at scale 3 (2026-11-01, "these are the final settings for cpu version").
+export const computeDefaultInteractionRadius = (width, height) => Math.round((cpu() ? 17.6 : 20) * liquidScale(width, height))
 // Size 6 and Smooth 4 at radius 20 are Robert's lamp defaults of 2026-10-31 ("let's make these the
 // new defaults", a share link); the lab draws its own at 3 and 3.
 // Robert, 2026-10-31, with the reservoirs back on the GPU: "size and smooth should default to 3 also" (were 6 and 4).
 // CPU: 0.87 per unit of scale, Robert's Size 3 at radius 34 (his third link, 2026-11-01: "update the
 // default to something nice similar to what I had there but fixed"; was 1.45, Size 5 at radius 69).
-export const computeDefaultParticleSize = (width, height) => Math.round((cpu() ? 0.87 : 3) * liquidScale(width, height))
+export const computeDefaultParticleSize = (width, height) => Math.round(3 * liquidScale(width, height)) // CPU 3 per unit as well: Robert's Size 9 at scale 3 (final CPU settings; was 0.87)
 // Smooth 7 and Blend 28 (Robert, 2026-10-31, with the two blurs apart: "smooth 7, blend 28"; Smooth was 3).
 // CPU: Smooth 0 (Robert's CPU share link).
-export const computeDefaultSmooth = (width, height) => cpu() ? 0 : Math.round(7 * liquidScale(width, height))
+export const computeDefaultSmooth = (width, height) => Math.round((cpu() ? 4.33 : 7) * liquidScale(width, height)) // CPU 4.33 per unit: Robert's Smooth 13 at scale 3 (final CPU settings; was 0)
 // Stiff and Near scale with the grain as well. Clavet's displacement per neighbour is dt² times
 // stiffness times a dimensionless kernel sum, so in px it does not grow with the radius while
 // the spacing does: at radius 43 the liquid tuned at 20 relaxed at less than half its strength
@@ -74,25 +75,31 @@ export const computeDefaultSmooth = (width, height) => cpu() ? 0 : Math.round(7 
 // times Density 360.1), CPU 706 (1.74 times 406; Robert's fourth link at scale 3: 5.2 times 406).
 // Old saves and links that carry stiffness and restDensity are folded on load (applySettings).
 export const REST_DENSITY = 400
-export const computeDefaultPull = (width, height) => Math.round((cpu() ? 706 : 2700) * liquidScale(width, height))
+export const computeDefaultPull = (width, height) => Math.round((cpu() ? 382.7 : 2700) * liquidScale(width, height)) // CPU 382.7 per unit: Robert's Pull 1150 at scale 3 (final CPU settings; was 706)
 const legacyStiffness = (width, height) => Math.round((cpu() ? 1.74 : 7.5) * liquidScale(width, height) * 10) / 10
 const legacyRestDensity = () => cpu() ? 406 : 360.1
-export const computeDefaultStiffnessNear = (width, height) => Math.round((cpu() ? 647 : 1101) * liquidScale(width, height)) // CPU 647 per unit: Robert's Near 1941 at scale 3 (his fourth link, the "new baseline for cpu")
+export const computeDefaultStiffnessNear = (width, height) => Math.round((cpu() ? 146.8 : 1101) * liquidScale(width, height)) // CPU 146.8 per unit: Robert's Near 441 at scale 3 (final CPU settings; 647 at his fourth link)
 // Blend 0 (Robert, once the heat table had 2048 steps: "set default blend to 0. not sure we even need
 // blend anymore, it's insanely smooth at 2048"); the bands it blurred away were the 48 step table.
 export const computeDefaultBlend = (width, height) => 0
 // CPU: Max Temp 1200 at a 1226 px window (Robert's fourth link, "new baseline for cpu"), 881 at 900:
 // lava that never gets much more than one and three quarter gravities buoyant (was 25038, 18470 at 900).
-export const computeDefaultMaxTemp = height => Math.round((cpu() ? 881 : 5030) * height / 900)
+export const computeDefaultMaxTemp = height => Math.round((cpu() ? 1003 : 5030) * height / 900) // CPU 1003 at 900 px: Robert's 1366 at 1226 px (final CPU settings; was 881)
 // Density and Conduct are fixed on the GPU and Robert's CPU link has them at 406 and 0.08.
-export const computeDefaultConduction = () => cpu() ? 0.06 : 0.07 // CPU 0.06 (was 0.04), Robert's fourth link
+export const computeDefaultConduction = () => cpu() ? 0.05 : 0.07 // CPU 0.05 (final CPU settings; 0.06 at the fourth link, 0.04 before)
 // Heat (the pulse period) and Element (an element's heat) by backend: Robert's third link has Heat
 // 33 and Element 69. Element stays at his 69: with Cap 1.5 and Lift 2, Element 8, 20, 40 and 69 all
 // read 0.6 to 1.0 lone particles a sample and all lift lava to the ceiling (two lamp minutes each).
-export const computeDefaultHeatSpots = () => cpu() ? 8 : 15 // CPU 8 (was 33), Robert's fourth link
-export const computeDefaultElementHeat = () => cpu() ? 4 : 8 // CPU 4 (was 69), Robert's fourth link
+export const computeDefaultHeatSpots = () => cpu() ? 4 : 15 // CPU 4 (final CPU settings; 8 at the fourth link, 33 before)
+export const computeDefaultElementHeat = () => cpu() ? 7 : 8 // CPU 7 (final CPU settings; 4 at the fourth link, 69 before)
 // Burn, Pulses and Core by backend as well, from the same link: 7.5 s, 3 and 0.08 on the CPU.
-export const computeDefaultElementLife = () => cpu() ? 7.5 : 15
+export const computeDefaultElementLife = () => cpu() ? 7 : 15 // CPU 7 (final CPU settings; was 7.5)
+// Turb, Eddies, Kick and Viscosity became backend-aware with Robert's final CPU settings
+// (Turb 150, Eddies 6, Kick 10, Viscosity 9 against the GPU's 45, 2, 6, 32). GPU unchanged.
+export const computeDefaultTurbulence = () => cpu() ? 150 : 45
+export const computeDefaultDrifters = () => cpu() ? 6 : 2
+export const computeDefaultWobbleKick = () => cpu() ? 10 : 6
+export const computeDefaultViscosity = () => cpu() ? 9 : 32
 export const computeDefaultElementRate = () => cpu() ? 3 : 4
 export const computeDefaultElementCore = () => cpu() ? 0.08 : 0.1
 // Reserve: how much lava the floor pots may hold, as a multiple of the visible lava; 8 is no
@@ -155,8 +162,8 @@ export const defaultStir = 20
 export const defaultConduction = fnstate(computeDefaultConduction()) // 0.07 on the GPU, see computeDefaultConduction
 // Robert, with the lamp beside the video: "default pace needs ot be ~0.45 or so".
 export const defaultPace = 0.45
-export const defaultTurbulence = 45
-export const defaultDrifters = 2
+export const defaultTurbulence = fnstate(computeDefaultTurbulence())
+export const defaultDrifters = fnstate(computeDefaultDrifters())
 export const defaultHeatSpots = fnstate(computeDefaultHeatSpots())
 // How deep the ceiling cups are, as a fraction of each cup's width. 0 is a flat ceiling.
 // Robert: "I don't want the reservoirs off by default". At the new liquid's spacing they hold a
@@ -168,7 +175,7 @@ export const defaultCupDepth = 1
 export const defaultWobble = 0.87
 // How much of the pressure step's move a particle carries on as velocity, and the most speed it
 // may carry, in gravities.
-export const defaultWobbleKick = 6
+export const defaultWobbleKick = fnstate(computeDefaultWobbleKick())
 // CPU 1.5: at the coarse grain the kick launched single particles out of the pot necks at the
 // cap, 3.4 gravities (2400 px/s measured at Robert's link, a spray of dots: "it forms like
 // little spouts that just spray"); at 1.5 the top speed is 1060 px/s and the lone particles
@@ -183,7 +190,7 @@ export const defaultWobbleMax = fnstate(computeDefaultWobbleMax())
 export const defaultSettle = 1
 // Viscosity: how much of the approach between neighbouring particles is taken away per second
 // (the paper's sigma). Needs Wobble above 0 to do anything. 0 is the lamp as tuned.
-export const defaultViscosity = 32
+export const defaultViscosity = fnstate(computeDefaultViscosity())
 // The most a relaxation step may move a particle, in radii (the check that keeps a high Density
 // from flying apart); which particles count as skin and take the kick, as a fraction of the mean
 // density (300: all of them, the paper's own velocity); and the margin from a side wall within
@@ -229,12 +236,12 @@ export const particleSize = fnstate(defaultParticleSize())
 export const stir = fnstate(defaultStir)
 export const conduction = fnstate(defaultConduction())
 export const pace = fnstate(defaultPace)
-export const turbulence = fnstate(defaultTurbulence)
-export const drifters = fnstate(defaultDrifters)
+export const turbulence = fnstate(defaultTurbulence())
+export const drifters = fnstate(defaultDrifters())
 export const heatSpots = fnstate(defaultHeatSpots())
 export const cupDepth = fnstate(defaultCupDepth)
 export const wobble = fnstate(defaultWobble)
-export const wobbleKick = fnstate(defaultWobbleKick)
+export const wobbleKick = fnstate(defaultWobbleKick())
 export const wobbleMax = fnstate(defaultWobbleMax())
 export const smooth = fnstate(defaultSmooth())
 // Blend: the blur on the colour inside the lava, separate from Smooth, which is the blur on the
@@ -244,7 +251,7 @@ export const smooth = fnstate(defaultSmooth())
 export const defaultBlend = fnstate(computeDefaultBlend(window.innerWidth, window.innerHeight))
 export const blend = fnstate(defaultBlend())
 export const settle = fnstate(defaultSettle)
-export const viscosity = fnstate(defaultViscosity)
+export const viscosity = fnstate(defaultViscosity())
 export const reach = fnstate(defaultReach())
 export const skin = fnstate(defaultSkin)
 export const wall = fnstate(defaultWall)
@@ -369,17 +376,17 @@ const defaults = () => ({
   stir: defaultStir,
   conduction: defaultConduction(),
   pace: defaultPace,
-  turbulence: defaultTurbulence,
-  drifters: defaultDrifters,
+  turbulence: defaultTurbulence(),
+  drifters: defaultDrifters(),
   heatSpots: defaultHeatSpots(),
   cupDepth: defaultCupDepth,
   wobble: defaultWobble,
-  wobbleKick: defaultWobbleKick,
+  wobbleKick: defaultWobbleKick(),
   wobbleMax: defaultWobbleMax(),
   smooth: defaultSmooth(),
   blend: defaultBlend(),
   settle: defaultSettle,
-  viscosity: defaultViscosity,
+  viscosity: defaultViscosity(),
   reach: defaultReach(),
   skin: defaultSkin,
   wall: defaultWall,
@@ -422,7 +429,11 @@ export const applySettings = saved => {
 
 export const resetSettings = () => applySettings(defaults())
 
-const STORAGE_KEY = 'lavalamp.app-settings'
+// Saves are kept per backend: the two lamps are tuned apart, and one store served both until
+// 2026-11-01, when a Save from the CPU tab came back as the GPU lamp's settings (Robert: "seems
+// like you replaced the gpu defaults with the cpu settings?"). The GPU keeps the old key, so
+// GPU saves from before still load; the CPU starts fresh.
+const storageKey = () => cpu() ? 'lavalamp.app-settings-cpu' : 'lavalamp.app-settings'
 
 // The views: ways of looking at the lamp, and the touch mode and sound bed. Not part of a save or
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
@@ -452,12 +463,12 @@ const loadViews = () => {
 // Views first, then saved settings, then a share link on top if the URL has one.
 export const loadSavedSettings = () => {
   loadViews()
-  const saved = localStorage.getItem(STORAGE_KEY)
+  const saved = localStorage.getItem(storageKey())
   if (saved) {
     try {
       applySettings(JSON.parse(saved))
     } catch {
-      localStorage.removeItem(STORAGE_KEY)
+      localStorage.removeItem(storageKey())
     }
   }
   const query = new URLSearchParams(window.location.search)
@@ -495,7 +506,7 @@ export const resetAndReload = () => {
 // reload (Robert: "saving settings does not survive a reload anymore"). ?cpu, ?profile and the
 // rest stay.
 export const saveSettings = () => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettings()))
+  localStorage.setItem(storageKey(), JSON.stringify(getSettings()))
   const query = new URLSearchParams(window.location.search)
   if (query.has('shared') || query.has('seed')) {
     query.delete('shared')
@@ -505,7 +516,7 @@ export const saveSettings = () => {
   }
 }
 
-export const clearSavedSettings = () => localStorage.removeItem(STORAGE_KEY)
+export const clearSavedSettings = () => localStorage.removeItem(storageKey())
 
 export const shareLink = () =>
   `${window.location.origin}${window.location.pathname}?shared=${btoa(JSON.stringify(getSettings()))}`

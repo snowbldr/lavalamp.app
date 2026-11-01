@@ -72,8 +72,8 @@ export async function start () {
   const radius = computeDefaultInteractionRadius(W, H)
   const params = {
     particleCount: computeDefaultParticleCount(W, H), interactionRadius: radius, stiffness: computeDefaultPull(W, H) / REST_DENSITY, stiffnessNear: computeDefaultStiffnessNear(W, H), restDensity: REST_DENSITY,
-    maxTemp: computeDefaultMaxTemp(H), gravity: computeDefaultGravity(H), particleSize: computeDefaultParticleSize(W, H), stir: defaultStir, conduction: defaultConduction(), turbulence: defaultTurbulence, drifters: defaultDrifters, heatSpots: defaultHeatSpots(), cupDepth: defaultCupDepth,
-    wobble: defaultWobble, wobbleKick: defaultWobbleKick, wobbleMax: defaultWobbleMax(), settle: defaultSettle, viscosity: defaultViscosity, reach: device ? GPU_REACH : 1, kickBelow: defaultSkin, wallPush: defaultWall,
+    maxTemp: computeDefaultMaxTemp(H), gravity: computeDefaultGravity(H), particleSize: computeDefaultParticleSize(W, H), stir: defaultStir, conduction: defaultConduction(), turbulence: defaultTurbulence(), drifters: defaultDrifters(), heatSpots: defaultHeatSpots(), cupDepth: defaultCupDepth,
+    wobble: defaultWobble, wobbleKick: defaultWobbleKick(), wobbleMax: defaultWobbleMax(), settle: defaultSettle, viscosity: defaultViscosity(), reach: device ? GPU_REACH : 1, kickBelow: defaultSkin, wallPush: defaultWall,
     elementHeat: defaultElementHeat(), elementLife: defaultElementLife(), elementRate: defaultElementRate(), elementLifeScale: defaultElementLifeScale, elementCore: defaultElementCore(), floorHeat: defaultFloorHeat, floorGlow: defaultFloorGlow,
     spawnArea: 14 * (radius / 20) * (radius / 20), touchHeat: 48, capacity: GPU_PARTICLES
   }
