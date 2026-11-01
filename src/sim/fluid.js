@@ -72,7 +72,9 @@ export function reuseNeighbours (state, list, start, end, i, radius) {
 
 // Equations 1, 2, 4 and 5. Density uses the quadratic kernel, near density the cubic one.
 // Pressure goes negative below the rest density, which is what pulls particles together and
-// gives the blobs their surface tension.
+// gives the blobs their surface tension. The lamp runs far below rest (a kernel density near 7
+// on the CPU grain and 25 on the GPU's, against 400), so the pressure is in practice a constant
+// pull of minus stiffness times restDensity; the settings expose that product as one knob, Pull.
 export function updatePressure (state, i, neighbours, stiffness, stiffnessNear, restDensity) {
   let density = 0
   let nearDensity = 0

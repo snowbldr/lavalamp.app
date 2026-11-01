@@ -63,8 +63,20 @@ export const computeDefaultSmooth = (width, height) => cpu() ? 0 : Math.round(7 
 // against its own spacing, soft and slow (the CPU lamp on a desktop window). Scaling both with
 // the radius keeps each step's move the same fraction of the spacing. At scale 1, which is every
 // phone and every desktop window on the GPU, nothing changes.
-// CPU: Stiff 6 and Near 2161 at Robert's window (scale 3.45), 1.74 and 623.5 per unit of scale (Stiff was 5.8 per unit, 20).
-export const computeDefaultStiffness = (width, height) => Math.round((cpu() ? 1.74 : 7.5) * liquidScale(width, height) * 10) / 10
+// Pull is Stiff times Density folded into one knob (2026-11-01). Measured on the CPU solver at
+// Robert's window: the pool's kernel density sits near 6.6 (the GPU's near 25) against a rest
+// density of 406 (360.1), so pressure is always about minus Stiff times Density and never
+// changes sign; Stiff 10.4 with Density 203, 2.6 with 812 and 5.2 with 406 all gave a spacing
+// of 7.6 to 7.7 px. Two knobs that moved the same thing (Robert: "it makes tuning much more
+// difficult... yeah, let's combine them"). The solver still takes stiffness and restDensity:
+// restDensity is pinned at REST_DENSITY and stiffness is Pull over it, which keeps the pull
+// within 0.7% of the old lamps on both backends. GPU 2700 per unit of scale (was Stiff 7.5
+// times Density 360.1), CPU 706 (1.74 times 406; Robert's fourth link at scale 3: 5.2 times 406).
+// Old saves and links that carry stiffness and restDensity are folded on load (applySettings).
+export const REST_DENSITY = 400
+export const computeDefaultPull = (width, height) => Math.round((cpu() ? 706 : 2700) * liquidScale(width, height))
+const legacyStiffness = (width, height) => Math.round((cpu() ? 1.74 : 7.5) * liquidScale(width, height) * 10) / 10
+const legacyRestDensity = () => cpu() ? 406 : 360.1
 export const computeDefaultStiffnessNear = (width, height) => Math.round((cpu() ? 647 : 1101) * liquidScale(width, height)) // CPU 647 per unit: Robert's Near 1941 at scale 3 (his fourth link, the "new baseline for cpu")
 // Blend 0 (Robert, once the heat table had 2048 steps: "set default blend to 0. not sure we even need
 // blend anymore, it's insanely smooth at 2048"); the bands it blurred away were the 48 step table.
@@ -73,7 +85,6 @@ export const computeDefaultBlend = (width, height) => 0
 // lava that never gets much more than one and three quarter gravities buoyant (was 25038, 18470 at 900).
 export const computeDefaultMaxTemp = height => Math.round((cpu() ? 881 : 5030) * height / 900)
 // Density and Conduct are fixed on the GPU and Robert's CPU link has them at 406 and 0.08.
-export const computeDefaultRestDensity = () => cpu() ? 406 : 360.1
 export const computeDefaultConduction = () => cpu() ? 0.06 : 0.07 // CPU 0.06 (was 0.04), Robert's fourth link
 // Heat (the pulse period) and Element (an element's heat) by backend: Robert's third link has Heat
 // 33 and Element 69. Element stays at his 69: with Cap 1.5 and Lift 2, Element 8, 20, 40 and 69 all
@@ -128,12 +139,11 @@ export const defaultHeatColors = {
 // Robert's picks for the arrows: blue for the slowest flow through red for the fastest.
 export const defaultFlowSlow = { r: 0, g: 55, b: 255 }
 export const defaultFlowFast = { r: 255, g: 0, b: 0 }
-// Stiff 7.5 against Density 360: the pull on every particle is close to their product, a constant
-// cohesion, and Near is what holds the particles apart (Robert: "Ok, big finding, stiff has a
-// relationship with density"). The old liquid was 4000, 25000 and 4.25 at radius 60.
-export const defaultStiffness = fnstate(computeDefaultStiffness(window.innerWidth, window.innerHeight))
+// Pull, once Stiff 7.5 against Density 360: the pull on every particle is close to their product,
+// a constant cohesion, and Near is what holds the particles apart (Robert: "Ok, big finding,
+// stiff has a relationship with density"). The old liquid was 4000, 25000 and 4.25 at radius 60.
+export const defaultPull = fnstate(computeDefaultPull(window.innerWidth, window.innerHeight))
 export const defaultStiffnessNear = fnstate(computeDefaultStiffnessNear(window.innerWidth, window.innerHeight))
-export const defaultRestDensity = fnstate(computeDefaultRestDensity()) // 360.1 on the GPU, see computeDefaultRestDensity
 // Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
 export const defaultStir = 20
 // Conduction was 0.005 with a flat floor, where 0.02 was the top of the slider and a lamp that never
@@ -211,9 +221,8 @@ export const flowSlow = fnstate({ ...defaultFlowSlow })
 export const flowFast = fnstate({ ...defaultFlowFast })
 export const interactionRadius = fnstate(defaultInteractionRadius())
 export const gravityStrength = fnstate(defaultGravityStrength())
-export const stiffness = fnstate(defaultStiffness())
+export const pull = fnstate(defaultPull())
 export const stiffnessNear = fnstate(defaultStiffnessNear())
-export const restDensity = fnstate(defaultRestDensity())
 export const maxTemp = fnstate(defaultMaxTemp())
 export const particleCount = fnstate(defaultParticleCount())
 export const particleSize = fnstate(defaultParticleSize())
@@ -335,7 +344,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, seed }
+const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow'])
 
@@ -350,9 +359,8 @@ const defaults = () => ({
   flowFast: { ...defaultFlowFast },
   interactionRadius: defaultInteractionRadius(),
   gravityStrength: defaultGravityStrength(),
-  stiffness: defaultStiffness(),
+  pull: defaultPull(),
   stiffnessNear: defaultStiffnessNear(),
-  restDensity: defaultRestDensity(),
   maxTemp: defaultMaxTemp(),
   particleCount: defaultParticleCount(),
   particleSize: defaultParticleSize(),
@@ -394,6 +402,13 @@ export const getSettings = () => {
 // Missing or unusable keys leave the current value alone, so old saved settings and partial share
 // links still load. Numbers are coerced because older versions saved slider values as strings.
 export const applySettings = saved => {
+  // Saves and links from before Pull carry stiffness and restDensity: fold them into Pull, one
+  // or both (a lone one takes the default of its day for the other).
+  if (!(Number(saved.pull) > 0) && (Number(saved.stiffness) > 0 || Number(saved.restDensity) > 0)) {
+    const s = Number(saved.stiffness) > 0 ? Number(saved.stiffness) : legacyStiffness(window.innerWidth, window.innerHeight)
+    const d = Number(saved.restDensity) > 0 ? Number(saved.restDensity) : legacyRestDensity()
+    saved = { ...saved, pull: Math.round(s * d) }
+  }
   for (const [key, state] of Object.entries(colorSettings)) {
     if (saved[key]) state({ ...saved[key] })
   }

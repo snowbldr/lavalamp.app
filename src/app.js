@@ -22,16 +22,15 @@ import {
   computeDefaultInteractionRadius,
   computeDefaultParticleSize,
   computeDefaultSmooth,
-  computeDefaultStiffness,
+  computeDefaultPull,
   computeDefaultStiffnessNear,
-  defaultStiffness,
+  defaultPull,
   defaultStiffnessNear,
+  REST_DENSITY,
   computeDefaultBlend,
   defaultBlend,
   setBackend,
-  computeDefaultRestDensity,
   computeDefaultConduction,
-  defaultRestDensity,
   defaultConduction,
   computeDefaultReserve,
   defaultReserve,
@@ -89,7 +88,7 @@ import {
   pace,
   particleCount,
   particleSize,
-  restDensity,
+  pull,
   showFlow,
   showCups,
   sound,
@@ -100,7 +99,6 @@ import {
   settle,
   smooth,
   blend,
-  stiffness,
   stiffnessNear,
   stir,
   touchMode,
@@ -146,9 +144,9 @@ export async function start () {
   const params = {}
   mirror(particleCount, params, 'particleCount', Math.trunc)
   mirror(interactionRadius, params, 'interactionRadius')
-  mirror(stiffness, params, 'stiffness')
+  params.restDensity = REST_DENSITY // Pull is Stiff times Density; see computeDefaultPull
+  mirror(pull, params, 'stiffness', v => v / REST_DENSITY)
   mirror(stiffnessNear, params, 'stiffnessNear')
-  mirror(restDensity, params, 'restDensity')
   mirror(maxTemp, params, 'maxTemp')
   mirror(gravityStrength, params, 'gravity')
   mirror(particleSize, params, 'particleSize')
@@ -268,7 +266,6 @@ export async function start () {
     lamp.style.transform = `rotate(${turns * 90}deg)`
     followWindow(defaultParticleCount, particleCount, computeDefaultParticleCount(width, height))
     followWindow(defaultMaxTemp, maxTemp, computeDefaultMaxTemp(height))
-    followWindow(defaultRestDensity, restDensity, computeDefaultRestDensity())
     followWindow(defaultConduction, conduction, computeDefaultConduction())
     followWindow(defaultReserve, reserve, computeDefaultReserve())
     followWindow(defaultLift, lift, computeDefaultLift())
@@ -282,7 +279,7 @@ export async function start () {
     followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
     followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))
     followWindow(defaultSmooth, smooth, computeDefaultSmooth(width, height))
-    followWindow(defaultStiffness, stiffness, computeDefaultStiffness(width, height))
+    followWindow(defaultPull, pull, computeDefaultPull(width, height))
     followWindow(defaultStiffnessNear, stiffnessNear, computeDefaultStiffnessNear(width, height))
     followWindow(defaultBlend, blend, computeDefaultBlend(width, height))
   }
