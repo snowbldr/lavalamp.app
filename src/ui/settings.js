@@ -95,9 +95,11 @@ export const computeDefaultElementHeat = () => cpu() ? 7 : 8 // CPU 7 (final CPU
 // Burn, Pulses and Core by backend as well, from the same link: 7.5 s, 3 and 0.08 on the CPU.
 export const computeDefaultElementLife = () => cpu() ? 7 : 15 // CPU 7 (final CPU settings; was 7.5)
 // Turb, Eddies, Kick and Viscosity became backend-aware with Robert's final CPU settings
-// (Turb 150, Eddies 6, Kick 10, Viscosity 9 against the GPU's 45, 2, 6, 32). GPU unchanged.
-export const computeDefaultTurbulence = () => cpu() ? 150 : 45
-export const computeDefaultDrifters = () => cpu() ? 6 : 2
+// (Turb 150, Eddies 6, Kick 10, Viscosity 9 against the GPU's 45, 2, 6, 32). Then Turb 150 and
+// Eddies 6 went to the GPU too (Robert, 2026-11-01: "also make turb 150 and eddies 6 default on
+// gpu version"); they stay as functions beside the others.
+export const computeDefaultTurbulence = () => 150
+export const computeDefaultDrifters = () => 6
 export const computeDefaultWobbleKick = () => cpu() ? 10 : 6
 export const computeDefaultViscosity = () => cpu() ? 9 : 32
 export const computeDefaultElementRate = () => cpu() ? 3 : 4
