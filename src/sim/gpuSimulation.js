@@ -102,6 +102,7 @@ struct Params {
   relaxCap: f32,
   gridTop: f32,
   fingerOverride: f32,
+  liftCap: f32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -307,6 +308,12 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     let o = P.elementsAt + e * 8u;
     let ex = WLD[o]; let er = WLD[o + 1u]; let eh = WLD[o + 2u]; let heat = WLD[o + 3u];
     if (heat <= 0.0 || er <= 0.0 || eh <= 0.0) { continue; }
+    let pot = WLD[o + 4u]; // the floor bottle this element is, as a HOME value, or -1
+    if (F[HOME(i)] >= 0.0) {
+      // Lava in a pot: its own element's heat in full, wherever it sits (simulation.js elementHeat).
+      if (F[HOME(i)] == pot) { t = min(P.maxTemp, t + heat); }
+      continue;
+    }
     let dx = (p.x - ex) * er / eh;
     let d2 = (dx * dx + fromFloor * fromFloor) / (er * er);
     if (d2 < 4.0) { t = min(P.maxTemp, t + heat * exp(-d2)); }
@@ -354,7 +361,7 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
   // Buoyancy goes through the inertia; the stirring (roll, eddies, fingers, impulse) moves the
   // lava at full strength this step, and under a finger or inside a strong eddy the carried
   // velocity gives way to the drift (no memory there), as simulation.js STIR_OVERRIDE.
-  let drift = vec2f(0.0, P.gravity - t);
+  let drift = vec2f(0.0, max(P.gravity - t, -P.liftCap * P.gravity));
   var v = V[VEL(i)];
   if (P.wobble > 0.0) { v += (drift - v) * max(min(1.0, P.dt / P.wobble), stirred); } else { v = drift; }
   V[VEL(i)] = v;
@@ -655,7 +662,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 48 // the Params struct, 48 fields, 192 bytes
+const PARAM_FLOATS = 52 // the Params struct, 49 fields, padded to 208 bytes (a uniform's size is a multiple of 16)
 const POWER_COLUMNS = 256
 const MAX_ELEMENTS = 32
 const ELEMENTS_AT = POWER_COLUMNS
@@ -901,6 +908,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[45] = RELAX_CAP
     pf[46] = gridTop
     pf[47] = STIR_OVERRIDE.finger
+    pf[48] = params.liftCap > 0 ? params.liftCap : 10
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
@@ -1046,6 +1054,7 @@ export function createGpuLamp ({ device, width, height, params }) {
       if (n >= MAX_ELEMENTS || !(el.glow > 0) || !(el.heat > 0)) continue
       const o = ELEMENTS_AT + n * 8
       floats[o] = el.x; floats[o + 1] = el.radius; floats[o + 2] = el.halfWidth; floats[o + 3] = el.heat * el.glow
+      floats[o + 4] = el.pot >= 0 ? bottles.length + el.pot : -1 // HOME counts the ceiling bottles first
       n++
     }
     let gridCols = Math.floor(w / FLOW_CELL) + 2

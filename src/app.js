@@ -36,6 +36,9 @@ import {
   computeDefaultReserve,
   defaultReserve,
   reserve,
+  lift,
+  computeDefaultLift,
+  defaultLift,
   pixels,
   backendLabel,
   GPU_PARTICLES,
@@ -144,6 +147,7 @@ export async function start () {
   mirror(heatSpots, params, 'heatSpots')
   mirror(cupDepth, params, 'cupDepth')
   mirror(reserve, params, 'reserveCap')
+  mirror(lift, params, 'liftCap')
   mirror(wobble, params, 'wobble')
   mirror(settle, params, 'settle')
   mirror(viscosity, params, 'viscosity')
@@ -255,6 +259,7 @@ export async function start () {
     followWindow(defaultRestDensity, restDensity, computeDefaultRestDensity())
     followWindow(defaultConduction, conduction, computeDefaultConduction())
     followWindow(defaultReserve, reserve, computeDefaultReserve())
+    followWindow(defaultLift, lift, computeDefaultLift())
     followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
     followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
     followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))

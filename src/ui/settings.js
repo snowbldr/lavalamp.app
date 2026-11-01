@@ -83,6 +83,13 @@ export const reserve = fnstate(defaultReserve())
 // resolution within one megapixel, which makes a Size under 4 a single pixel dot, so the knob
 // stopped doing anything there (Robert: "it seems like there's a floor on particle size,
 // anything under 4 doesn't change anything on cpu"). Not saved: a way of drawing, not a look.
+// Lift: the most buoyancy a particle may carry, in gravities; 10 is no cap (see LIFT_CAP in
+// simulation.js). CPU default 2: at the coarse grain a particle heated at the line outran the
+// liquid (3.5 gravities measured at Robert's link) and sprayed into the ceiling bottles ("it
+// forms like little spouts that just spray"). GPU none, its look untouched. Saved and shared.
+export const computeDefaultLift = () => cpu() ? 2 : 10
+export const defaultLift = fnstate(computeDefaultLift())
+export const lift = fnstate(defaultLift())
 export const defaultPixels = 1
 export const pixels = fnstate(defaultPixels)
 // Which lamp is running, for the panel (Robert: "we should display which backend is being used
@@ -310,7 +317,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, seed }
+const numberSettings = { interactionRadius, gravityStrength, stiffness, stiffnessNear, restDensity, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow'])
 
@@ -356,6 +363,7 @@ const defaults = () => ({
   floorHeat: defaultFloorHeat,
   floorGlow: defaultFloorGlow,
   reserve: defaultReserve(),
+  lift: defaultLift(),
   seed: randomSeed()
 })
 

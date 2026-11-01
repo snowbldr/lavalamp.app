@@ -183,6 +183,10 @@ const WOBBLE_MAX = 2 // was 1
 // cup goes below it, lit on the same clocks, and heating the lava hidden in the cup as well as
 // the lava above it, so a whole cup's worth warms together.
 const ELEMENTS_ARE_CUPS = true
+// Lift: the most buoyancy a particle may carry, in gravities. Past it a hot particle at the
+// line (Element 69, Max Temp 25038 on Robert's CPU link) left the liquid alone at three and a
+// half gravities, a spray of single dots. 10 is no cap; params.liftCap, the Lift knob.
+const LIFT_CAP = 10
 // A lit cup heats a core at its centre ELEMENT_CORE of the shorter side wide (half width), the
 // same in every cup, not the whole cup: heating the whole width made a big cup's middle go
 // buoyant all at once and blast, with two streams following at the sides where the heat was
@@ -709,7 +713,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1], elementRate = ELEMENT_RATE, elementLifeScale = ELEMENT_LIFE_SCALE, elementCore = ELEMENT_CORE, floorHeat = SPOT_BASE, floorGlow = SPOT_GLOW } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1], elementRate = ELEMENT_RATE, elementLifeScale = ELEMENT_LIFE_SCALE, elementCore = ELEMENT_CORE, floorHeat = SPOT_BASE, floorGlow = SPOT_GLOW, liftCap = LIFT_CAP } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchRadiusNow = touchRadius
@@ -811,7 +815,16 @@ export function createSimulation ({ width, height, params }) {
     }
     heaterPower = powerAt
     // The heat a lit element delivers to a point: its heat at the centre, Gaussian over its radius.
-    const elementHeat = (px, py) => {
+    // Lava inside a pot gets its own element's heat in full, wherever it sits in the pot: measured
+    // from the line, the Gaussian left the bottom of a pot at 7% of the heat (profiles under a
+    // lit element at Robert's grain and the lab's both read 800 at the line and 500 at 200 px
+    // deep), and Robert: "It's supposed to heat the whole contents of the pot, but it looks like
+    // it's only heating at the line across".
+    const elementHeat = (px, py, pot) => {
+      if (pot >= 0 && ELEMENTS_ARE_CUPS) {
+        const el = elements[pot]
+        return el && el.glow > 0 ? el.heat * el.glow : 0
+      }
       let heat = 0
       const dy = height - py
       for (const el of elements) {
@@ -847,7 +860,7 @@ export function createSimulation ({ width, height, params }) {
     for (let i = 0; i < alive; i++) {
       temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, heater ? powerAt(x[i]) : 0, HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
       if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || ELEMENTS_ARE_CUPS || y[i] <= height)) {
-        const heat = elementHeat(x[i], y[i])
+        const heat = elementHeat(x[i], y[i], state.home[i])
         if (heat > 0) temp[i] = Math.min(maxTemp, temp[i] + heat)
       }
       if (touching) {
@@ -877,7 +890,7 @@ export function createSimulation ({ width, height, params }) {
       const stirX = bottled ? 0 : fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
       const stirY = bottled ? 0 : fy + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
       const driftX = 0
-      const driftY = gravity - temp[i]
+      const driftY = Math.max(gravity - temp[i], -liftCap * gravity)
       if (wobble > 0) {
         // Inertia (Robert, with a video of a real lamp: "it's that snap back effect. and the
         // stretchiness and jiggle. we don't have those... This is a miss in our physics
@@ -1033,7 +1046,7 @@ export function createSimulation ({ width, height, params }) {
         const core = Math.min(cupWidth / 2, ELEMENT_CORE * shorter)
         // The core width and the life scale are drawn at each lighting from the params; the
         // cup's area over the smallest cup's is what the life scale is capped against.
-        elements.push({ fx, fr, weight, cupHalf: cup.fw / 2, coreFraction: core / width, areaRatio: (cupWidth * cupWidth) / (smallest * smallest), heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
+        elements.push({ pot: elements.length, fx, fr, weight, cupHalf: cup.fw / 2, coreFraction: core / width, areaRatio: (cupWidth * cupWidth) / (smallest * smallest), heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
       }
       return
     }
@@ -1045,7 +1058,7 @@ export function createSimulation ({ width, height, params }) {
       // the middle more than ones by the walls (the same lean as the old heat spots).
       const d = (fx - 0.5) / SPOT_SPREAD
       const weight = (0.25 + 0.75 * Math.exp(-d * d / 2)) * ELEMENT_RADIUS[0] / fr
-      elements.push({ fx, fr, weight, heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
+      elements.push({ pot: -1, fx, fr, weight, heat: 0, start: 0, life: 0, next: 0, fresh: true, x: 0, radius: 0, halfWidth: 0, glow: 0 })
     }
   }
 
