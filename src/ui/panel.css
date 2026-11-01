@@ -116,9 +116,17 @@
   position: relative; width: 34px; height: 34px; border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.35); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5); cursor: pointer;
 }
-.swatch-well input[type=color] {
-  position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0;
-}
+.swatch-well:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The lamp's own colour picker, under the row of the swatch clicked */
+.picker { margin-top: 8px; padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); }
+.picker-title { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(236, 236, 236, 0.6); margin-bottom: 6px; }
+.picker-sv { position: relative; height: 110px; border-radius: 6px; cursor: crosshair; touch-action: none; }
+.picker-hue { position: relative; height: 12px; margin-top: 10px; border-radius: 6px; cursor: pointer; touch-action: none; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.picker-dot { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); transform: translate(-50%, -50%); pointer-events: none; }
+.picker-row { margin-top: 8px; }
+.picker-from { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: rgba(236, 236, 236, 0.7); flex-wrap: wrap; }
+.picker-from-label { margin-right: 2px; }
+.picker-from-well { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); cursor: pointer; padding: 0; }
 /* The hex of the last hovered or pressed swatch, to copy from or paste into */
 .swatch-hexrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
 .swatch-hex-name { min-width: 36px; }

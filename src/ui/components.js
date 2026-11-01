@@ -177,20 +177,117 @@ let carried = null // the swatch a pointer went down on
 export const swatch = (title, id, state) => {
   const el = div(
     { class: 'swatch' },
-    div(
-      { class: 'swatch-well', style: { background: state.bindStyle(() => rgbToHex(state())) }, onpointerdown: () => { carried = el } },
-      input({
-        id,
-        type: 'color',
-        title,
-        value: state.bindAttr(() => rgbToHex(state())),
-        oninput: e => state(hexToRgb(e.target.value))
-      })
-    ),
-    label({ for: id }, title)
+    div({
+      id,
+      class: 'swatch-well',
+      role: 'button',
+      tabindex: 0,
+      title,
+      'aria-label': `${title} colour`,
+      style: { background: state.bindStyle(() => rgbToHex(state())) },
+      onpointerdown: () => { carried = el },
+      onclick: () => picker(el),
+      onkeydown: e => { if (e.key === 'Enter' || e.key === ' ') { picker(el); e.preventDefault() } }
+    }),
+    label({ for: id, onclick: () => picker(el) }, title)
   )
   el.swatchState = state
   el.swatchTitle = title
+  return el
+}
+
+// The colour picker, the lamp's own rather than the browser's (Robert, 2026-11-01: "can we make a
+// custom js color picker or import one? I really want the buttons"): a saturation and value
+// square, a hue strip, the hex, and a From row of the other swatches in the same row, one click
+// to take a colour from any of them, for stepping a gradient along. It opens under the row of the
+// swatch clicked and closes on a click anywhere else or Escape.
+const rgbToHsv = ({ r, g, b }) => {
+  r /= 255; g /= 255; b /= 255
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b); const d = max - min
+  let h = 0
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d) % 6
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h = (h * 60 + 360) % 360
+  }
+  return { h, s: max > 0 ? d / max : 0, v: max }
+}
+const hsvToRgb = (h, s, v) => {
+  const c = v * s; const x = c * (1 - Math.abs((h / 60) % 2 - 1)); const m = v - c
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x]
+  return { r: Math.round((r + m) * 255), g: Math.round((g + m) * 255), b: Math.round((b + m) * 255) }
+}
+let openPicker = null
+const closePicker = () => {
+  if (!openPicker) return
+  openPicker.remove()
+  openPicker = null
+  document.removeEventListener('pointerdown', pickerOutside, true)
+  document.removeEventListener('keydown', pickerEscape, true)
+}
+function pickerOutside (e) { if (openPicker && !openPicker.contains(e.target) && !e.target.closest('.swatch')) closePicker() }
+function pickerEscape (e) { if (e.key === 'Escape') closePicker() }
+export const picker = sw => {
+  const reopen = openPicker && openPicker.swatch === sw
+  closePicker()
+  if (reopen) return
+  const state = sw.swatchState
+  let { h, s, v } = rgbToHsv(state())
+  const svDot = div({ class: 'picker-dot' })
+  const hueDot = div({ class: 'picker-dot' })
+  const hex = input({
+    class: 'swatch-hex picker-hex',
+    type: 'text',
+    maxlength: 7,
+    spellcheck: false,
+    'aria-label': `${sw.swatchTitle} hex`,
+    onfocus: e => e.target.select(),
+    oninput: e => {
+      const t = e.target.value.trim()
+      if (/^#?[0-9a-fA-F]{6}$/.test(t)) { state(hexToRgb(t.startsWith('#') ? t : '#' + t)); ({ h, s, v } = rgbToHsv(state())); paint() }
+    }
+  })
+  const paint = () => {
+    sv.style.background = `linear-gradient(to top, #000, rgba(0, 0, 0, 0)), linear-gradient(to right, #fff, hsl(${h} 100% 50%))`
+    svDot.style.left = `${s * 100}%`
+    svDot.style.top = `${(1 - v) * 100}%`
+    hueDot.style.left = `${h / 360 * 100}%`
+    if (document.activeElement !== hex) hex.value = rgbToHex(state())
+  }
+  const set = () => { state(hsvToRgb(h, s, v)); paint() }
+  // A straight drag on either strip: the pointer is captured so the drag may leave the box.
+  const dragger = (el, onAt) => {
+    let down = false
+    const at = e => { const r = el.getBoundingClientRect(); onAt(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), Math.max(0, Math.min(1, (e.clientY - r.top) / r.height))) }
+    el.onpointerdown = e => { down = true; try { el.setPointerCapture(e.pointerId) } catch (err) {} at(e); e.preventDefault() }
+    el.onpointermove = e => { if (down) at(e) }
+    el.onpointerup = el.onpointercancel = () => { down = false }
+  }
+  const sv = div({ class: 'picker-sv' }, svDot)
+  const hue = div({ class: 'picker-hue' }, hueDot)
+  dragger(sv, (fx, fy) => { s = fx; v = 1 - fy; set() })
+  dragger(hue, fx => { h = Math.min(359.99, fx * 360); set() })
+  const others = [...sw.parentElement.children].filter(o => o !== sw && o.swatchState)
+  const from = div(
+    { class: 'picker-from' },
+    span({ class: 'picker-from-label' }, 'From'),
+    ...others.map(o => button({
+      type: 'button',
+      class: 'picker-from-well',
+      title: `Take ${o.swatchTitle}'s colour`,
+      'aria-label': `Take ${o.swatchTitle}'s colour`,
+      style: { background: o.swatchState.bindStyle(() => rgbToHex(o.swatchState())) },
+      onclick: () => { state({ ...o.swatchState() }); ({ h, s, v } = rgbToHsv(state())); paint() }
+    }))
+  )
+  const el = div({ class: 'picker' }, div({ class: 'picker-title' }, sw.swatchTitle), sv, hue, div({ class: 'picker-row' }, hex), from)
+  el.swatch = sw
+  sw.closest('.swatch-row').appendChild(el)
+  openPicker = el
+  paint()
+  document.addEventListener('pointerdown', pickerOutside, true)
+  document.addEventListener('keydown', pickerEscape, true)
   return el
 }
 document.addEventListener('pointerup', e => {
