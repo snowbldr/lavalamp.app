@@ -146,7 +146,12 @@ export const defaultWobble = 0.87
 // How much of the pressure step's move a particle carries on as velocity, and the most speed it
 // may carry, in gravities.
 export const defaultWobbleKick = 6
-export const defaultWobbleMax = 3.4
+// CPU 1.5: at the coarse grain the kick launched single particles out of the pot necks at the
+// cap, 3.4 gravities (2400 px/s measured at Robert's link, a spray of dots: "it forms like
+// little spouts that just spray"); at 1.5 the top speed is 1060 px/s and the lone particles
+// 0 to 3 a sample against 2 to 12. Kick 3 alone did nothing (0 to 18). GPU stays 3.4.
+export const computeDefaultWobbleMax = () => cpu() ? 1.5 : 3.4
+export const defaultWobbleMax = fnstate(computeDefaultWobbleMax())
 // Edge smoothing: radius in px of the blur on the density field before the metaball threshold,
 // which rounds off the bumps of the individual particles along every edge. 0 is the lamp as
 // drawn before it existed; WebGL only.
@@ -208,7 +213,7 @@ export const heatSpots = fnstate(defaultHeatSpots)
 export const cupDepth = fnstate(defaultCupDepth)
 export const wobble = fnstate(defaultWobble)
 export const wobbleKick = fnstate(defaultWobbleKick)
-export const wobbleMax = fnstate(defaultWobbleMax)
+export const wobbleMax = fnstate(defaultWobbleMax())
 export const smooth = fnstate(defaultSmooth())
 // Blend: the blur on the colour inside the lava, separate from Smooth, which is the blur on the
 // shape (Robert: "can we separately change the smooth/fuzz factor for the inside and outside of
@@ -347,7 +352,7 @@ const defaults = () => ({
   cupDepth: defaultCupDepth,
   wobble: defaultWobble,
   wobbleKick: defaultWobbleKick,
-  wobbleMax: defaultWobbleMax,
+  wobbleMax: defaultWobbleMax(),
   smooth: defaultSmooth(),
   blend: defaultBlend(),
   settle: defaultSettle,

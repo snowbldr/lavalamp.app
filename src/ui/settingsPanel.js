@@ -274,7 +274,7 @@ export function createSettingsPanel () {
           knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),
           knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity),
           knob('Kick', 'wobble-kick', wobbleKick, { min: 0, max: 10, step: 0.1 }, () => defaultWobbleKick),
-          knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax, v => `${v} g`),
+          knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax(), v => `${v} g`),
           knob('Reach', 'reach', reach, { min: 0.1, max: 2, step: 0.01 }, defaultReach, v => `${Number(v).toFixed(2)} r`),
           knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
           knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
