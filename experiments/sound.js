@@ -13,7 +13,7 @@ import { BEDS, EVENTS, TUNE, createGloop } from '../src/audio/gloop.js'
 import { DECADES, hint, knob, knobs, row, segmented, toggle } from '../src/ui/components.js'
 import { DEFAULTS as SAMPLE_DEFAULTS, SAMPLE_EVENTS, createSamplePlayer } from './samplePlayer.js'
 import {
-  GPU_PARTICLES, GPU_REACH, setParticleBudget,
+  GPU_PARTICLES, GPU_REACH, setBackend,
   computeDefaultParticleCount, computeDefaultInteractionRadius, computeDefaultParticleSize, computeDefaultSmooth, computeDefaultBlend,
   computeDefaultStiffness, computeDefaultStiffnessNear, computeDefaultMaxTemp, computeDefaultGravity,
   defaultRestDensity, defaultStir, defaultConduction, defaultPace, defaultTurbulence, defaultDrifters, defaultHeatSpots, defaultCupDepth,
@@ -67,12 +67,12 @@ const KNOBS = {
 
 export async function start () {
   const device = await getGpuDevice().catch(() => null)
-  if (device) setParticleBudget(GPU_PARTICLES)
+  if (device) setBackend('gpu')
   seedRandom(SEED)
   const radius = computeDefaultInteractionRadius(W, H)
   const params = {
-    particleCount: computeDefaultParticleCount(W, H), interactionRadius: radius, stiffness: computeDefaultStiffness(W, H), stiffnessNear: computeDefaultStiffnessNear(W, H), restDensity: defaultRestDensity,
-    maxTemp: computeDefaultMaxTemp(H), gravity: computeDefaultGravity(H), particleSize: computeDefaultParticleSize(W, H), stir: defaultStir, conduction: defaultConduction, turbulence: defaultTurbulence, drifters: defaultDrifters, heatSpots: defaultHeatSpots, cupDepth: defaultCupDepth,
+    particleCount: computeDefaultParticleCount(W, H), interactionRadius: radius, stiffness: computeDefaultStiffness(W, H), stiffnessNear: computeDefaultStiffnessNear(W, H), restDensity: defaultRestDensity(),
+    maxTemp: computeDefaultMaxTemp(H), gravity: computeDefaultGravity(H), particleSize: computeDefaultParticleSize(W, H), stir: defaultStir, conduction: defaultConduction(), turbulence: defaultTurbulence, drifters: defaultDrifters, heatSpots: defaultHeatSpots, cupDepth: defaultCupDepth,
     wobble: defaultWobble, wobbleKick: defaultWobbleKick, wobbleMax: defaultWobbleMax, settle: defaultSettle, viscosity: defaultViscosity, reach: device ? GPU_REACH : 1, kickBelow: defaultSkin, wallPush: defaultWall,
     elementHeat: defaultElementHeat, elementLife: defaultElementLife, elementRate: defaultElementRate, elementLifeScale: defaultElementLifeScale, elementCore: defaultElementCore, floorHeat: defaultFloorHeat, floorGlow: defaultFloorGlow,
     spawnArea: 14 * (radius / 20) * (radius / 20), touchHeat: 48, capacity: GPU_PARTICLES
@@ -221,7 +221,7 @@ export async function start () {
     const s = gloop.stats
     const dt = (now - lastReadout) / 1000
     const per = k => ((s[k] - lastStats[k]) / dt).toFixed(1)
-    readout(`agitation ${s.agitation.toFixed(2)}   snap ${per('snap')}  lift ${per('lift')}  land ${per('land')}  pour ${per('pour')}  spill ${per('spill')} /s   pops ${per('pops')}/s   ${s.state}`)
+    readout(`agitation ${s.agitation.toFixed(2)}   snap ${per('snap')}  lift ${per('lift')}  land ${per('land')}  pour ${per('pour')}  spill ${per('spill')}  merge ${per('merge')} /s   pops ${per('pops')}/s   ${s.state}`)
     lastStats = s
     lastReadout = now
   }
@@ -289,7 +289,7 @@ export async function start () {
     }
     shown.temp = sim.state.temp
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view: null })
-    if (gloop.enabled) gloop.update(sim.state, sim.count, W, H, params.gravity, FRAME * pace())
+    if (gloop.enabled) gloop.update(sim.state, sim.count, W, H, params.gravity, FRAME * pace(), params.interactionRadius)
     drawMarks()
     updateReadout()
     requestAnimationFrame(frame)

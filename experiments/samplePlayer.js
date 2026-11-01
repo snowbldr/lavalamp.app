@@ -6,7 +6,7 @@
 // stretch. Stretch that does not change the pitch is granular: the sample is played as short
 // overlapping grains, each at the pitch's rate, stepping through the sample slower or faster
 // than they are laid down; at a stretch of 1 the sample plays straight.
-export const SAMPLE_EVENTS = ['none', 'snap', 'lift', 'land', 'pour', 'spill', 'simmer']
+export const SAMPLE_EVENTS = ['none', 'snap', 'lift', 'land', 'pour', 'spill', 'merge', 'simmer']
 export const DEFAULTS = { gain: 0.8, pitch: 0, stretch: 1, start: 0, end: 1, event: 'none', pitchBySize: -12, stretchBySize: 0, cooldown: 0.15 }
 const GRAIN = 0.08 // seconds
 const OVERLAP = 0.5 // of a grain
