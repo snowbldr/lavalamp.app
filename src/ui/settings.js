@@ -403,7 +403,20 @@ export const resetAndReload = () => {
   window.location.href = window.location.pathname
 }
 
-export const saveSettings = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettings()))
+// Saving also takes ?shared and ?seed out of the address: a share link is applied on top of the
+// saved settings at every load, so with the link still in the address bar a save looked lost on
+// reload (Robert: "saving settings does not survive a reload anymore"). ?cpu, ?profile and the
+// rest stay.
+export const saveSettings = () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(getSettings()))
+  const query = new URLSearchParams(window.location.search)
+  if (query.has('shared') || query.has('seed')) {
+    query.delete('shared')
+    query.delete('seed')
+    const rest = query.toString().replace(/=(?=&|$)/g, '') // ?cpu stays ?cpu, not ?cpu=
+    window.history.replaceState(null, '', `${window.location.pathname}${rest ? '?' + rest : ''}${window.location.hash}`)
+  }
+}
 
 export const clearSavedSettings = () => localStorage.removeItem(STORAGE_KEY)
 
