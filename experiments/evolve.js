@@ -89,7 +89,7 @@ export async function start () {
     if (!population.length) newGeneration()
   }
 
-  // Clips: the picture as a webm from the canvas, the events with wall clock times from the
+  // Clips: the picture as a video from the canvas, the events with wall clock times from the
   // start, and the agitation every tenth of a second.
   const clips = []
   const clipList = div({ class: 'clips' })
@@ -100,7 +100,9 @@ export async function start () {
     await begin()
     if (recording) return
     const stream = canvas.captureStream(30)
-    const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm' })
+    // Safari (iPhone) records mp4, not webm, so take the first container the browser offers.
+    const mimeType = ['video/webm;codecs=vp9', 'video/webm', 'video/mp4'].find(t => MediaRecorder.isTypeSupported(t))
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : {})
     const chunks = []
     recorder.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data) }
     recording = { start: performance.now(), events: [], agitation: [] }
@@ -111,7 +113,7 @@ export async function start () {
     recorder.stop()
     await new Promise(r => { recorder.onstop = r })
     clearInterval(ticker)
-    const clip = { url: URL.createObjectURL(new Blob(chunks, { type: 'video/webm' })), events: recording.events, agitation: recording.agitation, duration: CLIP_SECONDS }
+    const clip = { url: URL.createObjectURL(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' })), events: recording.events, agitation: recording.agitation, duration: CLIP_SECONDS }
     recording = null
     clips.push(clip)
     const k = clips.length - 1
