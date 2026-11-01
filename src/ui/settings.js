@@ -45,12 +45,15 @@ export const setBackend = kind => { backend = kind; budget = kind === 'gpu' ? GP
 const cpu = () => backend === 'cpu'
 const liquidScale = (width, height) => Math.sqrt(Math.max(1, width * height / LAB_AREA_PER_PARTICLE / budget))
 export const computeDefaultParticleCount = (width, height) => Math.min(Math.trunc(width * height / LAB_AREA_PER_PARTICLE), budget)
-export const computeDefaultInteractionRadius = (width, height) => Math.round(20 * liquidScale(width, height))
+// CPU: 10 per unit of scale, half the lab's grain against the budget (Robert's radius 34 where the
+// formula gave 69): finer lava for the same 3000 particles, a smaller pool.
+export const computeDefaultInteractionRadius = (width, height) => Math.round((cpu() ? 10 : 20) * liquidScale(width, height))
 // Size 6 and Smooth 4 at radius 20 are Robert's lamp defaults of 2026-10-31 ("let's make these the
 // new defaults", a share link); the lab draws its own at 3 and 3.
 // Robert, 2026-10-31, with the reservoirs back on the GPU: "size and smooth should default to 3 also" (were 6 and 4).
-// CPU: 1.45 per unit of scale, Robert's Size 5 at radius 69.
-export const computeDefaultParticleSize = (width, height) => Math.round((cpu() ? 1.45 : 3) * liquidScale(width, height))
+// CPU: 0.87 per unit of scale, Robert's Size 3 at radius 34 (his third link, 2026-11-01: "update the
+// default to something nice similar to what I had there but fixed"; was 1.45, Size 5 at radius 69).
+export const computeDefaultParticleSize = (width, height) => Math.round((cpu() ? 0.87 : 3) * liquidScale(width, height))
 // Smooth 7 and Blend 28 (Robert, 2026-10-31, with the two blurs apart: "smooth 7, blend 28"; Smooth was 3).
 // CPU: Smooth 0 (Robert's CPU share link).
 export const computeDefaultSmooth = (width, height) => cpu() ? 0 : Math.round(7 * liquidScale(width, height))
@@ -60,17 +63,22 @@ export const computeDefaultSmooth = (width, height) => cpu() ? 0 : Math.round(7 
 // against its own spacing, soft and slow (the CPU lamp on a desktop window). Scaling both with
 // the radius keeps each step's move the same fraction of the spacing. At scale 1, which is every
 // phone and every desktop window on the GPU, nothing changes.
-// CPU: Stiff 20 and Near 2151 at radius 69 (Robert's CPU share link), 5.8 and 623.5 per unit of scale.
-export const computeDefaultStiffness = (width, height) => Math.round((cpu() ? 5.8 : 7.5) * liquidScale(width, height) * 10) / 10
+// CPU: Stiff 6 and Near 2161 at Robert's window (scale 3.45), 1.74 and 623.5 per unit of scale (Stiff was 5.8 per unit, 20).
+export const computeDefaultStiffness = (width, height) => Math.round((cpu() ? 1.74 : 7.5) * liquidScale(width, height) * 10) / 10
 export const computeDefaultStiffnessNear = (width, height) => Math.round((cpu() ? 623.5 : 1101) * liquidScale(width, height))
 // Blend 0 (Robert, once the heat table had 2048 steps: "set default blend to 0. not sure we even need
 // blend anymore, it's insanely smooth at 2048"); the bands it blurred away were the 48 step table.
 export const computeDefaultBlend = (width, height) => 0
-// CPU: Max Temp 12459 at a 1220 px window (Robert's CPU share link), 9190 at 900.
-export const computeDefaultMaxTemp = height => Math.round((cpu() ? 9190 : 5030) * height / 900)
+// CPU: Max Temp 25038 at a 1220 px window (Robert's third link), 18470 at 900 (was 12459, 9190 at 900).
+export const computeDefaultMaxTemp = height => Math.round((cpu() ? 18470 : 5030) * height / 900)
 // Density and Conduct are fixed on the GPU and Robert's CPU link has them at 406 and 0.08.
 export const computeDefaultRestDensity = () => cpu() ? 406 : 360.1
-export const computeDefaultConduction = () => cpu() ? 0.08 : 0.07
+export const computeDefaultConduction = () => cpu() ? 0.04 : 0.07 // CPU 0.04 (was 0.08), Robert's third link
+// Heat (the pulse period) and Element (an element's heat) by backend: Robert's third link has Heat
+// 33 and Element 69. Element stays at his 69: with Cap 1.5 and Lift 2, Element 8, 20, 40 and 69 all
+// read 0.6 to 1.0 lone particles a sample and all lift lava to the ceiling (two lamp minutes each).
+export const computeDefaultHeatSpots = () => cpu() ? 33 : 15
+export const computeDefaultElementHeat = () => cpu() ? 69 : 8
 // Reserve: how much lava the floor pots may hold, as a multiple of the visible lava; 8 is no
 // cap. The pots are sized by the window, not the grain, so on the CPU at Robert's radius 34
 // they held 14000 particles under 3000 visible (the GPU holds 25000 under 35000) and the step
@@ -134,7 +142,7 @@ export const defaultConduction = fnstate(computeDefaultConduction()) // 0.07 on 
 export const defaultPace = 0.45
 export const defaultTurbulence = 45
 export const defaultDrifters = 2
-export const defaultHeatSpots = 15
+export const defaultHeatSpots = fnstate(computeDefaultHeatSpots())
 // How deep the ceiling cups are, as a fraction of each cup's width. 0 is a flat ceiling.
 // Robert: "I don't want the reservoirs off by default". At the new liquid's spacing they hold a
 // lamp's worth of lava (13500 hidden particles on a desktop window, 70 ms a step against 18
@@ -178,7 +186,7 @@ export const defaultWall = 0
 // the reservoirs, that was never a fix for the fluid behavior"): a lit element's heat per step at
 // its core and how long a lighting burns, the tops of their ranges. The lab's finger, which
 // pinches cleanly, is 48 per step for 3.4 s over 45 px; the elements were 3 to 8 for 5 to 15 s.
-export const defaultElementHeat = 8
+export const defaultElementHeat = fnstate(computeDefaultElementHeat())
 export const defaultElementLife = 15
 // These three follow the window, so they are state too. The app updates them on resize.
 export const defaultParticleCount = fnstate(computeDefaultParticleCount(window.innerWidth, window.innerHeight))
@@ -209,7 +217,7 @@ export const conduction = fnstate(defaultConduction())
 export const pace = fnstate(defaultPace)
 export const turbulence = fnstate(defaultTurbulence)
 export const drifters = fnstate(defaultDrifters)
-export const heatSpots = fnstate(defaultHeatSpots)
+export const heatSpots = fnstate(defaultHeatSpots())
 export const cupDepth = fnstate(defaultCupDepth)
 export const wobble = fnstate(defaultWobble)
 export const wobbleKick = fnstate(defaultWobbleKick)
@@ -226,7 +234,7 @@ export const viscosity = fnstate(defaultViscosity)
 export const reach = fnstate(defaultReach())
 export const skin = fnstate(defaultSkin)
 export const wall = fnstate(defaultWall)
-export const elementHeat = fnstate(defaultElementHeat)
+export const elementHeat = fnstate(defaultElementHeat())
 export const elementLife = fnstate(defaultElementLife)
 // The rest of the heater's numbers (Robert: "the heaters get too hot for too long. We need some
 // knobs to tweak the heater pulses and heat and such"): lightings per Heat interval, how much
@@ -348,7 +356,7 @@ const defaults = () => ({
   pace: defaultPace,
   turbulence: defaultTurbulence,
   drifters: defaultDrifters,
-  heatSpots: defaultHeatSpots,
+  heatSpots: defaultHeatSpots(),
   cupDepth: defaultCupDepth,
   wobble: defaultWobble,
   wobbleKick: defaultWobbleKick,
@@ -360,7 +368,7 @@ const defaults = () => ({
   reach: defaultReach(),
   skin: defaultSkin,
   wall: defaultWall,
-  elementHeat: defaultElementHeat,
+  elementHeat: defaultElementHeat(),
   elementLife: defaultElementLife,
   elementRate: defaultElementRate,
   elementLifeScale: defaultElementLifeScale,

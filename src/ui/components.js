@@ -58,6 +58,9 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
       'aria-valuemin': scale ? scale.bindAttr(() => minOf()) : min,
       'aria-valuemax': scale ? scale.bindAttr(() => maxOf()) : state.bindAttr(() => maxOf()),
       'aria-valuenow': state.bindAttr(),
+      // The hint for this knob is registered after the knob is built (see hint), so the tooltip is
+      // looked up on the first hover.
+      onmouseenter: () => { if (!dial.title) { const text = hintText.get(title); if (text) dial.title = text } },
       'aria-valuetext': state.bindAttr(() => format(state())),
       onpointerdown: e => {
         if (scale && (e.metaKey || e.ctrlKey)) { nextScale(); e.preventDefault(); return }
@@ -122,12 +125,25 @@ export const knobs = (...cells) => div({ class: 'knobs' }, ...cells)
 // One sentence about a control, shown while help is on (`help` is a boolean fnstate). Robert:
 // "we should have a ? icon to click that opens a brief one sentence explanation of each control
 // and what it changes". `lines` is text, or pairs of [name, text] for a row of knobs.
-export const hint = (help, lines) => div(
-  { class: 'hint', style: { display: help.bindStyle(() => help() ? 'block' : 'none') } },
-  ...(typeof lines === 'string'
-    ? [lines]
-    : lines.map(([name, text]) => div(span({ class: 'hint-name' }, name), ' ', text)))
-)
+// Every named hint is also kept by name, so a knob can carry its sentence as a tooltip (Robert:
+// "hovering a knob should show a tooltip with it's explanation"); see tooltips() below.
+export const hintText = new Map()
+export const hint = (help, lines) => {
+  if (typeof lines !== 'string') for (const [name, text] of lines) hintText.set(name, text)
+  return div(
+    { class: 'hint', style: { display: help.bindStyle(() => help() ? 'block' : 'none') } },
+    ...(typeof lines === 'string'
+      ? [lines]
+      : lines.map(([name, text]) => div(span({ class: 'hint-name' }, name), ' ', text)))
+  )
+}
+// Give every knob under `root` its hint as a title, once the panel is built.
+export const tooltips = root => {
+  for (const dial of root.querySelectorAll('.knob')) {
+    const text = hintText.get(dial.getAttribute('aria-label'))
+    if (text) dial.title = text
+  }
+}
 
 // A round swatch with the colour input hidden over it.
 export const swatch = (title, id, state) => div(

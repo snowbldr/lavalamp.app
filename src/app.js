@@ -41,6 +41,10 @@ import {
   defaultLift,
   computeDefaultWobbleMax,
   defaultWobbleMax,
+  computeDefaultHeatSpots,
+  defaultHeatSpots,
+  computeDefaultElementHeat,
+  defaultElementHeat,
   pixels,
   backendLabel,
   GPU_PARTICLES,
@@ -263,6 +267,8 @@ export async function start () {
     followWindow(defaultReserve, reserve, computeDefaultReserve())
     followWindow(defaultLift, lift, computeDefaultLift())
     followWindow(defaultWobbleMax, wobbleMax, computeDefaultWobbleMax())
+    followWindow(defaultHeatSpots, heatSpots, computeDefaultHeatSpots())
+    followWindow(defaultElementHeat, elementHeat, computeDefaultElementHeat())
     followWindow(defaultGravityStrength, gravityStrength, computeDefaultGravity(height))
     followWindow(defaultInteractionRadius, interactionRadius, computeDefaultInteractionRadius(width, height))
     followWindow(defaultParticleSize, particleSize, computeDefaultParticleSize(width, height))

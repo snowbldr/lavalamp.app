@@ -1,5 +1,5 @@
 import { button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { hint, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle } from './components.js'
+import { hint, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -234,10 +234,10 @@ export function createSettingsPanel () {
         // The heater (Robert: "the heaters get too hot for too long. We need some knobs to tweak
         // the heater pulses and heat and such").
         knobs(
-          knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots, seconds),
+          knob('Heat', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots(), seconds),
           knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction(), fixed(2)),
           knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
-          knob('Element', 'element-heat', elementHeat, { min: 1, max: 80, step: 1 }, () => defaultElementHeat),
+          knob('Element', 'element-heat', elementHeat, { min: 1, max: 80, step: 1 }, () => defaultElementHeat()),
           knob('Burn', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife, seconds),
           knob('Big Burn', 'element-life-scale', elementLifeScale, { min: 1, max: 8, step: 0.5 }, () => defaultElementLifeScale, times),
           knob('Pulses', 'element-rate', elementRate, { min: 0.5, max: 12, step: 0.5 }, () => defaultElementRate, fixed(1)),
@@ -343,5 +343,6 @@ export function createSettingsPanel () {
     )
   )
 
+  tooltips(panel)
   return { element: panel, open, close }
 }
