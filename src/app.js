@@ -59,6 +59,8 @@ import {
   computeDefaultElementCore,
   defaultElementCore,
   pixels,
+  autoPixels,
+  targetFps,
   backendLabel,
   GPU_PARTICLES,
   GPU_REACH,
@@ -353,6 +355,27 @@ export async function start () {
   fit()
   window.addEventListener('resize', fit)
   pixels.subscribe(() => renderer.resize(width, height))
+  // Auto Pixels (see settings.js). The ladder of budgets, the window's own size as the top rung,
+  // two seconds under Target to step down, four seconds at half again over it to step up, so it
+  // settles rather than hunts. A change of Pixels not made here is the hand on the knob: auto off.
+  const PIXEL_LADDER = [0.5, 1, 1.5, 2, 3, 4]
+  let autoSetting = false
+  pixels.subscribe(() => { if (!autoSetting) autoPixels(false) })
+  let slowSeconds = 0
+  let fastSeconds = 0
+  const autoPixelsTick = fps => {
+    if (!autoPixels()) { slowSeconds = 0; fastSeconds = 0; return }
+    const native = Math.min(4, Math.ceil(window.innerWidth * window.innerHeight / 1e6 * 2) / 2)
+    const rung = PIXEL_LADDER.indexOf(pixels())
+    const target = targetFps()
+    slowSeconds = fps < target ? slowSeconds + 1 : 0
+    fastSeconds = fps > target * 1.5 ? fastSeconds + 1 : 0
+    let next = null
+    if (slowSeconds >= 2 && rung > 0) next = PIXEL_LADDER[rung - 1]
+    else if (fastSeconds >= 4 && rung >= 0 && rung < PIXEL_LADDER.length - 1 && PIXEL_LADDER[rung + 1] <= native) next = PIXEL_LADDER[rung + 1]
+    else if (rung < 0) next = 1
+    if (next !== null) { autoSetting = true; pixels(next); autoSetting = false; slowSeconds = 0; fastSeconds = 0 }
+  }
 
   // Turn the lamp so its floor is on `newEdge`, carrying every particle to where it was on the
   // page, so the lava stays put and gravity simply starts pulling it toward the new floor.
@@ -521,7 +544,9 @@ export async function start () {
   function frame () {
     fpsFrames++
     if (performance.now() - fpsSince >= 1000) {
-      fpsLabel(`${Math.round(fpsFrames * 1000 / (performance.now() - fpsSince))} fps`)
+      const fps = fpsFrames * 1000 / (performance.now() - fpsSince)
+      autoPixelsTick(fps)
+      fpsLabel(`${Math.round(fps)} fps, Pixels ${Number(pixels()).toFixed(1)} M${autoPixels() ? ' (auto)' : ''}`)
       fpsFrames = 0
       fpsSince = performance.now()
     }

@@ -125,6 +125,13 @@ export const defaultLift = fnstate(computeDefaultLift())
 export const lift = fnstate(defaultLift())
 export const defaultPixels = 1
 export const pixels = fnstate(defaultPixels)
+// Auto Pixels: the lamp picks Pixels itself to hold a frame rate, stepping down when the frame
+// falls under Target and up, never past the window's own size, when it runs well over it
+// (Robert: "what if we do like a auto adjusting fps? Like goal is 35 fps, then we reduce pixels
+// until we hit the target fps or better"). Touching the Pixels knob turns it off.
+export const autoPixels = fnstate(true)
+export const defaultTargetFps = 35
+export const targetFps = fnstate(defaultTargetFps)
 // Which lamp is running, for the panel (Robert: "we should display which backend is being used
 // in the advance settings (so I can be sure I'm using cpu)").
 export const backendLabel = fnstate('')

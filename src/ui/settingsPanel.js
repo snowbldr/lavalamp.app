@@ -16,6 +16,9 @@ import {
   defaultLift,
   pixels,
   defaultPixels,
+  autoPixels,
+  targetFps,
+  defaultTargetFps,
   backendLabel,
   screenLabel,
   motionLabel,
@@ -315,11 +318,15 @@ export function createSettingsPanel () {
           knob('Pixels', 'pixels', pixels, { min: 0.5, max: 4, step: 0.5 }, () => defaultPixels, v => `${Number(v).toFixed(1)} M`)
         ),
         pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
+        pair('Auto Pixels', toggle('auto-pixels', autoPixels)),
+        knobs(knob('Target', 'target-fps', targetFps, { min: 20, max: 120, step: 5 }, () => defaultTargetFps, v => `${v} fps`)),
         hint(help, [
           ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
           ['Smooth', 'Rounds off the bumps along every edge by blurring the lava\'s shape before it is cut, by this many pixels. 0 is the raw metaballs.'],
           ['Blend', 'How far the colours inside the lava blur into each other, in pixels, without touching the edge; below Smooth it does nothing extra.'],
           ['Pixels', 'The budget the lamp is drawn within, in megapixels. A big window is drawn at half resolution within one megapixel, where a Size under 4 is a single pixel dot. Not saved.'],
+          ['Auto Pixels', 'The lamp picks Pixels itself: down a step after two seconds under Target, up a step after four seconds well over it, never past the window\'s own size. Moving Pixels by hand switches this off.'],
+          ['Target', 'The frame rate Auto Pixels holds.'],
           ['Heater', 'Show the heater strip and its elements along the floor.'],
           ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
         ])
