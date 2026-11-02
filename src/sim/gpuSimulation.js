@@ -1040,6 +1040,20 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     resize (w, h) { width = w; height = h; if (!floor.length) gridBottom = h; layoutGrid() },
     setBottles,
     get reserve () { return reserve },
+    // Everything at rest: temperature, velocity, the kick's previous position and the damping's
+    // last move all zeroed, so a still test starts from a lava with nothing in it but position
+    // (Robert, 2026-11-02: "start with a non-moving lava and then zero out everything's temp,
+    // velocity, momentum, etc"). The next readback brings the zeros into state.
+    calm () {
+      const zeros2 = new Float32Array(2 * capacity)
+      device.queue.writeBuffer(buffers.F, 0, new Float32Array(2 * capacity)) // temp, tempOut
+      device.queue.writeBuffer(buffers.V, 2 * vec2Bytes, zeros2) // vel, velOut (two vec2 arrays)
+      device.queue.writeBuffer(buffers.V, 5 * vec2Bytes, new Float32Array(2 * capacity).subarray(0, 2 * capacity)) // delta
+      const xs = new Float32Array(2 * capacity)
+      for (let i = 0; i < alive; i++) { xs[2 * i] = state.x[i]; xs[2 * i + 1] = state.y[i] }
+      device.queue.writeBuffer(buffers.V, 4 * vec2Bytes, xs) // px = pos, so the kick sees no move
+      state.temp.fill(0); state.vx.fill(0); state.vy.fill(0)
+    },
     // Move every particle by fn(x, y) (the lamp turning with the phone), from the last readback.
     transform (fn) { const xs = new Float32Array(2 * capacity); for (let i = 0; i < alive; i++) { const [nx, ny] = fn(state.x[i], state.y[i]); state.x[i] = nx; state.y[i] = ny; xs[2 * i] = nx; xs[2 * i + 1] = ny } device.queue.writeBuffer(buffers.V, 0, xs); device.queue.writeBuffer(buffers.V, 4 * vec2Bytes, xs) },
     get width () { return width },

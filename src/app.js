@@ -292,6 +292,22 @@ export async function start () {
       ? createWorkerLamp({ width, height, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
       : createSimulation({ width, height, params })
   backendLabel(device ? 'GPU (WebGPU)' : remote ? 'CPU, simulation on a worker thread' : 'CPU, simulation on the page thread')
+  // ?still: the still test's lamp (docs/methods/measured-hunt.md). The lava as spawned, then
+  // everything zeroed (temperature, velocity, the kick's memory), no heat, no stirring, the
+  // reservoirs not drawn, so what moves afterwards is the solver and gravity and nothing else
+  // (Robert: "a static environment should produce static lava except for the small jitter that
+  // all atoms actually have irl"). For measuring, like ?profile; the knobs still read as loaded.
+  // The overrides are reapplied every frame: fit() moves window-following defaults and their
+  // mirrors would put Stir 20 and Turb 150 back.
+  const still = new URLSearchParams(window.location.search).has('still')
+  const STILL = { stir: 0, turbulence: 0, drifters: 0, floorHeat: 0, floorGlow: 0, elementHeat: 0, heatSpots: 1e9, maxTemp: 0 }
+  if (still) {
+    Object.assign(params, STILL)
+    showCups(false)
+    particleSize(1) // Robert: "set the particle size to 1 and smooth to 0 so I can see the particles moving"
+    smooth(0)
+    if (sim.core && sim.core.calm) sim.core.calm()
+  }
   const renderer = createRenderer(lamp, look)
   const motion = createMotionInput()
   // In the Reservoirs view the lamp is drawn scaled down and shifted (see `view` in frame), so a
@@ -517,6 +533,7 @@ export async function start () {
       sim.frame(pace(), overlayWants())
       count = sim.interpolate(shown, performance.now())
     } else {
+      if (still) Object.assign(params, STILL)
       due += pace()
       while (due >= 1) {
         due -= 1
