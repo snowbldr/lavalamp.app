@@ -3,7 +3,7 @@
    physics nerd stuff". Range inputs keep their keyboard and touch behaviour and lose their look;
    colour inputs hide behind a swatch. */
 .panel {
-  --accent: #f2a33c; /* amber, like a dial lamp; Robert: "make the control not purple themed" */
+  --accent: #e8e8ea; /* monotone, a soft white on the dark (Robert: "make the panel style monotone instead of the orange/yellow... I want it to look super premium"); it was amber before */
   position: fixed;
   top: 10px;
   left: 10px;
@@ -96,7 +96,7 @@
 }
 .knob-pointer {
   position: absolute; left: 50%; top: 4px; width: 3px; height: 12px; margin-left: -1.5px; border-radius: 2px;
-  background: var(--accent); box-shadow: 0 0 4px rgba(242, 163, 60, 0.7);
+  background: var(--accent); box-shadow: 0 0 4px rgba(232, 232, 234, 0.6);
 }
 .knob.turning .knob-face, .knob:focus-visible .knob-face { box-shadow: 0 0 0 2px var(--accent), 0 2px 6px rgba(0, 0, 0, 0.7); }
 .knob-label { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(236, 236, 236, 0.7); text-align: center; }
@@ -136,11 +136,22 @@
 }
 .swatch-hex:focus { outline: none; border-color: var(--accent); }
 
-/* Touch as a boxed sub panel with pictures (Robert: "my 13 yr old step daughter literally could
-   not see the touch controls"). */
-.touch-panel { margin: 6px 0 4px; padding: 10px 12px 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); }
-.touch-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.9); }
-.touch-sub { font-size: 11px; letter-spacing: 0; text-transform: none; color: rgba(236, 236, 236, 0.55); }
+/* Boxed sub panels in the top section, Colours and Touch (Robert: "my 13 yr old step daughter
+   literally could not see the touch controls"; "Let's do the colors in a sub panel like that
+   too"). The first one's title leaves room for the corner buttons. */
+.sub-panel { margin: 6px 0 4px; padding: 10px 12px 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); }
+.sub-panel:first-child { margin-top: 0; }
+.sub-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.9); }
+.sub-panel:first-child .sub-title { padding-right: 76px; }
+.sub-sub { font-size: 11px; letter-spacing: 0; text-transform: none; color: rgba(236, 236, 236, 0.55); }
+.sub-panel .swatch-row:first-of-type { padding-top: 0; }
+.sub-panel .swatch-caption { padding-right: 0; }
+/* Inside a box the width is 24 px shorter: six swatches and the Gradient choice still fit on one line. */
+.sub-panel { padding-left: 9px; padding-right: 9px; }
+.sub-panel .swatches { gap: 6px; justify-content: space-between; }
+.sub-panel .swatch { font-size: 10px; }
+.sub-panel .row .row-label { font-size: 12px; }
+.sub-panel .segmented button { font-size: 11px; padding: 5px 0; }
 .icon-choice { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 4px; }
 .icon-choice button {
   display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0 6px;

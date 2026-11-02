@@ -194,6 +194,10 @@ export function createSettingsPanel () {
     button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the controls do' }, '?'),
     section(
       null, null,
+      // The colours as a boxed sub panel like Touch (Robert: "Let's do the colors in a sub panel
+      // like that too").
+      div({ class: 'sub-panel' },
+      div({ class: 'sub-title' }, span('Colours'), span({ class: 'sub-sub' }, 'how the heat is painted')),
       swatchRow('Heat colours', always, true,
         swatch('Cold', 'heatCold', heatCold),
         swatch('Cool', 'heatCool', heatCool),
@@ -223,11 +227,12 @@ export function createSettingsPanel () {
           onclick: () => applyTheme(theme)
         }, span(theme.name))))
       ),
-      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Duotone runs from one colour to another; Mono runs one colour from dark to light. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.'),
+      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Duotone runs from one colour to another; Mono runs one colour from dark to light. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
+      ),
       // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
       // thirteen year old (Robert: "I want to make it look more like a sub panel").
-      div({ class: 'touch-panel' },
-        div({ class: 'touch-title' }, span('Touch'), span({ class: 'touch-sub' }, 'what your finger does to the lava')),
+      div({ class: 'sub-panel' },
+        div({ class: 'sub-title' }, span('Touch'), span({ class: 'sub-sub' }, 'what your finger does to the lava')),
         iconChoice('touch', touchMode, TOUCH_OPTIONS),
         knobs(knob('Strength', 'touch-strength', touchStrength, { min: 0, max: 3, step: 0.1 }, () => defaultTouchStrength, v => `${Number(v).toFixed(1)}x`))
       ),
