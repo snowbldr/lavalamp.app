@@ -34,6 +34,13 @@ asked. A full backup of the repository from before docs was split out is at
 ~/lavalamp.app-backup-2026-10-30 (and the ref backup/master-with-docs); keep both until Robert
 says go.
 
+## When the lamp looks wrong
+
+Measure before guessing. docs/methods/measured-hunt.md is the method that found the honeycomb
+(a deterministic link at Pace 3, an in-page detector that draws what the renderer draws, windows
+in sim steps, causes ruled out by the number, the fix A/B'd live); the scripts are in
+docs/methods/tools.
+
 ## Layout
 
 src/sim is the simulation with no DOM, src/render the metaball pass, src/ui settings and
