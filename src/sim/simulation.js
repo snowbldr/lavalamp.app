@@ -245,7 +245,23 @@ const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated
 // Drifting eddies: the same vortex, but born with a velocity, bouncing off the walls and floor
 // and dying away over its life instead of fading in and out in place. `drifters` in params is
 // how many are alive at once; a new one is born a few seconds after one dies.
-const DRIFT_SPEED = [30, 90] // px/s
+// Robert, 2026-11-02, after finding that the eddies crushed the pool ("the eddies compressing
+// the liquid"): "we should restrict the eddies effect across a gradient on the lower part of the
+// lamp... all eddies spawn from anywhere on the edges then follow inverse logarithm movement
+// speed (starts fast, slows down quickly, then sorta hobbles along)... the rotation force
+// should follow an inverse exponential curve (it should run fairly strongly, then drop off
+// quick)... The path of each eddy should be affected by the other eddies." So: a drifter is born
+// on a random edge heading inward, travels at DRIFT_SPEED_START over (1 + DRIFT_SLOWING ln(1 +
+// age)) px/s (240 at birth, 77 after a second, 37 after five, 24 after twenty), spins at full
+// for half a second then as exp(-age / (DRIFT_SPIN_TAU life)), and is carried by the other
+// eddies' flow at its position times DRIFT_ADVECT. Every eddy's push fades with depth: full
+// above EDDY_DEPTH_FADE[0] of the height, down to EDDY_DEPTH_FADE[1] of itself at the floor, so
+// the pool is skimmed from the top rather than squashed.
+const DRIFT_SPEED_START = [150, 300] // px/s at birth
+const DRIFT_SLOWING = 3
+const DRIFT_SPIN_TAU = 0.3 // of the life
+const DRIFT_ADVECT = 1
+const EDDY_DEPTH_FADE = [0.6, 0.12]
 const DRIFT_LIFE = [12, 30] // seconds
 const DRIFT_GAP = [2, 6] // seconds between one dying and the next being born
 // A drifter is shaped like a little tornado rather than a soft eddy: solid rotation inside a
@@ -302,6 +318,11 @@ export function createSimulation ({ width, height, params }) {
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
   let nextDrifter = randomRange(...DRIFT_GAP)
+  const carried = [0, 0] // scratch: the other eddies' flow at an eddy
+  // A drifter's spin over its life: half a second to spin up, then dying away exponentially.
+  const driftEnvelope = e => { const age = time - e.start; return Math.min(1, age / 0.5) * Math.exp(-age / (DRIFT_SPIN_TAU * e.life)) }
+  // The eddies' push fades with depth, so they skim the pool rather than squash it.
+  const depthFade = py => { const t = py / height; if (t <= EDDY_DEPTH_FADE[0]) return 1; const u = Math.min(1, (t - EDDY_DEPTH_FADE[0]) / (1 - EDDY_DEPTH_FADE[0])); return 1 + (EDDY_DEPTH_FADE[1] - 1) * u * u * (3 - 2 * u) }
 
   function allocate (count) {
     return {
@@ -378,13 +399,20 @@ export function createSimulation ({ width, height, params }) {
     if (drifting.length < drifters && time >= nextDrifter) {
       const core = randomRange(...DRIFT_CORE)
       const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
-      const speed = randomRange(...DRIFT_SPEED)
-      const heading = randomRange(0, 2 * Math.PI)
+      const speed = randomRange(...DRIFT_SPEED_START)
+      // Born on one of the four edges, heading inward within 60 degrees of straight in.
+      const side = Math.floor(random() * 4)
+      const along = random()
+      const inward = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][side] // down from the top, left from the right, up from the floor, right from the left
+      const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
       drifting.push({
-        x: randomRange(core, width - core),
-        y: randomRange(core, height - core),
-        vx: speed * Math.cos(heading),
-        vy: speed * Math.sin(heading),
+        x: side === 1 ? width - core : side === 3 ? core : core + along * (width - 2 * core),
+        y: side === 0 ? core : side === 2 ? height - core : core + along * (height - 2 * core),
+        speed,
+        hx: Math.cos(heading),
+        hy: Math.sin(heading),
+        vx: 0,
+        vy: 0,
         core,
         radius,
         gain: DRIFT_GAIN * randomRange(...DRIFT_VARIETY),
@@ -401,11 +429,16 @@ export function createSimulation ({ width, height, params }) {
         if (time + randomRange(...DRIFT_GAP) < nextDrifter || nextDrifter < time) nextDrifter = time + randomRange(...DRIFT_GAP)
         continue
       }
+      const age = time - e.start
+      const pace = e.speed / (1 + DRIFT_SLOWING * Math.log(1 + age))
+      eddyVelocity(e.x, e.y, Math.abs(turbulence), carried, e)
+      e.vx = pace * e.hx + DRIFT_ADVECT * carried[0]
+      e.vy = pace * e.hy + DRIFT_ADVECT * carried[1]
       e.x += e.vx * dt
       e.y += e.vy * dt
       const half = e.core
-      if (e.x < half) { e.x = half; e.vx = Math.abs(e.vx) } else if (e.x > width - half) { e.x = width - half; e.vx = -Math.abs(e.vx) }
-      if (e.y < half) { e.y = half; e.vy = Math.abs(e.vy) } else if (e.y > height - half) { e.y = height - half; e.vy = -Math.abs(e.vy) }
+      if (e.x < half) { e.x = half; e.hx = Math.abs(e.hx) } else if (e.x > width - half) { e.x = width - half; e.hx = -Math.abs(e.hx) }
+      if (e.y < half) { e.y = half; e.hy = Math.abs(e.hy) } else if (e.y > height - half) { e.y = height - half; e.hy = -Math.abs(e.hy) }
     }
     if (drifting.length > drifters) drifting.length = drifters
     if (time >= nextEddy) {
@@ -425,8 +458,9 @@ export function createSimulation ({ width, height, params }) {
     }
   }
 
-  // The eddies' velocity at a point, written into `out`.
-  function eddyVelocity (px, py, strength, out) {
+  // The eddies' velocity at a point, written into `out`; `skip` leaves one drifter out (its own
+  // flow is nothing to itself).
+  function eddyVelocity (px, py, strength, out, skip = null) {
     out[0] = 0
     out[1] = 0
     if (strength === 0) return
@@ -441,13 +475,12 @@ export function createSimulation ({ width, height, params }) {
     }
     for (let k = 0; k < drifting.length; k++) {
       const e = drifting[k]
+      if (e === skip) continue
       const dx = px - e.x
       const dy = py - e.y
       const r = Math.hypot(dx, dy)
       if (r === 0) continue
-      const age = time - e.start
-      // A second to spin up, then dying away to nothing.
-      const envelope = Math.min(1, age) * (1 - age / e.life)
+      const envelope = driftEnvelope(e)
       // Speed: rising linearly to the peak at the core's edge, then 2 r rc / (r^2 + rc^2),
       // which is one over distance in the tail, inside a Gaussian cutoff at the reach.
       const q = r / e.core
@@ -455,6 +488,9 @@ export function createSimulation ({ width, height, params }) {
       out[0] += -dy / r * speed * e.spin
       out[1] += dx / r * speed * e.spin
     }
+    const fade = depthFade(py)
+    out[0] *= fade
+    out[1] *= fade
   }
 
   // How many particles the floor's reservoirs hold between them.
@@ -561,7 +597,7 @@ export function createSimulation ({ width, height, params }) {
     const strength = Math.abs(params.turbulence || 0)
     if (strength === 0) return false
     for (const e of eddies) if (overrideGate(strength * Math.sin(Math.PI * (time - e.start) / e.life)) > 0) return true
-    for (const e of drifting) { const age = time - e.start; if (overrideGate(e.gain * strength * Math.min(1, age) * (1 - age / e.life)) > 0) return true }
+    for (const e of drifting) { if (overrideGate(e.gain * strength * driftEnvelope(e)) > 0) return true }
     return false
   }
 
@@ -584,8 +620,7 @@ export function createSimulation ({ width, height, params }) {
     }
     for (let k = 0; k < drifting.length && fade < 1; k++) {
       const e = drifting[k]
-      const age = time - e.start
-      const envelope = Math.min(1, age) * (1 - age / e.life)
+      const envelope = driftEnvelope(e)
       const peak = e.gain * strength * envelope
       const gate = overrideGate(peak)
       if (gate === 0) continue
