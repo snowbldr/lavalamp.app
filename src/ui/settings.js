@@ -133,6 +133,9 @@ export const backendLabel = fnstate('')
 // detection on mobile, and the screen lock no longer works on my android phone"), and both
 // depend on the page being a secure context, so the phone says what it has.
 export const screenLabel = fnstate('Screen: tap the lamp once to keep it awake')
+// Frames a second, counted in the frame loop and written once a second (Robert: "let's add
+// something to show fps in settings as long as it's computationally cheap").
+export const fpsLabel = fnstate('')
 export const motionLabel = fnstate('')
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 

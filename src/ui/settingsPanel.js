@@ -19,6 +19,7 @@ import {
   backendLabel,
   screenLabel,
   motionLabel,
+  fpsLabel,
   blend,
   defaultSettle,
   defaultViscosity,
@@ -219,6 +220,7 @@ export function createSettingsPanel () {
     section(
       'Advanced', advancedOpen,
       div({ class: 'panel-note' }, backendLabel.bindAs(() => `Backend: ${backendLabel()}`)),
+      div({ class: 'panel-note' }, fpsLabel.bindAs(() => fpsLabel())),
       div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),
       div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
       section(

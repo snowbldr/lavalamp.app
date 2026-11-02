@@ -104,6 +104,7 @@ import {
   fullscreen,
   screenLabel,
   motionLabel,
+  fpsLabel,
   soundBed,
   showHeater,
   settle,
@@ -514,7 +515,16 @@ export async function start () {
     tally.frames = 0; tally.sim = 0; tally.steps = 0; tally.render = 0; tally.span = 0; tally.phases = {}
   }
   let leaning = 0 // seconds gravity has pointed at an edge other than the current one
+  // Frames a second for the panel: a counter and one string a second, nothing else.
+  let fpsFrames = 0
+  let fpsSince = performance.now()
   function frame () {
+    fpsFrames++
+    if (performance.now() - fpsSince >= 1000) {
+      fpsLabel(`${Math.round(fpsFrames * 1000 / (performance.now() - fpsSince))} fps`)
+      fpsFrames = 0
+      fpsSince = performance.now()
+    }
     // A shake is a shove, in the lamp's frame.
     const [ax, ay] = pageVectorToLamp(turns, ...motion.consume())
     sim.push(ax / FRAME * MOTION_GAIN, ay / FRAME * MOTION_GAIN)
