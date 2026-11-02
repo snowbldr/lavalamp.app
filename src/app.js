@@ -193,6 +193,9 @@ export async function start () {
   // like ?profile, not a setting.
   const dampQuery = new URLSearchParams(window.location.search).get('damp')
   if (dampQuery !== null && !Number.isNaN(Number(dampQuery))) params.damp = Number(dampQuery)
+  // ?wallNear=N&wallPull=M try the glass as boundary particles (see wallLattice in
+  // gpuSimulation.js); 0 and 0, the lamp as it was.
+  for (const key of ['wallNear', 'wallPull']) { const q = new URLSearchParams(window.location.search).get(key); if (q !== null && !Number.isNaN(Number(q))) params[key] = Number(q) }
   mirror(particleCount, params, 'particleCount', Math.trunc)
   mirror(interactionRadius, params, 'interactionRadius')
   params.restDensity = REST_DENSITY // Pull is Stiff times Density; see computeDefaultPull

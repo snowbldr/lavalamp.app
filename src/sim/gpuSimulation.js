@@ -104,6 +104,8 @@ struct Params {
   fingerOverride: f32,
   liftCap: f32,
   damp: f32,
+  wallNear: f32,
+  wallPull: f32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -414,6 +416,29 @@ fn scatter(@builtin(global_invocation_id) id: vec3u) {
   U[SORTED(k)] = i;
 }
 
+// The glass as particles. The side walls used to be a clamp applied after the relaxation
+// (contain): a particle against the wall was pushed into it by its neighbours every pass and
+// put back, and with neighbours on one side only it was unsupported and one-sidedly pulled,
+// so the wall layer sank and the band beside it rose, a cell at each wall that churned a
+// still pool (measured 2026-11-02: 157 particles on the wall lines, each tried 1.5 px into the
+// wall a pass; the band within 15 px jittered 14% of a spacing a step against 0 in the middle;
+// Robert: "I bet we need a border of actual particles with a near setting. The particles need
+// to form a solid boundary and can be constant, but should apply at the boundary instead of
+// any kind of hard clamp"). So: a fixed lattice of boundary particles behind each side wall,
+// one every spacing (a sixth of the radius) in rows half a spacing in from the wall, staggered,
+// as deep as the radius. Lava within a radius of the wall counts them in its density and is
+// pushed off them by its own near pressure (wallNear times) and pulled to them by its own
+// pressure (wallPull times, 0 for a glass the lava does not wet); they push back with the
+// lava's own pressures, as a neighbour of the same liquid would. The lattice is computed on the
+// fly, nothing is stored, and only lava near a wall pays for it. wallNear 0 is off: the clamp
+// alone, as before.
+fn wallSpacing() -> f32 { return P.radius / 6.0; }
+// Calls body(dv, g) for each lattice point within the radius of p: dv from p to the point.
+fn wallLattice(p: vec2f, side: u32) -> bool {
+  let dist = select(P.width - p.x, p.x, side == 0u);
+  return P.wallNear > 0.0 && dist < P.radius;
+}
+
 @compute @workgroup_size(${WORKGROUP})
 fn density(@builtin(global_invocation_id) id: vec3u) {
   let i = id.x;
@@ -433,6 +458,27 @@ fn density(@builtin(global_invocation_id) id: vec3u) {
         let r = length(V[POS(j)] - p);
         if (r >= P.radius) { continue; }
         let g = 1.0 - r / P.radius;
+        d += g * g;
+        dn += g * g * g;
+      }
+    }
+  }
+  for (var side = 0u; side < 2u; side++) {
+    if (!wallLattice(p, side)) { continue; }
+    let s = wallSpacing();
+    let rows = u32(ceil(P.radius / s));
+    for (var r = 0u; r < rows; r++) {
+      let wx = select(P.width + (f32(r) + 0.5) * s, -(f32(r) + 0.5) * s, side == 0u);
+      let dx = wx - p.x;
+      if (abs(dx) >= P.radius) { continue; }
+      let span = sqrt(P.radius * P.radius - dx * dx);
+      let off = select(0.0, 0.5 * s, (r & 1u) == 1u);
+      let k0 = i32(floor((p.y - span - off) / s));
+      let k1 = i32(ceil((p.y + span - off) / s));
+      for (var k = k0; k <= k1; k++) {
+        let rr = length(vec2f(dx, f32(k) * s + off - p.y));
+        if (rr >= P.radius) { continue; }
+        let g = 1.0 - rr / P.radius;
         d += g * g;
         dn += g * g * g;
       }
@@ -482,6 +528,30 @@ fn relax(@builtin(global_invocation_id) id: vec3u) {
   // were not, and where the heat finger packed lava past its density the near pressure spiked, a
   // hundred neighbours each pushed from the same snapshot, and the pool erupted into a spray
   // (Robert: "on the gpu, in pinch, with current settings, it sometimes randomly explodes").
+  for (var side = 0u; side < 2u; side++) {
+    if (!wallLattice(p, side)) { continue; }
+    let s = wallSpacing();
+    let rows = u32(ceil(P.radius / s));
+    for (var r = 0u; r < rows; r++) {
+      let wx = select(P.width + (f32(r) + 0.5) * s, -(f32(r) + 0.5) * s, side == 0u);
+      let dx = wx - p.x;
+      if (abs(dx) >= P.radius) { continue; }
+      let span = sqrt(P.radius * P.radius - dx * dx);
+      let off = select(0.0, 0.5 * s, (r & 1u) == 1u);
+      let k0 = i32(floor((p.y - span - off) / s));
+      let k1 = i32(ceil((p.y + span - off) / s));
+      for (var k = k0; k <= k1; k++) {
+        let dv = vec2f(dx, f32(k) * s + off - p.y);
+        let rr = length(dv);
+        if (rr >= P.radius || rr == 0.0) { continue; }
+        let g = 1.0 - rr / P.radius;
+        let u = dv / rr;
+        let pair = (pi * g * P.wallPull + ni * g * g * P.wallNear) * dt2;
+        own += u * pair;
+        pushed -= u * pair * P.share;
+      }
+    }
+  }
   var delta = (pushed - own) * P.jacobi; // WGSL reserves the word move
   // Every particle moving at once is a Jacobi iteration, unstable where the lava is packed: in
   // the cold floor at Near 1101 and Radius 25 each neighbour's reply undoes about seven times the
@@ -677,7 +747,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 52
+const PARAM_FLOATS = 52 // the Params struct, 52 fields, 208 bytes (a uniform's size is a multiple of 16)
 // The most a relaxation pass may move a particle, in radii, whatever Reach says. The Jacobi
 // solver resolves a packed cold pool only a few rows a pass, and moves of a whole radius let the
 // floor compress and burst (the GPU's Reach default has been 0.5 since that was measured, 979 to
@@ -685,7 +755,7 @@ const PARAM_FLOATS = 52
 // (Robert, 2026-11-01: "getting this weird emergent pattern... can we not add a guard for that to
 // prevent it in code?"). His saved settings carried the CPU's Reach 1 onto the GPU once saves
 // loaded after the backend was known, and the honeycomb followed within minutes.
-const REACH_CAP = 0.5 // the honeycomb itself formed at 0.5 as well; see docs/decisions.md, 2026-11-01 // the Params struct, 50 fields, padded to 208 bytes (a uniform's size is a multiple of 16)
+const REACH_CAP = 0.5 // the honeycomb itself formed at 0.5 as well; see docs/decisions.md, 2026-11-01
 const POWER_COLUMNS = 256
 const MAX_ELEMENTS = 32
 const ELEMENTS_AT = POWER_COLUMNS
@@ -944,6 +1014,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[47] = STIR_OVERRIDE.finger
     pf[48] = params.liftCap > 0 ? params.liftCap : 10
     pf[49] = params.damp ?? 0.25 // what is left of a relaxation move that reverses the last one; see relax
+    pf[50] = params.wallNear ?? 0; pf[51] = params.wallPull ?? 0 // the glass as particles; see wallLattice
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
