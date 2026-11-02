@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>canvas</title>
+</head>
+<body style="margin: 0; padding: 0; background: black">
+<canvas id="canvas" style="background: black; filter: blur(2px) contrast(2)"></canvas>
+<script>
+  const canvas = document.getElementById('canvas'),
+    ctx = canvas.getContext('2d'),
+    tempCanvas = document.createElement('canvas'),
+    tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true }),
+    width = 600,
+    height = 600,
+    threshold = 150,
+    points = []
+
+  canvas.width = tempCanvas.width = width
+  canvas.height = tempCanvas.height = height
+  const lavaColor = {r: 255,g: 0,b: 0}
+  const lavaShadow = {r: 255, g: 200, b: 0}
+  const shadowHeight = 20
+
+  for (let i = 0; i < 50; i++) {
+    let x = Math.random() * width,
+      y = Math.random() * height,
+      vx = ( Math.random() * 2 ) - 1,
+      vy = ( Math.random() * 2 ) - 1,
+      size = 40
+
+    points.push({ x: x, y: y, vx: vx, vy: vy, size: size })
+
+  }
+
+  function update () {
+    tempCtx.clearRect(0, 0, width, height)
+    for (const point of points) {
+      point.x += point.vx
+      point.y += point.vy
+
+      if (point.x > width + point.size) {
+        point.x = 0 - point.size
+      }
+      if (point.x < 0 - point.size) {
+        point.x = width + point.size
+      }
+      if (point.y > height + point.size) {
+        point.y = 0 - point.size
+      }
+      if (point.y < 0 - point.size) {
+        point.y = height + point.size
+      }
+
+      tempCtx.beginPath()
+      const grad = tempCtx.createRadialGradient(point.x, point.y, 0, point.x, point.y, point.size)
+      grad.addColorStop(0, `rgba(${lavaColor.r},${lavaColor.g},${lavaColor.b},1)`)
+      grad.addColorStop(1, `rgba(${lavaColor.r},${lavaColor.g},${lavaColor.b},0)`)
+      tempCtx.fillStyle = grad
+      tempCtx.arc(point.x, point.y, point.size, 0, Math.PI * 2)
+      tempCtx.fill()
+    }
+
+    let imageData = tempCtx.getImageData(0, 0, width, height),
+      pix = imageData.data
+    //set transparency based on cutoff to make metaball effect
+    //close enough balls will increase the transparency over the threshold to create the blobbing effect
+    for (let row = 0; row < canvas.height; row++) {
+      for (let col = 0; col < canvas.width; col++) {
+        const i = row * canvas.width * 4 + col * 4
+        if (pix[i + 3] > threshold) {
+          pix[i + 3] = 255
+        } else {
+          pix[i + 3] = 0
+        }
+      }
+    }
+
+    function isEdge (row, col) {
+      if (row + 1 <= canvas.height && pix[pixIndex(row + 1, col) + 3] === 0) {
+        return true
+      }
+      if (row - 1 >= 0 && pix[pixIndex(row - 1, col) + 3] === 0) {
+        return true
+      }
+      if (col + 1 <= canvas.width && pix[pixIndex(row, col + 1) + 3] === 0) {
+        return true
+      }
+      return col - 1 >= 0 && pix[pixIndex(row, col - 1) + 3] === 0;
+
+    }
+    const pixIndex = (row, col) => row * canvas.width * 4 + col * 4
+
+    const addGradient = (i, percent, r = 0, g = 0, b = 0) => {
+      const x = 1 - percent
+      pix[i] = percent * pix[i] + x * r
+      pix[i + 1] = percent * pix[i+1] + x * g
+      pix[i + 2] = percent * pix[i+2] + x * b
+    }
+
+    //draw shadow
+    for (let row = 0; row < canvas.height; row++) {
+      for (let col = 0; col < canvas.width; col++) {
+        const i = pixIndex(row, col)
+        if (pix[i + 3] === 255 && isEdge(row, col, i)) {
+          addGradient(i, 1, lavaShadow.r, lavaShadow.g, lavaShadow.b)
+          pix[i] = 255
+          pix[i + 1] = 132
+          pix[i + 2] = 3
+          for (let j = 1; j < shadowHeight; j++) {
+            let up = pixIndex(row - j, col)
+            if (row + j < canvas.height && pix[up + 3] === 255) {
+              addGradient(up, j/shadowHeight, lavaShadow.r, lavaShadow.g, lavaShadow.b)
+            }
+            //TODO figure out how to draw gradient border around entire blob
+          }
+        }
+      }
+    }
+    ctx.putImageData(imageData, 0, 0)
+    requestAnimationFrame(update)
+  }
+
+  update()
+
+</script>
+</body>
+</html>

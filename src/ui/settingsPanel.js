@@ -85,6 +85,7 @@ import {
   seed,
   pull,
   saveSettings,
+  getSettings,
   shareLink,
   showFlow,
   showCups,
@@ -110,6 +111,7 @@ import {
   turbulence,
   wobble
 } from './settings.js'
+import { CURRENT, goTo, versions } from '../versions.js'
 
 // The Sound section is hidden for now, not removed: the gloops are not finished and this version
 // goes up without them (Robert: "let's temporarily hide all the sound stuff from the settings so
@@ -146,6 +148,20 @@ export function createSettingsPanel () {
   const soundOpen = fnstate(false)
   const help = fnstate(false) // the ? button: one sentence under every control
 
+  // Every version of the lamp is kept and can be opened (Robert: "the ability to load old
+  // versions of the lava lamp"); a newer one than this, when there is one, is offered first as
+  // an upgrade that maps these settings onto it (src/versions.js). Filled once the manifest loads.
+  const versionRow = div({ class: 'panel-note' }, `Version ${CURRENT}`)
+  versions().then(list => {
+    const newer = list.filter(v => Number(v.version) > Number(CURRENT))
+    const older = list.filter(v => Number(v.version) < Number(CURRENT))
+    versionRow.replaceChildren(
+      span(`Version ${CURRENT}${newer.length ? '' : ', the newest'}. `),
+      ...newer.map(v => button({ class: 'small primary', style: { 'margin-right': '6px' }, title: v.description, onclick: () => { if (confirm(`Upgrade to ${v.label}? These settings are mapped onto it; this version's save is kept.`)) window.location.href = `${v.path}&upgrade=${CURRENT}&from=${encodeURIComponent(btoa(JSON.stringify(getSettings())))}` } }, `Upgrade to ${v.label}`)),
+      span('Older: '),
+      ...older.map(v => button({ class: 'small', style: { 'margin-right': '6px' }, title: `${v.date}: ${v.description}`, onclick: () => goTo(v.version) }, v.label))
+    )
+  })
   const open = () => document.body.append(panel)
   const close = () => panel.remove()
 
@@ -251,6 +267,7 @@ export function createSettingsPanel () {
       div({ class: 'panel-note' }, fpsLabel.bindAs(() => fpsLabel())),
       div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),
       div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
+      versionRow,
       // One long list under headings, no folding inside Advanced, each group split a layer
       // further (Robert: "The advanced panel should become one giant list. we may want to break
       // up the groups a bit further, perhaps another layer of subgroups").
