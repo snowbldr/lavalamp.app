@@ -25,6 +25,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let slotGen = new Int32Array(0) // which build of slotOf each entry belongs to
   let slotBuild = 0
   let push = null
+  let light = 0 // pots to light at the next frame (the music's beat)
   let sentParams = ''
   const empty = new Float32Array(0)
   const state = { x: empty, y: empty, vx: empty, vy: empty, temp: empty, id: new Int32Array(0) }
@@ -94,8 +95,9 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, pace: paceNow, want: wantNow })
       push = null
+      light = 0
       if (!wantNow.cups) { cups = null }
     },
     // Fill `shown` with the positions for this instant, between the last two states, and give
@@ -120,6 +122,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     step () {}, // the worker steps itself
     resize (w, h) { width = w; height = h; worker.postMessage({ type: 'resize', width: w, height: h }) },
     push (fx, fy) { push = push ? [push[0] + fx, push[1] + fy] : [fx, fy] },
+    lightElement () { light++ },
     setTouches (list) { touches = list || [] },
     transform (fn) {
       const map = affine(fn)

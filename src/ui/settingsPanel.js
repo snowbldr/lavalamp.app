@@ -101,6 +101,22 @@ import {
   fullscreen,
   soundBed,
   soundBeds,
+  music,
+  musicPending,
+  musicSource,
+  musicSources,
+  musicSensitivity,
+  defaultMusicSensitivity,
+  musicBeat,
+  defaultMusicBeat,
+  musicFloor,
+  defaultMusicFloor,
+  musicLift,
+  defaultMusicLift,
+  musicTurb,
+  defaultMusicTurb,
+  musicKick,
+  defaultMusicKick,
   showHeater,
   touchMode,
   touchModes,
@@ -116,7 +132,7 @@ import { CURRENT, goTo, versions } from '../versions.js'
 // The Sound section is hidden for now, not removed: the gloops are not finished and this version
 // goes up without them (Robert: "let's temporarily hide all the sound stuff from the settings so
 // we can push up this version. I think next is sound"). Flip to true to show it again.
-const SOUND_SHOWN = false
+const SOUND_SHOWN = true // sound is the milestone again (Robert: "get a sub agent working on the sound side quest")
 
 // The touch modes as pictures: arrows out, arrows in, a circling arrow, a flame, a snowflake.
 const ICON = body => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`
@@ -146,6 +162,17 @@ export function createSettingsPanel () {
   // Advanced and its groups, all folded by default.
   const advancedOpen = fnstate(false)
   const soundOpen = fnstate(false)
+  // The music meter: three bars (bass, mids, highs) and a beat dot, written straight to the
+  // DOM once a frame while listening, which is the cheapest thing a panel can do.
+  const meterBars = [div(), div(), div()]
+  const meterBeat = div({ class: 'meter-beat' })
+  const meterRow = div({ class: 'meter', title: 'Bass, mids, highs; the dot flashes on the beat' }, ...meterBars.map(b => div({ class: 'meter-bar' }, b)), meterBeat)
+  const meter = levels => {
+    meterBars[0].style.width = `${Math.min(100, levels.bass * 100)}%`
+    meterBars[1].style.width = `${Math.min(100, levels.mid * 100)}%`
+    meterBars[2].style.width = `${Math.min(100, levels.high * 100)}%`
+    meterBeat.style.background = `rgba(232, 232, 234, ${0.12 + 0.88 * levels.beat})`
+  }
   const help = fnstate(false) // the ? button: one sentence under every control
 
   // Every version of the lamp is kept and can be opened (Robert: "the ability to load old
@@ -393,7 +420,34 @@ export function createSettingsPanel () {
           'Sound', soundOpen,
           pair('Sound', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
           row('Bed', segmented('bed', soundBed, soundBeds)),
-          hint(help, 'Gloops made up from the lava as it moves: a bloop where a neck snaps or a blob lands, pitched by how much lava moved, and a bed that follows how stirred up the lava is: Simmer is a scatter of tiny pops, Noise a low rumble, Hum a drone.')
+          hint(help, 'Gloops made up from the lava as it moves: a bloop where a neck snaps or a blob lands, pitched by how much lava moved, and a bed that follows how stirred up the lava is: Simmer is a scatter of tiny pops, Noise a low rumble, Hum a drone.'),
+          // The lamp listening to music (Robert: "one thing I would love is a music sync"): a
+          // card like the others, the switch and the source, a meter so people can see it
+          // hearing, and the depths of what the music does.
+          div({ class: 'sub-panel' },
+            div({ class: 'sub-title' }, span('Music'), span({ class: 'sub-sub' }, 'the lamp listens and moves to it')),
+            pair('Listen', div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music)), 'Source', segmented('music-source', musicSource, musicSources)),
+            meterRow,
+            knobs(
+              knob('Sense', 'music-sensitivity', musicSensitivity, { min: 0.2, max: 5, step: 0.1 }, () => defaultMusicSensitivity, times),
+              knob('Beat', 'music-beat', musicBeat, { min: 0, max: 1, step: 0.05 }, () => defaultMusicBeat, fixed(2)),
+              knob('Floor', 'music-floor', musicFloor, { min: 0, max: 4, step: 0.1 }, () => defaultMusicFloor, times),
+              knob('Lift', 'music-lift', musicLift, { min: 0, max: 3, step: 0.1 }, () => defaultMusicLift, times)
+            ),
+            knobs(
+              knob('Turb', 'music-turb', musicTurb, { min: 0, max: 4, step: 0.1 }, () => defaultMusicTurb, times),
+              knob('Kick', 'music-kick', musicKick, { min: 0, max: 3, step: 0.1 }, () => defaultMusicKick, times)
+            ),
+            hint(help, [
+              ['Listen', 'Start listening. Mic hears whatever is playing in the room (the browser asks once); Tab, on a desktop, hears one browser tab (tick "Share tab audio" in the dialog).'],
+              ['Sense', 'How loud the music counts as: turn up for a quiet speaker, down for a loud one. The meter shows bass, mids and highs, and flashes on the beat.'],
+              ['Beat', 'The chance that each beat lights a pot under the lava.'],
+              ['Floor', 'How much the bass turns up the floor heat, on top of the Floor knob: at 1x a full bass doubles it.'],
+              ['Lift', 'How much the bass raises Lift, so blobs rise harder on the drop.'],
+              ['Turb', 'How much the mids turn up the eddies.'],
+              ['Kick', 'How much the highs sharpen the Kick, the recoil of necks and skins.']
+            ])
+          )
         )]
         : []),
       row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
@@ -418,5 +472,5 @@ export function createSettingsPanel () {
   )
 
   tooltips(panel)
-  return { element: panel, open, close }
+  return { element: panel, open, close, meter }
 }

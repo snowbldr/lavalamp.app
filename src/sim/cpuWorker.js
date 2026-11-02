@@ -127,6 +127,7 @@ self.onmessage = ({ data: m }) => {
       if (m.params) Object.assign(params, m.params)
       sim.setTouches(m.touches || [])
       if (m.push) sim.push(m.push[0], m.push[1])
+      for (let k = 0; k < (m.light || 0); k++) sim.lightElement()
       if (m.want) want = m.want
       setPace(m.pace)
       break
