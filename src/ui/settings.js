@@ -1,5 +1,6 @@
 import { fnstate } from '@srfnstack/fntags'
 import { notify } from './components.js'
+import { CURRENT } from '../versions.js'
 import { seedRandom } from '../sim/random.js'
 
 // Defaults that depend on the window. They take the raw window size, not the capped lamp size,
@@ -414,8 +415,11 @@ const defaults = () => ({
   seed: randomSeed()
 })
 
+// Every save and every link carries the version it was made on (Robert: "going forward, links
+// and settings need to always include the version"), so the root page can open the lamp it
+// belongs to.
 export const getSettings = () => {
-  const result = {}
+  const result = { version: CURRENT }
   for (const [key, state] of Object.entries({ ...colorSettings, ...numberSettings })) result[key] = state()
   return result
 }
@@ -445,12 +449,29 @@ export const resetSettings = () => applySettings(defaults())
 // 2026-11-01, when a Save from the CPU tab came back as the GPU lamp's settings (Robert: "seems
 // like you replaced the gpu defaults with the cpu settings?"). The GPU keeps the old key, so
 // GPU saves from before still load; the CPU starts fresh.
-const storageKey = () => cpu() ? 'lavalamp.app-settings-cpu' : 'lavalamp.app-settings'
+// Each version keeps its own saves (Robert: "Their old local storage settings need to maintain
+// all versions of settings independently so they can always go back"): v1, the 2023 lamp, owns
+// 'lavalamp.app-settings' and is never touched; this version has its own keys. A v2 save made
+// under the old key before the split (the GPU lamp used it until 2026-11-02) is copied over
+// once, never moved, and told apart from a v1 save by a key v1 never had.
+const LEGACY_KEY = 'lavalamp.app-settings'
+const LEGACY_CPU_KEY = 'lavalamp.app-settings-cpu'
+const storageKey = () => cpu() ? `lavalamp.app-v${CURRENT}-settings-cpu` : `lavalamp.app-v${CURRENT}-settings`
+const looksLikeThisVersion = text => {
+  try { const o = JSON.parse(text); return !!o && (o.version === CURRENT || 'pull' in o || 'turbulence' in o || 'cupDepth' in o || 'heatSpots' in o) } catch { return false }
+}
+const adoptLegacySave = () => {
+  try {
+    if (localStorage.getItem(storageKey())) return
+    const old = localStorage.getItem(cpu() ? LEGACY_CPU_KEY : LEGACY_KEY)
+    if (old && looksLikeThisVersion(old)) localStorage.setItem(storageKey(), old)
+  } catch {}
+}
 
 // The views: ways of looking at the lamp, and the touch mode and sound bed. Not part of a save or
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
 // reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
-const VIEW_KEY = 'lavalamp.app-views'
+const VIEW_KEY = `lavalamp.app-v${CURRENT}-views`
 const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed }
 const viewChoices = { touchMode: touchModes, soundBed: soundBeds }
 const saveViews = () => {
@@ -475,6 +496,7 @@ const loadViews = () => {
 // Views first, then saved settings, then a share link on top if the URL has one.
 export const loadSavedSettings = () => {
   loadViews()
+  adoptLegacySave()
   const saved = localStorage.getItem(storageKey())
   if (saved) {
     try {
@@ -531,4 +553,4 @@ export const saveSettings = () => {
 export const clearSavedSettings = () => localStorage.removeItem(storageKey())
 
 export const shareLink = () =>
-  `${window.location.origin}${window.location.pathname}?shared=${btoa(JSON.stringify(getSettings()))}`
+  `${window.location.origin}${window.location.pathname}?v=${CURRENT}&shared=${btoa(JSON.stringify(getSettings()))}`

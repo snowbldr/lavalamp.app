@@ -20,9 +20,26 @@
     <path d="M16.455,8.5a3.492,3.492,0,0,0-3.151,2H0v3H13.3a3.481,3.481,0,0,0,6.3,0H24v-3H19.605A3.492,3.492,0,0,0,16.455,8.5Z"/>
     <path d="M7.545,16.375a3.492,3.492,0,0,0-3.15,2H0v3H4.395a3.481,3.481,0,0,0,6.3,0H24v-3H10.7A3.492,3.492,0,0,0,7.545,16.375Z"/>
 </svg>
+<script>
+  // Which lamp this visit gets. Every version that ever ran here is kept under versions/, and a
+  // link that names an older version, or none at all, opens that one, so the links people have
+  // keep working (the lamp live since 2023 is v1). Only a link or a saved choice naming the
+  // current version gets the page below. See src/versions.js.
+  (function () {
+    var CURRENT = '2'
+    var query = new URLSearchParams(window.location.search)
+    var v = query.get('v')
+    if (!v && query.get('shared')) { try { v = String(JSON.parse(atob(query.get('shared'))).version || '') } catch (e) { v = '' } }
+    if (!v && !query.has('shared')) { try { v = localStorage.getItem('lavalamp.app-version') || '' } catch (e) { v = '' } }
+    if (!v || !/^[0-9.]+$/.test(v)) v = '1'
+    if (v !== CURRENT) {
+      window.lavalampHandoff = v
+      window.location.replace('versions/v' + v + '/index.html' + window.location.search + window.location.hash)
+    }
+  })()
+</script>
 <script type="module">
-  import { start } from './src/app.js'
-  start()
+  if (!window.lavalampHandoff) import('./src/app.js').then(m => m.start())
 </script>
 </body>
 </html>

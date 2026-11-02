@@ -9,6 +9,7 @@ import { createPointerInput } from './input/pointer.js'
 import { createGloop } from './audio/gloop.js'
 import { TURNS, lampSizeFor, lampToPage, pageToLamp, pageVectorToLamp } from './input/frame.js'
 import { notify } from './ui/components.js'
+import { takeUpgrade } from './versions.js'
 import { createSettingsPanel } from './ui/settingsPanel.js'
 import {
   bgColor,
@@ -92,6 +93,8 @@ import {
   flowSlow,
   interactionRadius,
   loadSavedSettings,
+  applySettings,
+  saveSettings,
   maxTemp,
   pace,
   particleCount,
@@ -183,6 +186,10 @@ export async function start () {
   refitDefaults(window.innerWidth, window.innerHeight)
   // Saved settings are per backend, so they load once the backend is known and the defaults sit on it.
   loadSavedSettings()
+  // Arriving from an older version's banner: its settings, mapped (see versions.js), go on top
+  // and are saved as this version's, so the next visit finds them.
+  const upgrade = takeUpgrade()
+  if (upgrade) { applySettings(upgrade.mapped); saveSettings() }
   // The GPU solver never moves a particle more than GPU_REACH a pass (see REACH_CAP in
   // gpuSimulation.js); a loaded Reach above it would be a lie on the knob.
   if (device && reach() > GPU_REACH) reach(GPU_REACH)
