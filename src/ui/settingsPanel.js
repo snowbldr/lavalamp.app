@@ -17,6 +17,8 @@ import {
   pixels,
   defaultPixels,
   backendLabel,
+  screenLabel,
+  motionLabel,
   blend,
   defaultSettle,
   defaultViscosity,
@@ -102,6 +104,11 @@ import {
   turbulence,
   wobble
 } from './settings.js'
+
+// The Sound section is hidden for now, not removed: the gloops are not finished and this version
+// goes up without them (Robert: "let's temporarily hide all the sound stuff from the settings so
+// we can push up this version. I think next is sound"). Flip to true to show it again.
+const SOUND_SHOWN = false
 
 // Two sections: the top one for anyone (colours, what a finger does, the flow field, fullscreen)
 // and Advanced, folded away, with its own folded groups: Flow, Heating, Particle physics,
@@ -212,6 +219,8 @@ export function createSettingsPanel () {
     section(
       'Advanced', advancedOpen,
       div({ class: 'panel-note' }, backendLabel.bindAs(() => `Backend: ${backendLabel()}`)),
+      div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),
+      div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
       section(
         'Flow', flowOpen,
         knobs(
@@ -313,12 +322,14 @@ export function createSettingsPanel () {
           ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
         ])
       ),
-      section(
-        'Sound', soundOpen,
-        pair('Sound', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
-        row('Bed', segmented('bed', soundBed, soundBeds)),
-        hint(help, 'Gloops made up from the lava as it moves: a bloop where a neck snaps or a blob lands, pitched by how much lava moved, and a bed that follows how stirred up the lava is: Simmer is a scatter of tiny pops, Noise a low rumble, Hum a drone.')
-      ),
+      ...(SOUND_SHOWN
+        ? [section(
+          'Sound', soundOpen,
+          pair('Sound', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
+          row('Bed', segmented('bed', soundBed, soundBeds)),
+          hint(help, 'Gloops made up from the lava as it moves: a bloop where a neck snaps or a blob lands, pitched by how much lava moved, and a bed that follows how stirred up the lava is: Simmer is a scatter of tiny pops, Noise a low rumble, Hum a drone.')
+        )]
+        : []),
       row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
       hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.')
     ),

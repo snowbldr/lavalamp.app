@@ -3,6 +3,8 @@ export function createMotionInput () {
   const acceleration = [0, 0]
   const gravity = [0, 1] // which way is down, in page coordinates (x right, y down), from the sensor
   let heard = false
+  let events = 0 // devicemotion events received, so the panel can say whether the sensor speaks at all
+  let asked = false
 
   // Rotate a device-frame vector (x right, y up the screen) into page coordinates (x right, y down),
   // allowing for the browser having already turned the page to match the device.
@@ -14,6 +16,7 @@ export function createMotionInput () {
   }
 
   window.addEventListener('devicemotion', event => {
+    events++
     const a = event.acceleration
     if (a) {
       const [px, py] = toPage(a.x || 0, a.y || 0)
@@ -54,9 +57,22 @@ export function createMotionInput () {
     },
     // iOS only delivers motion events after the page asks, and only from inside a user gesture.
     requestPermission () {
+      asked = true
       if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
         DeviceMotionEvent.requestPermission().catch(() => {})
       }
+    },
+    // One line for the panel: whether motion events arrive, and the likeliest reason when they
+    // do not. A browser only delivers them on a secure context (https, and a certificate it
+    // trusts: a self signed one accepted through the warning page does not always count), and
+    // Chrome has a Motion sensors site setting that can be off.
+    status () {
+      if (typeof DeviceMotionEvent === 'undefined') return 'Motion: this browser has no motion sensors'
+      if (events === 0 && !window.isSecureContext) return 'Motion: no events; the page is not a secure context (needs https)'
+      if (events === 0 && !asked) return 'Motion: waiting for a tap to ask the browser'
+      if (events === 0) return 'Motion: no events yet (iOS: allow when asked; Chrome: Site settings, Motion sensors)'
+      const [x, y] = gravity
+      return `Motion: ${events} events, down is ${heard ? (Math.abs(x) > Math.abs(y) ? (x > 0 ? 'right' : 'left') : (y > 0 ? 'bottom' : 'top')) : 'unknown (lying flat)'}`
     }
   }
 }

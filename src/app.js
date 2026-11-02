@@ -102,6 +102,8 @@ import {
   sound,
   soundPending,
   fullscreen,
+  screenLabel,
+  motionLabel,
   soundBed,
   showHeater,
   settle,
@@ -328,16 +330,54 @@ export async function start () {
     if (!sim.remote) remember()
   }
 
-  // Browsers only allow the wake lock and the motion sensors from inside a user gesture.
-  const onFirstClick = () => {
-    document.removeEventListener('click', onFirstClick)
-    if (typeof NoSleep !== 'undefined') {
-      new NoSleep().enable()
-      notify('Wake Lock Activated')
+  // Keeping the screen awake. The browser's own Screen Wake Lock first (a secure context only),
+  // taken again whenever the page comes back into view, since the browser drops it every time
+  // the page is hidden; NoSleep's looping video where there is no such API. Each outcome goes on
+  // the panel, so a phone can say what happened (Robert: "the screen lock no longer works on my
+  // android phone"; nothing of that can be seen from the laptop).
+  let wakeLock = null
+  let noSleep = null
+  const keepAwake = async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLock = await navigator.wakeLock.request('screen')
+        screenLabel('Screen: kept awake (Wake Lock API)')
+        wakeLock.addEventListener('release', () => { if (document.visibilityState === 'visible') screenLabel('Screen: wake lock released by the browser') })
+        return true
+      } catch (e) {
+        screenLabel(`Screen: wake lock refused (${e.name}: ${e.message})`)
+        return false
+      }
     }
-    motion.requestPermission()
+    if (typeof NoSleep !== 'undefined') {
+      try {
+        noSleep = noSleep || new NoSleep()
+        await noSleep.enable()
+        screenLabel(window.isSecureContext ? 'Screen: kept awake (NoSleep video)' : 'Screen: kept awake by NoSleep video; not a secure context (needs https) so no Wake Lock API')
+        return true
+      } catch (e) {
+        screenLabel(`Screen: NoSleep failed (${e.name}: ${e.message})`)
+        return false
+      }
+    }
+    screenLabel('Screen: no way to keep it awake here' + (window.isSecureContext ? '' : ' (not a secure context: needs https)'))
+    return false
   }
-  document.addEventListener('click', onFirstClick)
+  // Browsers only allow the wake lock and the motion sensors from inside a user gesture. A tap
+  // ends in pointerup and click both; the first of either does it.
+  let gestureSeen = false
+  const onFirstGesture = () => {
+    if (gestureSeen) return
+    gestureSeen = true
+    for (const event of ['click', 'pointerup', 'keydown']) document.removeEventListener(event, onFirstGesture)
+    keepAwake().then(ok => { if (ok) notify('Wake Lock Activated') })
+    motion.requestPermission()
+    motionLabel(motion.status())
+  }
+  for (const event of ['click', 'pointerup', 'keydown']) document.addEventListener(event, onFirstGesture)
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && gestureSeen && 'wakeLock' in navigator) keepAwake() })
+  motionLabel(motion.status())
+  setInterval(() => motionLabel(motion.status()), 1000)
 
   lamp.addEventListener('click', settingsPanel.close)
   const settingsButton = document.getElementById('settings')

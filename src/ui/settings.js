@@ -128,6 +128,12 @@ export const pixels = fnstate(defaultPixels)
 // Which lamp is running, for the panel (Robert: "we should display which backend is being used
 // in the advance settings (so I can be sure I'm using cpu)").
 export const backendLabel = fnstate('')
+// Whether the screen is being kept awake and whether the motion sensors are heard, for the
+// panel: on a phone neither can be seen from the laptop (Robert: "there's no accelerometer
+// detection on mobile, and the screen lock no longer works on my android phone"), and both
+// depend on the page being a secure context, so the phone says what it has.
+export const screenLabel = fnstate('Screen: tap the lamp once to keep it awake')
+export const motionLabel = fnstate('')
 export const computeDefaultGravity = height => Math.round(500 * height / 900)
 
 export const defaultBgColor = { r: 0, g: 0, b: 0 }
