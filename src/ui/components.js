@@ -173,9 +173,31 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
 // A row of knobs; on a touch screen a stack of sliders.
 export const knobs = (...cells) => div({ class: TOUCH_UI ? 'knobs sliders' : 'knobs' }, ...cells)
 
-// Headed groups for the Advanced list, never folded: a group and, inside it, subgroups.
-export const group = (title, ...rows) => div({ class: 'group' }, div({ class: 'group-title' }, title), ...rows)
-export const subgroup = (title, ...rows) => div({ class: 'subgroup' }, div({ class: 'subgroup-title' }, title), ...rows)
+// The Advanced list: each group a card like Colours and Touch, its knobs packed four to a row
+// in one grid with the subgroup named in small print over its first knob, the other rows
+// (switches, hints) under the grid (Robert: "we should pack these. each group should be a card
+// like above, each row should hold max 4"). On a touch screen the knobs are sliders in a stack,
+// so there the subgroup name is a line of its own. A subgroup is knob cells, nothing else.
+export const subgroup = (title, ...cells) => ({ subgroup: title, cells })
+export const group = (title, ...rows) => {
+  const packed = []
+  const rest = []
+  for (const r of rows) {
+    if (r && r.subgroup !== undefined) {
+      if (TOUCH_UI) packed.push(div({ class: 'subgroup-title' }, r.subgroup))
+      r.cells.forEach((cell, i) => {
+        if (!TOUCH_UI) cell.prepend(div({ class: 'knob-sub' }, i === 0 ? r.subgroup : ''))
+        packed.push(cell)
+      })
+    } else rest.push(r)
+  }
+  return div(
+    { class: 'sub-panel group' },
+    div({ class: 'sub-title' }, span(title)),
+    div({ class: TOUCH_UI ? 'knobs sliders' : 'knobs' }, ...packed),
+    ...rest
+  )
+}
 
 // One sentence about a control, shown while help is on (`help` is a boolean fnstate). Robert:
 // "we should have a ? icon to click that opens a brief one sentence explanation of each control

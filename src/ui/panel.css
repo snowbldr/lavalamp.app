@@ -177,12 +177,12 @@ input[type="range"].slider::-moz-range-track { height: 6px; border-radius: 3px; 
 input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 .reset { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: #ececec; font-size: 15px; line-height: 1; cursor: pointer; padding: 0; }
 
-/* The Advanced list: headed groups and subgroups, nothing folded. */
-.group { padding: 4px 0 2px; }
-.group + .group { border-top: 1px solid rgba(255, 255, 255, 0.1); margin-top: 6px; padding-top: 10px; }
-.group-title { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(236, 236, 236, 0.85); margin-bottom: 2px; }
-.subgroup { padding: 2px 0 4px; }
-.subgroup-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); margin: 4px 0 0; }
+/* The Advanced list: each group a card, knobs packed four to a row, the subgroup named in small
+   print over its first knob (every cell keeps the line so the dials align). */
+.sub-panel.group { padding-bottom: 6px; }
+.sub-panel.group .knobs { padding-top: 0; }
+.knob-sub { height: 12px; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); white-space: nowrap; align-self: flex-start; }
+.subgroup-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); margin: 6px 0 0; }
 
 /* Segmented choice and toggles */
 .segmented { display: flex; width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.08); padding: 2px; }
