@@ -293,6 +293,7 @@ export function createSimulation ({ width, height, params }) {
   let kicked = false // whether the kick-off lighting has happened
   let cupDepthNow = 0 // params.cupDepth as of the last step, for ceilingAt
   let touchHeatNow = TOUCH_HEAT // params.touchHeat as of the last step
+  let touchStrengthNow = 1 // params.touchStrength: a multiplier on every finger effect
   let touchRadiusNow = 0 // params.touchRadius as of the last step, px; 0 means the TOUCH_RADIUS fraction
   let wallPushNow = 0 // params.wallPush as of the last step, px
   let spawnAreaNow = params.spawnArea || SPAWN_AREA // floor area per settled particle, px², for the spawn slab and the reservoirs
@@ -516,13 +517,13 @@ export function createSimulation ({ width, height, params }) {
         case 'push': {
           const ux = r > 0 ? dx / r : 0
           const uy = r > 0 ? dy / r : 0
-          out[0] += (TOUCH_PUSH * ux + t.vx) * w
-          out[1] += (TOUCH_PUSH * uy + t.vy) * w
+          out[0] += (TOUCH_PUSH * touchStrengthNow * ux + t.vx) * w
+          out[1] += (TOUCH_PUSH * touchStrengthNow * uy + t.vy) * w
           break
         }
         case 'pull': {
           // Toward the finger, never past it.
-          const speed = Math.min(TOUCH_PUSH * w, r / dt)
+          const speed = Math.min(TOUCH_PUSH * touchStrengthNow * w, r / dt)
           if (r > 0) {
             out[0] += -dx / r * speed + t.vx * w
             out[1] += -dy / r * speed + t.vy * w
@@ -532,7 +533,7 @@ export function createSimulation ({ width, height, params }) {
         case 'spin': {
           const core = radius * 0.5
           const c = r / core
-          const speed = TOUCH_SPIN * 2 * c / (1 + c * c) * Math.exp(-(q * q) / 4)
+          const speed = TOUCH_SPIN * touchStrengthNow * 2 * c / (1 + c * c) * Math.exp(-(q * q) / 4)
           if (r > 0) {
             out[0] += -dy / r * speed + t.vx * w
             out[1] += dx / r * speed + t.vy * w
@@ -540,10 +541,10 @@ export function createSimulation ({ width, height, params }) {
           break
         }
         case 'heat':
-          heat += touchHeatNow * w
+          heat += touchHeatNow * touchStrengthNow * w
           break
         case 'cool':
-          heat -= touchHeatNow * w
+          heat -= touchHeatNow * touchStrengthNow * w
           break
       }
     }
@@ -713,9 +714,10 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1], elementRate = ELEMENT_RATE, elementLifeScale = ELEMENT_LIFE_SCALE, elementCore = ELEMENT_CORE, floorHeat = SPOT_BASE, floorGlow = SPOT_GLOW, liftCap = LIFT_CAP } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchStrength = 1, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1], elementRate = ELEMENT_RATE, elementLifeScale = ELEMENT_LIFE_SCALE, elementCore = ELEMENT_CORE, floorHeat = SPOT_BASE, floorGlow = SPOT_GLOW, liftCap = LIFT_CAP } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
+    touchStrengthNow = touchStrength
     touchRadiusNow = touchRadius
     wallPushNow = wallPush
     spawnAreaNow = params.spawnArea || SPAWN_AREA

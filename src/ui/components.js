@@ -351,6 +351,28 @@ export const segmented = (idPrefix, state, options) => div(
   ))
 )
 
+// A choice shown as pictures with a word under each, for the touch modes (Robert: "my 13 yr old
+// step daughter literally could not see the touch controls. Maybe some little pictures to
+// explain the different touch modes would be good too"). Each option is { value, label, svg }.
+export const iconChoice = (idPrefix, state, options) => div(
+  { class: 'icon-choice' },
+  ...options.map(option => {
+    const picture = document.createElement('span')
+    picture.className = 'icon'
+    picture.innerHTML = option.svg
+    return button(
+      {
+        id: `${idPrefix}-${option.value}`,
+        class: state.bindAttr(() => state() === option.value ? 'on' : ''),
+        title: option.title || option.label,
+        onclick: () => state(option.value)
+      },
+      picture,
+      span(option.label)
+    )
+  })
+)
+
 // An on/off switch for a boolean state.
 export const toggle = (id, state) => button({
   id,

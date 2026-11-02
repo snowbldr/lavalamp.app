@@ -1,5 +1,5 @@
 import { button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { hint, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { hint, iconChoice, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -103,6 +103,8 @@ import {
   showHeater,
   touchMode,
   touchModes,
+  touchStrength,
+  defaultTouchStrength,
   stiffnessNear,
   stir,
   turbulence,
@@ -113,6 +115,16 @@ import {
 // goes up without them (Robert: "let's temporarily hide all the sound stuff from the settings so
 // we can push up this version. I think next is sound"). Flip to true to show it again.
 const SOUND_SHOWN = false
+
+// The touch modes as pictures: arrows out, arrows in, a circling arrow, a flame, a snowflake.
+const ICON = body => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`
+const TOUCH_OPTIONS = [
+  { value: 'push', label: 'Push', title: 'Shove the lava away from your finger', svg: ICON('<circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M12 8V3m-3 2 3-2 3 2M12 16v5m-3-2 3 2 3-2M8 12H3m2-3-2 3 2 3M16 12h5m-2-3 2 3-2 3"/>') },
+  { value: 'pull', label: 'Pull', title: 'Gather the lava in to your finger', svg: ICON('<circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M12 3v5M9 6l3 2 3-2M12 21v-5m-3 2 3-2 3 2M3 12h5M6 9l2 3-2 3M21 12h-5m2-3-2 3 2 3"/>') },
+  { value: 'spin', label: 'Spin', title: 'Whirl the lava around your finger', svg: ICON('<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 3v4.5H15"/>') },
+  { value: 'heat', label: 'Heat', title: 'Warm the lava so it rises', svg: ICON('<path d="M12 3c1 3.5 5 5 5 9.5a5 5 0 0 1-10 0c0-1.8.7-3.2 1.8-4.4.2 1.4.9 2.4 2 3C10.6 8.6 10.8 5.8 12 3z"/>') },
+  { value: 'cool', label: 'Cool', title: 'Chill the lava so it sinks', svg: ICON('<path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19"/><path d="M12 2 9.5 4.5M12 2l2.5 2.5M12 22l-2.5-2.5M12 22l2.5-2.5M2 12l2.5-2.5M2 12l2.5 2.5M22 12l-2.5-2.5M22 12l-2.5 2.5"/>') }
+]
 
 // Two sections: the top one for anyone (colours, what a finger does, the flow field, fullscreen)
 // and Advanced, folded away, with its own folded groups: Flow, Heating, Particle physics,
@@ -212,8 +224,14 @@ export function createSettingsPanel () {
         }, span(theme.name))))
       ),
       hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Duotone runs from one colour to another; Mono runs one colour from dark to light. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.'),
-      row('Touch', segmented('touch', touchMode, touchModes)),
-      hint(help, 'What a finger or the mouse does to the lava under it: shove it away, gather it in, spin it, heat it or cool it.'),
+      // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
+      // thirteen year old (Robert: "I want to make it look more like a sub panel").
+      div({ class: 'touch-panel' },
+        div({ class: 'touch-title' }, span('Touch'), span({ class: 'touch-sub' }, 'what your finger does to the lava')),
+        iconChoice('touch', touchMode, TOUCH_OPTIONS),
+        knobs(knob('Strength', 'touch-strength', touchStrength, { min: 0, max: 3, step: 0.1 }, () => defaultTouchStrength, v => `${Number(v).toFixed(1)}x`))
+      ),
+      hint(help, 'What a finger or the mouse does to the lava under it: Push shoves it away, Pull gathers it in, Spin whirls it, Heat and Cool change its temperature. Strength is how hard, 1x as tuned.'),
       pair('Flow Field', toggle('flow', showFlow), 'Fullscreen', toggle('fullscreen', fullscreen)),
       hint(help, [
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.'],
@@ -315,7 +333,7 @@ export function createSettingsPanel () {
           knob('Size', 'particleSize', particleSize, { min: 1, max: 50, step: 1 }, () => defaultParticleSize()),
           knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth()),
           knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend()),
-          knob('Pixels', 'pixels', pixels, { min: 0.5, max: 4, step: 0.5 }, () => defaultPixels, v => `${Number(v).toFixed(1)} M`)
+          knob('Pixels', 'pixels', pixels, { min: 0.5, max: () => Math.max(4, Math.ceil(window.innerWidth * window.innerHeight / 1e6)), step: 0.5 }, () => defaultPixels, v => `${Number(v).toFixed(2)} M`)
         ),
         pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
         pair('Auto Pixels', toggle('auto-pixels', autoPixels)),

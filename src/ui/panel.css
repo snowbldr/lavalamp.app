@@ -136,6 +136,20 @@
 }
 .swatch-hex:focus { outline: none; border-color: var(--accent); }
 
+/* Touch as a boxed sub panel with pictures (Robert: "my 13 yr old step daughter literally could
+   not see the touch controls"). */
+.touch-panel { margin: 6px 0 4px; padding: 10px 12px 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); }
+.touch-title { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.9); }
+.touch-sub { font-size: 11px; letter-spacing: 0; text-transform: none; color: rgba(236, 236, 236, 0.55); }
+.icon-choice { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 4px; }
+.icon-choice button {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; background: rgba(255, 255, 255, 0.05);
+  color: rgba(236, 236, 236, 0.8); font: inherit; font-size: 11px; cursor: pointer;
+}
+.icon-choice button .icon { display: block; line-height: 0; }
+.icon-choice button.on { background: var(--accent); border-color: var(--accent); color: #1c1c1e; font-weight: 600; }
+
 /* Segmented choice and toggles */
 .segmented { display: flex; width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.08); padding: 2px; }
 .segmented button {

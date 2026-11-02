@@ -115,6 +115,7 @@ import {
   stiffnessNear,
   stir,
   touchMode,
+  touchStrength,
   turbulence,
   viscosity,
   seed
@@ -200,6 +201,7 @@ export async function start () {
   // gpuSimulation.js); 0 and 0, the lamp as it was.
   for (const key of ['wallNear', 'wallPull']) { const q = new URLSearchParams(window.location.search).get(key); if (q !== null && !Number.isNaN(Number(q))) params[key] = Number(q) }
   mirror(particleCount, params, 'particleCount', Math.trunc)
+  mirror(touchStrength, params, 'touchStrength')
   mirror(interactionRadius, params, 'interactionRadius')
   params.restDensity = REST_DENSITY // Pull is Stiff times Density; see computeDefaultPull
   mirror(pull, params, 'stiffness', v => v / REST_DENSITY)
@@ -355,26 +357,32 @@ export async function start () {
   fit()
   window.addEventListener('resize', fit)
   pixels.subscribe(() => renderer.resize(width, height))
-  // Auto Pixels (see settings.js). The ladder of budgets, the window's own size as the top rung,
-  // two seconds under Target to step down, four seconds at half again over it to step up, so it
-  // settles rather than hunts. A change of Pixels not made here is the hand on the knob: auto off.
-  const PIXEL_LADDER = [0.5, 1, 1.5, 2, 3, 4]
+  // Auto Pixels (see settings.js). The rungs are the budgets under the window's own size and
+  // then that size exactly, so the top is 1:1 with the screen and not a round number (Robert:
+  // "it should reach exactly 1:1 with the current resolution not arbitrarily 3.0"). Up a rung
+  // after one second at half again over Target, down a rung after two seconds under it, and a
+  // rung that was just stepped down from is not tried again for half a minute, so it settles
+  // rather than hunts. A change of Pixels not made here is the hand on the knob: auto off.
+  const nativePixels = () => window.innerWidth * window.innerHeight / 1e6
+  const pixelLadder = () => { const native = nativePixels(); const rungs = [0.5, 1, 1.5, 2, 3, 4, 6, 8].filter(r => r < native); rungs.push(native); return rungs }
   let autoSetting = false
   pixels.subscribe(() => { if (!autoSetting) autoPixels(false) })
   let slowSeconds = 0
   let fastSeconds = 0
+  let failedRung = -1
+  let failedUntil = 0
   const autoPixelsTick = fps => {
     if (!autoPixels()) { slowSeconds = 0; fastSeconds = 0; return }
-    const native = Math.min(4, Math.ceil(window.innerWidth * window.innerHeight / 1e6 * 2) / 2)
-    const rung = PIXEL_LADDER.indexOf(pixels())
+    const ladder = pixelLadder()
+    let rung = 0
+    for (let k = 0; k < ladder.length; k++) if (Math.abs(ladder[k] - pixels()) < Math.abs(ladder[rung] - pixels())) rung = k
     const target = targetFps()
     slowSeconds = fps < target ? slowSeconds + 1 : 0
     fastSeconds = fps > target * 1.5 ? fastSeconds + 1 : 0
     let next = null
-    if (slowSeconds >= 2 && rung > 0) next = PIXEL_LADDER[rung - 1]
-    else if (fastSeconds >= 4 && rung >= 0 && rung < PIXEL_LADDER.length - 1 && PIXEL_LADDER[rung + 1] <= native) next = PIXEL_LADDER[rung + 1]
-    else if (rung < 0) next = 1
-    if (next !== null) { autoSetting = true; pixels(next); autoSetting = false; slowSeconds = 0; fastSeconds = 0 }
+    if (slowSeconds >= 2 && rung > 0) { failedRung = rung; failedUntil = performance.now() + 30000; next = rung - 1 }
+    else if (fastSeconds >= 1 && rung < ladder.length - 1 && !(rung + 1 === failedRung && performance.now() < failedUntil)) next = rung + 1
+    if (next !== null) { autoSetting = true; pixels(ladder[next]); autoSetting = false; slowSeconds = 0; fastSeconds = 0 }
   }
 
   // Turn the lamp so its floor is on `newEdge`, carrying every particle to where it was on the
@@ -546,7 +554,7 @@ export async function start () {
     if (performance.now() - fpsSince >= 1000) {
       const fps = fpsFrames * 1000 / (performance.now() - fpsSince)
       autoPixelsTick(fps)
-      fpsLabel(`${Math.round(fps)} fps, Pixels ${Number(pixels()).toFixed(1)} M${autoPixels() ? ' (auto)' : ''}`)
+      fpsLabel(`${Math.round(fps)} fps, Pixels ${Number(pixels()).toFixed(2)} M${autoPixels() ? ' (auto)' : ''}${Math.abs(pixels() - nativePixels()) < 0.005 ? ', 1:1' : ''}`)
       fpsFrames = 0
       fpsSince = performance.now()
     }

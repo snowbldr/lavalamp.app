@@ -321,6 +321,10 @@ export const fullscreen = fnstate(false)
 // What a finger on the lamp does. Not saved.
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
+// How hard a finger acts, a multiplier on the push, pull and spin speeds and on the heat and
+// cool (Robert: "we need a touch effect strength slider under the touch").
+export const defaultTouchStrength = 1
+export const touchStrength = fnstate(defaultTouchStrength)
 
 // Themes: a name and every colour at once, the heat gradient, the back and the flow arrows
 // (Robert: "themes that set all of the colors"). Six contrast presets, gradients that jump hue
@@ -375,7 +379,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, seed }
+const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
 

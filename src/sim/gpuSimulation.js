@@ -106,6 +106,7 @@ struct Params {
   damp: f32,
   wallNear: f32,
   wallPull: f32,
+  touchStrength: f32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -351,12 +352,12 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     let q = r / P.touchRadius;
     if (q > 2.5) { continue; }
     let w = exp(-q * q);
-    if (tc.mode == 3u) { t += P.touchHeat * w; }
-    else if (tc.mode == 4u) { t -= P.touchHeat * w; }
+    if (tc.mode == 3u) { t += P.touchHeat * P.touchStrength * w; }
+    else if (tc.mode == 4u) { t -= P.touchHeat * P.touchStrength * w; }
     else { stirred = max(stirred, min(1.0, P.fingerOverride * w)); } // a moving finger overrides the inertia by its weight, simulation.js STIR_OVERRIDE.finger
-    if (tc.mode == 0u) { let u = select(vec2f(0.0), d / r, r > 0.0); finger += (250.0 * u + vec2f(tc.vx, tc.vy)) * w; }
-    else if (tc.mode == 1u) { if (r > 0.0) { let speed = min(250.0 * w, r / P.dt); finger += -d / r * speed + vec2f(tc.vx, tc.vy) * w; } }
-    else if (tc.mode == 2u) { let core = P.touchRadius * 0.5; let c = r / core; let speed = 300.0 * 2.0 * c / (1.0 + c * c) * exp(-(q * q) / 4.0); if (r > 0.0) { finger += vec2f(-d.y, d.x) / r * speed + vec2f(tc.vx, tc.vy) * w; } }
+    if (tc.mode == 0u) { let u = select(vec2f(0.0), d / r, r > 0.0); finger += (250.0 * P.touchStrength * u + vec2f(tc.vx, tc.vy)) * w; }
+    else if (tc.mode == 1u) { if (r > 0.0) { let speed = min(250.0 * P.touchStrength * w, r / P.dt); finger += -d / r * speed + vec2f(tc.vx, tc.vy) * w; } }
+    else if (tc.mode == 2u) { let core = P.touchRadius * 0.5; let c = r / core; let speed = 300.0 * P.touchStrength * 2.0 * c / (1.0 + c * c) * exp(-(q * q) / 4.0); if (r > 0.0) { finger += vec2f(-d.y, d.x) / r * speed + vec2f(tc.vx, tc.vy) * w; } }
   }
   t = clamp(t, 0.0, P.maxTemp);
   F[TEMP(i)] = t;
@@ -747,7 +748,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 52 // the Params struct, 52 fields, 208 bytes (a uniform's size is a multiple of 16)
+const PARAM_FLOATS = 56 // the Params struct, 53 fields, padded to 224 bytes (a uniform's size is a multiple of 16)
 // The most a relaxation pass may move a particle, in radii, whatever Reach says. The Jacobi
 // solver resolves a packed cold pool only a few rows a pass, and moves of a whole radius let the
 // floor compress and burst (the GPU's Reach default has been 0.5 since that was measured, 979 to
@@ -1015,6 +1016,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[48] = params.liftCap > 0 ? params.liftCap : 10
     pf[49] = params.damp ?? 0.25 // what is left of a relaxation move that reverses the last one; see relax
     pf[50] = params.wallNear ?? 0; pf[51] = params.wallPull ?? 0 // the glass as particles; see wallLattice
+    pf[52] = params.touchStrength ?? 1
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
