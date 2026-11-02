@@ -1,5 +1,5 @@
 import { button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { hint, iconChoice, knob, knobs, notify, pair, row, section, segmented, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { group, hint, iconChoice, knob, knobs, notify, pair, row, section, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -143,10 +143,6 @@ export function createSettingsPanel () {
   let panel
   // Advanced and its groups, all folded by default.
   const advancedOpen = fnstate(false)
-  const flowOpen = fnstate(false)
-  const heatingOpen = fnstate(false)
-  const physicsOpen = fnstate(false)
-  const renderingOpen = fnstate(false)
   const soundOpen = fnstate(false)
   const help = fnstate(false) // the ? button: one sentence under every control
 
@@ -249,14 +245,20 @@ export function createSettingsPanel () {
       div({ class: 'panel-note' }, fpsLabel.bindAs(() => fpsLabel())),
       div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),
       div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
-      section(
-        'Flow', flowOpen,
-        knobs(
-          knob('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir),
-          knob('Turb', 'turbulence', turbulence, { min: 0, max: () => Math.max(150, defaultTurbulence() * 2), step: 1 }, () => defaultTurbulence()),
-          knob('Eddies', 'drifters', drifters, { min: 0, max: () => Math.max(6, defaultDrifters() * 2), step: 1 }, () => defaultDrifters()),
-          knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
-        ),
+      // One long list under headings, no folding inside Advanced, each group split a layer
+      // further (Robert: "The advanced panel should become one giant list. we may want to break
+      // up the groups a bit further, perhaps another layer of subgroups").
+      group('Flow',
+        subgroup('Roll', knobs(
+            knob('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir)
+          )),
+        subgroup('Eddies', knobs(
+            knob('Turb', 'turbulence', turbulence, { min: 0, max: () => Math.max(150, defaultTurbulence() * 2), step: 1 }, () => defaultTurbulence()),
+            knob('Eddies', 'drifters', drifters, { min: 0, max: () => Math.max(6, defaultDrifters() * 2), step: 1 }, () => defaultDrifters())
+          )),
+        subgroup('Clock', knobs(
+            knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
+          )),
         hint(help, [
           ['Stir', 'Speed of the slow convection roll, up the middle and down the walls; negative runs it backwards.'],
           ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
@@ -264,22 +266,23 @@ export function createSettingsPanel () {
           ['Pace', 'Slow motion for the whole lamp.']
         ])
       ),
-      section(
-        'Heating', heatingOpen,
-        // The heater (Robert: "the heaters get too hot for too long. We need some knobs to tweak
-        // the heater pulses and heat and such").
-        knobs(
-          knob('Period', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots(), seconds),
-          knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction(), fixed(2)),
-          knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole),
-          knob('Heat', 'element-heat', elementHeat, { min: 1, max: () => Math.max(40, defaultElementHeat() * 4), step: 1 }, () => defaultElementHeat()),
-          knob('Duration', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife(), seconds),
-          knob('Big pot', 'element-life-scale', elementLifeScale, { min: 1, max: 8, step: 0.5 }, () => defaultElementLifeScale, times),
-          knob('Pulses', 'element-rate', elementRate, { min: 0.5, max: 12, step: 0.5 }, () => defaultElementRate(), fixed(1)),
-          knob('Core', 'element-core', elementCore, { min: 0.02, max: 0.3, step: 0.01 }, () => defaultElementCore(), fixed(2)),
-          knob('Floor', 'floor-heat', floorHeat, { min: 0, max: 1, step: 0.05 }, () => defaultFloorHeat, fixed(2)),
-          knob('Glow', 'floor-glow', floorGlow, { min: 0, max: 6, step: 0.1 }, () => defaultFloorGlow, fixed(1))
-        ),
+      group('Heating',
+        subgroup('Lava', knobs(
+            knob('Conduct', 'conduction', conduction, { min: 0, max: 1, step: 0.01 }, () => defaultConduction(), fixed(2)),
+            knob('Max Temp', 'max-temp', maxTemp, { min: 420, max: () => defaultMaxTemp() * 2, step: 1 }, defaultMaxTemp, whole)
+          )),
+        subgroup('Pots', knobs(
+            knob('Period', 'heat-spots', heatSpots, { min: 0, max: 60, step: 1 }, () => defaultHeatSpots(), seconds),
+            knob('Heat', 'element-heat', elementHeat, { min: 1, max: () => Math.max(40, defaultElementHeat() * 4), step: 1 }, () => defaultElementHeat()),
+            knob('Duration', 'element-life', elementLife, { min: 1, max: 30, step: 0.5 }, () => defaultElementLife(), seconds),
+            knob('Big pot', 'element-life-scale', elementLifeScale, { min: 1, max: 8, step: 0.5 }, () => defaultElementLifeScale, times),
+            knob('Pulses', 'element-rate', elementRate, { min: 0.5, max: 12, step: 0.5 }, () => defaultElementRate(), fixed(1)),
+            knob('Core', 'element-core', elementCore, { min: 0.02, max: 0.3, step: 0.01 }, () => defaultElementCore(), fixed(2))
+          )),
+        subgroup('Floor', knobs(
+            knob('Floor', 'floor-heat', floorHeat, { min: 0, max: 1, step: 0.05 }, () => defaultFloorHeat, fixed(2)),
+            knob('Glow', 'floor-glow', floorGlow, { min: 0, max: 6, step: 0.1 }, () => defaultFloorGlow, fixed(1))
+          )),
         hint(help, [
           ['Period', 'Seconds between rounds of pots lighting under the lava: lower is more often. 0 keeps the whole floor warm instead.'],
           ['Conduct', 'How fast heat spreads between touching lava. High and a blob warms and lifts as one; too high and a rising blob heats the pool below it through its neck and feeds the stretch.'],
@@ -293,26 +296,33 @@ export function createSettingsPanel () {
           ['Glow', 'How much brighter the floor gets under a pot at full glow.']
         ])
       ),
-      section(
-        'Particle physics', physicsOpen,
-        knobs(
-          knob('Count', 'particle-count', particleCount, { min: 5, max: () => Math.trunc(defaultParticleCount()) * 2, step: 1 }, defaultParticleCount, whole),
-          knob('Radius', 'interaction-radius', interactionRadius, { min: 5, max: () => Math.max(100, defaultInteractionRadius() * 2), step: 1 }, () => defaultInteractionRadius()),
-          knob('Pull', 'pull', pull, { min: 10, max: () => defaultPull() * 4, step: 10 }, () => defaultPull(), whole),
-          knob('Near', 'stiffness-near', stiffnessNear, { min: 1, max: () => defaultStiffnessNear() * 4, step: 10 }, () => defaultStiffnessNear()),
-          knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
-          knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
-          knob('Reserve', 'reserve', reserve, { min: 0.25, max: 8, step: 0.25 }, () => defaultReserve(), v => v >= 8 ? 'all' : times(v)),
-          knob('Lift', 'lift', lift, { min: 0.5, max: 10, step: 0.5 }, () => defaultLift(), v => v >= 10 ? 'none' : `${Number(v).toFixed(1)} g`),
-          knob('Wobble', 'wobble', wobble, { min: 0, max: 2, step: 0.01 }, () => defaultWobble, seconds),
-          knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),
-          knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity()),
-          knob('Kick', 'wobble-kick', wobbleKick, { min: 0, max: () => Math.max(10, defaultWobbleKick() * 2), step: 0.1 }, () => defaultWobbleKick()),
-          knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax(), v => `${v} g`),
-          knob('Reach', 'reach', reach, { min: 0.1, max: () => defaultReach() < 1 ? 0.5 : 2, step: 0.01 }, defaultReach, v => `${Number(v).toFixed(2)} r`),
-          knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
-          knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
-        ),
+      group('Liquid',
+        subgroup('Grain', knobs(
+            knob('Count', 'particle-count', particleCount, { min: 5, max: () => Math.trunc(defaultParticleCount()) * 2, step: 1 }, defaultParticleCount, whole),
+            knob('Radius', 'interaction-radius', interactionRadius, { min: 5, max: () => Math.max(100, defaultInteractionRadius() * 2), step: 1 }, () => defaultInteractionRadius())
+          )),
+        subgroup('Forces', knobs(
+            knob('Pull', 'pull', pull, { min: 10, max: () => defaultPull() * 4, step: 10 }, () => defaultPull(), whole),
+            knob('Near', 'stiffness-near', stiffnessNear, { min: 1, max: () => defaultStiffnessNear() * 4, step: 10 }, () => defaultStiffnessNear()),
+            knob('Gravity', 'gravity', gravityStrength, { min: 220, max: () => defaultGravityStrength() * 2, step: 1 }, defaultGravityStrength, whole),
+            knob('Lift', 'lift', lift, { min: 0.5, max: 10, step: 0.5 }, () => defaultLift(), v => v >= 10 ? 'none' : `${Number(v).toFixed(1)} g`)
+          )),
+        subgroup('Reservoirs', knobs(
+            knob('Bottles', 'cup-depth', cupDepth, { min: 0, max: 2, step: 0.05 }, () => defaultCupDepth, fixed(2)),
+            knob('Reserve', 'reserve', reserve, { min: 0.25, max: 8, step: 0.25 }, () => defaultReserve(), v => v >= 8 ? 'all' : times(v))
+          )),
+        subgroup('Motion', knobs(
+            knob('Wobble', 'wobble', wobble, { min: 0, max: 2, step: 0.01 }, () => defaultWobble, seconds),
+            knob('Kick', 'wobble-kick', wobbleKick, { min: 0, max: () => Math.max(10, defaultWobbleKick() * 2), step: 0.1 }, () => defaultWobbleKick()),
+            knob('Cap', 'wobble-max', wobbleMax, { min: 0.5, max: 10, step: 0.1 }, () => defaultWobbleMax(), v => `${v} g`),
+            knob('Viscosity', 'viscosity', viscosity, { min: 0, max: 60, step: 1 }, () => defaultViscosity())
+          )),
+        subgroup('Solver', knobs(
+            knob('Settle', 'settle', settle, { min: 1, max: 3, step: 1 }, () => defaultSettle),
+            knob('Reach', 'reach', reach, { min: 0.1, max: () => defaultReach() < 1 ? 0.5 : 2, step: 0.01 }, defaultReach, v => `${Number(v).toFixed(2)} r`),
+            knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
+            knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
+          )),
         hint(help, [
           ['Count', 'How many particles make up the visible lava; the pots below fill themselves on top.'],
           ['Radius', 'How far apart two particles can be and still feel each other.'],
@@ -332,17 +342,17 @@ export function createSettingsPanel () {
           ['Wall', 'Lava this close to a side wall is eased away from it, in px; a glass the wax does not wet.']
         ])
       ),
-      section(
-        'Rendering', renderingOpen,
-        knobs(
-          knob('Size', 'particleSize', particleSize, { min: 1, max: 50, step: 1 }, () => defaultParticleSize()),
-          knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth()),
-          knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend()),
-          knob('Pixels', 'pixels', pixels, { min: 0.5, max: () => Math.max(4, Math.ceil(window.innerWidth * window.innerHeight / 1e6)), step: 0.5 }, () => defaultPixels, v => `${Number(v).toFixed(2)} M`)
-        ),
-        pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
-        pair('Auto Pixels', toggle('auto-pixels', autoPixels)),
-        knobs(knob('Target', 'target-fps', targetFps, { min: 20, max: 120, step: 5 }, () => defaultTargetFps, v => `${v} fps`)),
+      group('Rendering',
+        subgroup('Look', knobs(
+            knob('Size', 'particleSize', particleSize, { min: 1, max: 50, step: 1 }, () => defaultParticleSize()),
+            knob('Smooth', 'smooth', smooth, { min: 0, max: 24, step: 1 }, () => defaultSmooth()),
+            knob('Blend', 'blend', blend, { min: 0, max: 48, step: 1 }, () => defaultBlend())
+          )),
+        subgroup('Budget', knobs(
+            knob('Pixels', 'pixels', pixels, { min: 0.5, max: () => Math.max(4, Math.ceil(window.innerWidth * window.innerHeight / 1e6)), step: 0.5 }, () => defaultPixels, v => `${Number(v).toFixed(2)} M`),
+            knob('Target', 'target-fps', targetFps, { min: 20, max: 120, step: 5 }, () => defaultTargetFps, v => `${v} fps`)
+          ), pair('Auto Pixels', toggle('auto-pixels', autoPixels))),
+        subgroup('Views', pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups))),
         hint(help, [
           ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
           ['Smooth', 'Rounds off the bumps along every edge by blurring the lava\'s shape before it is cut, by this many pixels. 0 is the raw metaballs.'],

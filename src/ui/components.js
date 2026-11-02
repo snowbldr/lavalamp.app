@@ -36,6 +36,12 @@ export const row = (title, control, { value, reset, forId } = {}) => div(
 const KNOB_SWEEP = 160 // px of drag for the whole range
 const KNOB_ANGLE = 135 // degrees either side of straight up
 export const DECADES = [1, 10, 100, 1000, 10000, 100000]
+// Touch screens get sliders in place of the dials (Robert: "honestly I really like the dials,
+// but only other super users will like them... On touch screens always the sliders. I think we
+// should have a separate button for reset, tap on mobile will be annoying with a slider").
+// ?touch on the page shows the sliders on a desktop, for checking them.
+export const TOUCH_UI = (typeof window !== 'undefined') && (window.matchMedia('(pointer: coarse)').matches || new URLSearchParams(window.location.search).has('touch'))
+
 export const knob = (title, id, state, { min, max, step, scales }, resetTo, format = v => String(v)) => {
   const scale = scales ? fnstate(scales.find(s => s >= Math.max(typeof max === 'function' ? max() : max, state())) || scales[scales.length - 1]) : null
   const maxOf = () => scale ? scale() : typeof max === 'function' ? max() : max
@@ -70,6 +76,28 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
   }
   const nudge = steps => state(clamp(state() + steps * stepOf()))
   const nextScale = () => { const i = scales.indexOf(scale()); scale(scales[(i + 1) % scales.length]) }
+  if (TOUCH_UI) {
+    // The same mapping as the dial (the default at the middle of the travel), on a native range
+    // input with a big thumb, a value, and a reset button.
+    const range = input({
+      id,
+      class: 'slider',
+      type: 'range',
+      min: 0,
+      max: 1000,
+      step: 1,
+      'aria-label': title,
+      value: state.bindAttr(() => String(Math.round(fraction() * 1000))),
+      oninput: e => state(clamp(fromFraction(Number(e.target.value) / 1000)))
+    })
+    return div(
+      { class: 'slider-row' },
+      label({ class: 'slider-label', for: id, onclick: () => { if (!range.title) { const text = hintText.get(title); if (text) range.title = text } } }, title),
+      range,
+      span({ class: 'slider-value' }, state.bindAs(() => format(state()))),
+      resetTo ? button({ class: 'reset', title: 'Reset to default', 'aria-label': `Reset ${title}`, onclick: () => state(resetTo()) }, '↺') : span()
+    )
+  }
   let drag = null
   const dial = div(
     {
@@ -142,8 +170,12 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
   )
 }
 
-// A row of knobs.
-export const knobs = (...cells) => div({ class: 'knobs' }, ...cells)
+// A row of knobs; on a touch screen a stack of sliders.
+export const knobs = (...cells) => div({ class: TOUCH_UI ? 'knobs sliders' : 'knobs' }, ...cells)
+
+// Headed groups for the Advanced list, never folded: a group and, inside it, subgroups.
+export const group = (title, ...rows) => div({ class: 'group' }, div({ class: 'group-title' }, title), ...rows)
+export const subgroup = (title, ...rows) => div({ class: 'subgroup' }, div({ class: 'subgroup-title' }, title), ...rows)
 
 // One sentence about a control, shown while help is on (`help` is a boolean fnstate). Robert:
 // "we should have a ? icon to click that opens a brief one sentence explanation of each control

@@ -161,6 +161,25 @@
 .icon-choice button .icon { display: block; line-height: 0; }
 .icon-choice button.on { background: var(--accent); border-color: var(--accent); color: #1c1c1e; font-weight: 600; }
 
+/* Sliders in place of the dials on touch screens, with a reset button each. */
+.knobs.sliders { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+.slider-row { display: grid; grid-template-columns: 72px 1fr 56px 30px; align-items: center; gap: 8px; min-height: 40px; }
+.slider-label { font-size: 12px; color: rgba(236, 236, 236, 0.85); }
+.slider-value { font-size: 12px; font-variant-numeric: tabular-nums; color: rgba(236, 236, 236, 0.9); text-align: right; }
+input[type="range"].slider { -webkit-appearance: none; appearance: none; width: 100%; height: 32px; margin: 0; background: transparent; }
+input[type="range"].slider::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); }
+input[type="range"].slider::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+input[type="range"].slider::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); }
+input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+.reset { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: #ececec; font-size: 15px; line-height: 1; cursor: pointer; padding: 0; }
+
+/* The Advanced list: headed groups and subgroups, nothing folded. */
+.group { padding: 4px 0 2px; }
+.group + .group { border-top: 1px solid rgba(255, 255, 255, 0.1); margin-top: 6px; padding-top: 10px; }
+.group-title { font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(236, 236, 236, 0.85); margin-bottom: 2px; }
+.subgroup { padding: 2px 0 4px; }
+.subgroup-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); margin: 4px 0 0; }
+
 /* Segmented choice and toggles */
 .segmented { display: flex; width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.08); padding: 2px; }
 .segmented button {
