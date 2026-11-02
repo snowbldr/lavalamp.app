@@ -11,12 +11,9 @@
   width: 320px;
   max-width: calc(100vw - 20px);
   max-height: calc(100vh - 20px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(236, 236, 236, 0.28) transparent;
-  scrollbar-gutter: stable;
+  overflow: hidden; /* the frame: the close button sits on it; the content scrolls inside */
   box-sizing: border-box;
-  padding: 10px 18px 18px;
+  padding: 0;
   border-radius: 14px;
   background: rgba(20, 20, 22, 0.86);
   backdrop-filter: blur(12px);
@@ -28,19 +25,39 @@
   -webkit-user-select: none;
 }
 .panel * { box-sizing: border-box; }
-.panel-bar { display: flex; justify-content: flex-end; align-items: center; height: 26px; margin: -2px 0 2px; }
-.panel-close {
-  position: relative;
-  width: 22px; height: 22px;
-  border: 0; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(236, 236, 236, 0.8); font-size: 14px; line-height: 22px; text-align: center;
-  cursor: pointer; padding: 0;
+/* The scrolling content, 16 px from every edge of the frame (the 11 px scrollbar gutters on
+   both sides count toward that; a touch screen has no gutter). */
+.panel-scroll {
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(236, 236, 236, 0.28) transparent;
+  scrollbar-gutter: stable both-edges;
+  padding: 16px 5px;
 }
-/* The hit area is a fingertip, the drawn button is not. */
-.panel-close::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+@media (pointer: coarse) { .panel-scroll { scrollbar-gutter: auto; padding: 16px; } }
+/* The first card starts at the padding, nothing above it, so the close button sits in the
+   frame's corner beside the card's rounded corner. */
+.panel-scroll > .panel-section:first-of-type { padding-top: 0; }
+.panel-scroll > .panel-section:first-of-type .sub-panel:first-child { margin-top: 0; }
+/* The close button nestles in the panel's top right corner, 3 px off the panel's edges and
+   about 3 px on the diagonal from the colour card's rounded corner (a 9 px circle against a
+   14 px arc whose centre is 30 px in). Its hit box is the whole corner: the square from the
+   panel's corner to a couple of pixels into the card, rounded corner space included (Robert:
+   "move it more into the corner... we just need like 2-4px on the diagonal... draw the click
+   hitbox including the whole top right corner"). */
+.panel-close {
+  position: absolute; top: 3px; right: 3px;
+  width: 18px; height: 18px;
+  border: 0; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(236, 236, 236, 0.85); font-size: 12px; line-height: 18px; text-align: center;
+  cursor: pointer; padding: 0; z-index: 1;
+}
+.panel-close::before { content: ""; position: absolute; top: -3px; right: -3px; width: 21px; height: 21px; }
 .panel-close:hover { background: rgba(255, 255, 255, 0.16); }
-.panel-help { font-size: 12px; font-weight: 600; margin-left: 8px; }
+.panel-help { position: static; width: 22px; height: 22px; line-height: 22px; font-size: 12px; font-weight: 600; margin-left: 8px; }
+.panel-help::before { content: none; }
 .panel-help.on { background: var(--accent); color: #1c1c1e; }
 .hint { font-size: 11px; line-height: 1.35; color: rgba(236, 236, 236, 0.6); padding: 2px 0 8px; }
 .hint div + div { margin-top: 2px; }
@@ -144,7 +161,7 @@
 /* Boxed sub panels in the top section, Colours and Touch (Robert: "my 13 yr old step daughter
    literally could not see the touch controls"; "Let's do the colors in a sub panel like that
    too"). The first one's title leaves room for the corner buttons. */
-.sub-panel { margin: 6px 0 4px; padding: 10px 12px 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); }
+.sub-panel { margin: 6px 0 4px; padding: 10px 12px 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); }
 .sub-panel:first-child { margin-top: 0; }
 .sub-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.9); }
 .sub-sub { font-size: 11px; letter-spacing: 0; text-transform: none; color: rgba(236, 236, 236, 0.55); }
@@ -233,7 +250,7 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 
 /* A thin, quiet scrollbar on the panel (Robert: "can we do better with the scroll bar on the
    settings panel? it's so ugly"): six pixels, rounded, no track, on the panel's own dark. */
-.panel::-webkit-scrollbar { width: 6px; }
-.panel::-webkit-scrollbar-track { background: transparent; }
-.panel::-webkit-scrollbar-thumb { background: rgba(236, 236, 236, 0.28); border-radius: 3px; }
-.panel::-webkit-scrollbar-thumb:hover { background: rgba(236, 236, 236, 0.5); }
+.panel-scroll::-webkit-scrollbar { width: 6px; }
+.panel-scroll::-webkit-scrollbar-track { background: transparent; }
+.panel-scroll::-webkit-scrollbar-thumb { background: rgba(236, 236, 236, 0.28); border-radius: 3px; }
+.panel-scroll::-webkit-scrollbar-thumb:hover { background: rgba(236, 236, 236, 0.5); }

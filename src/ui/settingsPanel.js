@@ -1,5 +1,5 @@
 import { button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { group, hint, iconChoice, knob, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { group, helpList, hint, iconChoice, knob, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -191,7 +191,9 @@ export function createSettingsPanel () {
     // bad on the panel. We should remove 'Colours' and 'how the heat is painted' and move the
     // colors card below the buttons. possibly make the buttons a bit smaller too, but keep the
     // hitboxes bigger so they're still easy on mobile").
-    div({ class: 'panel-bar' }, button({ class: 'panel-close', onclick: close, title: 'Close', 'aria-label': 'Close' }, '×')),
+    button({ class: 'panel-close', onclick: close, title: 'Close', 'aria-label': 'Close' }, '×'),
+    div(
+      { class: 'panel-scroll' },
     section(
       null, null,
       // The colours as a boxed sub panel like Touch (Robert: "Let's do the colors in a sub panel
@@ -233,7 +235,7 @@ export function createSettingsPanel () {
       div({ class: 'sub-panel' },
         div({ class: 'sub-title' }, span('Touch'), span({ class: 'sub-sub' }, 'what your finger does to the lava')),
         iconChoice('touch', touchMode, TOUCH_OPTIONS),
-        knobs(knob('Strength', 'touch-strength', touchStrength, { min: 0, max: 3, step: 0.1 }, () => defaultTouchStrength, v => `${Number(v).toFixed(1)}x`))
+        knobs(knob('Strength', 'touch-strength', touchStrength, { min: 0, max: 3, step: 0.1, slider: true }, () => defaultTouchStrength, v => `${Number(v).toFixed(1)}x`))
       ),
       hint(help, 'What a finger or the mouse does to the lava under it: Push shoves it away, Pull gathers it in, Spin whirls it, Heat and Cool change its temperature. Strength is how hard, 1x as tuned.'),
       pair('Flow Field', toggle('flow', showFlow), 'Fullscreen', toggle('fullscreen', fullscreen)),
@@ -263,7 +265,7 @@ export function createSettingsPanel () {
         subgroup('Clock',
             knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
           ),
-        hint(help, [
+        helpList(help, [
           ['Stir', 'Speed of the slow convection roll, up the middle and down the walls; negative runs it backwards.'],
           ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
           ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
@@ -287,7 +289,7 @@ export function createSettingsPanel () {
             knob('Floor', 'floor-heat', floorHeat, { min: 0, max: 1, step: 0.05 }, () => defaultFloorHeat, fixed(2)),
             knob('Glow', 'floor-glow', floorGlow, { min: 0, max: 6, step: 0.1 }, () => defaultFloorGlow, fixed(1))
           ),
-        hint(help, [
+        helpList(help, [
           ['Period', 'Seconds between rounds of pots lighting under the lava: lower is more often. 0 keeps the whole floor warm instead.'],
           ['Conduct', 'How fast heat spreads between touching lava. High and a blob warms and lifts as one; too high and a rising blob heats the pool below it through its neck and feeds the stretch.'],
           ['Max Temp', 'The hottest a particle can get, which is also the fastest it can rise.'],
@@ -327,7 +329,7 @@ export function createSettingsPanel () {
             knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
             knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
           ),
-        hint(help, [
+        helpList(help, [
           ['Count', 'How many particles make up the visible lava; the pots below fill themselves on top.'],
           ['Radius', 'How far apart two particles can be and still feel each other.'],
           ['Pull', 'How hard every particle pulls on its neighbours within the Radius: the cohesion. Was Stiff times Density.'],
@@ -358,7 +360,7 @@ export function createSettingsPanel () {
           ),
         pair('Auto Pixels', toggle('auto-pixels', autoPixels)),
         pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
-        hint(help, [
+        helpList(help, [
           ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
           ['Smooth', 'Rounds off the bumps along every edge by blurring the lava\'s shape before it is cut, by this many pixels. 0 is the raw metaballs.'],
           ['Blend', 'How far the colours inside the lava blur into each other, in pixels, without touching the edge; below Smooth it does nothing extra.'],
@@ -394,6 +396,7 @@ export function createSettingsPanel () {
           notify('Settings saved')
         }
       }, 'Save')
+    )
     )
   )
 

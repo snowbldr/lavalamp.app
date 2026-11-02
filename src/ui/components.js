@@ -42,7 +42,9 @@ export const DECADES = [1, 10, 100, 1000, 10000, 100000]
 // ?touch on the page shows the sliders on a desktop, for checking them.
 export const TOUCH_UI = (typeof window !== 'undefined') && (window.matchMedia('(pointer: coarse)').matches || new URLSearchParams(window.location.search).has('touch'))
 
-export const knob = (title, id, state, { min, max, step, scales }, resetTo, format = v => String(v)) => {
+// `slider: true` draws the slider on every screen (Touch Strength; Robert: "let's make touch
+// strength always a slider, it looks bad as a knob").
+export const knob = (title, id, state, { min, max, step, scales, slider = false }, resetTo, format = v => String(v)) => {
   const scale = scales ? fnstate(scales.find(s => s >= Math.max(typeof max === 'function' ? max() : max, state())) || scales[scales.length - 1]) : null
   const maxOf = () => scale ? scale() : typeof max === 'function' ? max() : max
   const stepOf = () => scale ? scale() / 100 : step
@@ -76,7 +78,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
   }
   const nudge = steps => state(clamp(state() + steps * stepOf()))
   const nextScale = () => { const i = scales.indexOf(scale()); scale(scales[(i + 1) % scales.length]) }
-  if (TOUCH_UI) {
+  if (TOUCH_UI || slider) {
     // The same mapping as the dial (the default at the middle of the travel), on a native range
     // input with a big thumb, a value, and a reset button.
     const range = input({
@@ -91,7 +93,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
       oninput: e => state(clamp(fromFraction(Number(e.target.value) / 1000)))
     })
     return div(
-      { class: 'slider-row' },
+      { class: 'slider-row', 'data-knob': title },
       label({ class: 'slider-label', for: id, onclick: () => { if (!range.title) { const text = hintText.get(title); if (text) range.title = text } } }, title),
       range,
       span({ class: 'slider-value' }, state.bindAs(() => format(state()))),
@@ -159,7 +161,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
     )
   )
   return div(
-    { class: 'knob-cell' },
+    { class: 'knob-cell', 'data-knob': title },
     dial,
     label({ class: 'knob-label', for: id }, title),
     span(
@@ -171,7 +173,7 @@ export const knob = (title, id, state, { min, max, step, scales }, resetTo, form
 }
 
 // A row of knobs; on a touch screen a stack of sliders.
-export const knobs = (...cells) => div({ class: TOUCH_UI ? 'knobs sliders' : 'knobs' }, ...cells)
+export const knobs = (...cells) => div({ class: TOUCH_UI || cells.some(c => c.classList && c.classList.contains('slider-row')) ? 'knobs sliders' : 'knobs' }, ...cells)
 
 // The Advanced list: each group a card like Colours and Touch, its knobs packed four to a row
 // in one grid with the subgroup named in small print over its first knob, the other rows
@@ -179,9 +181,14 @@ export const knobs = (...cells) => div({ class: TOUCH_UI ? 'knobs sliders' : 'kn
 // like above, each row should hold max 4"). On a touch screen the knobs are sliders in a stack,
 // so there the subgroup name is a line of its own. A subgroup is knob cells, nothing else.
 export const subgroup = (title, ...cells) => ({ subgroup: title, cells })
+// The help for a group's knobs, laid out by group() under each row of knobs in the row's own
+// order (Robert: "The help should be written per row not group. left to right should read top
+// to bottom"). Registers the texts for the tooltips as hint() does.
+export const helpList = (help, entries) => { for (const [name, text] of entries) hintText.set(name, text); return { help, entries } }
 export const group = (title, ...rows) => {
-  const packed = []
+  const packed = [] // knob cells, or on a touch screen subgroup lines and slider rows
   const rest = []
+  let helpFor = null
   for (const r of rows) {
     if (r && r.subgroup !== undefined) {
       if (TOUCH_UI) packed.push(div({ class: 'subgroup-title' }, r.subgroup))
@@ -189,13 +196,37 @@ export const group = (title, ...rows) => {
         if (!TOUCH_UI) cell.prepend(div({ class: 'knob-sub' }, i === 0 ? r.subgroup : ''))
         packed.push(cell)
       })
-    } else rest.push(r)
+    } else if (r && r.entries) helpFor = r
+    else rest.push(r)
   }
+  // Rows of four dials, each followed by its four hints; sliders one to a row with their hint.
+  const perRow = TOUCH_UI ? 1 : 4
+  const out = []
+  let rowCells = []
+  const flush = () => {
+    if (!rowCells.length) return
+    out.push(div({ class: TOUCH_UI ? 'knobs sliders' : 'knobs' }, ...rowCells))
+    if (helpFor) {
+      const names = rowCells.map(c => c.dataset && c.dataset.knob).filter(Boolean)
+      const entries = names.map(n => helpFor.entries.find(e => e[0] === n)).filter(Boolean)
+      if (entries.length) out.push(hint(helpFor.help, entries))
+    }
+    rowCells = []
+  }
+  for (const el of packed) {
+    if (el.classList && el.classList.contains('subgroup-title')) { flush(); out.push(el); continue }
+    rowCells.push(el)
+    if (rowCells.length === perRow) flush()
+  }
+  flush()
+  // Hints for anything in the group that is not a knob (the switches) come after the rest.
+  const leftover = helpFor ? helpFor.entries.filter(e => !packed.some(c => c.dataset && c.dataset.knob === e[0])) : []
   return div(
     { class: 'sub-panel group' },
     div({ class: 'sub-title' }, span(title)),
-    div({ class: TOUCH_UI ? 'knobs sliders' : 'knobs' }, ...packed),
-    ...rest
+    ...out,
+    ...rest,
+    ...(leftover.length ? [hint(helpFor.help, leftover)] : [])
   )
 }
 
