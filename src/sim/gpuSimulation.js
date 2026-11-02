@@ -103,6 +103,7 @@ struct Params {
   gridTop: f32,
   fingerOverride: f32,
   liftCap: f32,
+  damp: f32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -125,6 +126,7 @@ fn POSOUT(i: u32) -> u32 { return P.capacity + i; }
 fn VEL(i: u32) -> u32 { return 2u * P.capacity + i; }
 fn VELOUT(i: u32) -> u32 { return 3u * P.capacity + i; }
 fn PX(i: u32) -> u32 { return 4u * P.capacity + i; }
+fn DELTA(i: u32) -> u32 { return 5u * P.capacity + i; } // the particle's last relaxation move
 fn TEMP(i: u32) -> u32 { return i; }
 fn TEMPOUT(i: u32) -> u32 { return P.capacity + i; }
 fn PRESS(i: u32) -> u32 { return 2u * P.capacity + i; }
@@ -481,12 +483,25 @@ fn relax(@builtin(global_invocation_id) id: vec3u) {
   // hundred neighbours each pushed from the same snapshot, and the pool erupted into a spray
   // (Robert: "on the gpu, in pinch, with current settings, it sometimes randomly explodes").
   var delta = (pushed - own) * P.jacobi; // WGSL reserves the word move
+  // Every particle moving at once is a Jacobi iteration, unstable where the lava is packed: in
+  // the cold floor at Near 1101 and Radius 25 each neighbour's reply undoes about seven times the
+  // move, so the pool never settles, the Reach cap sets how far the oscillation swings (6 px in a
+  // lattice 3.6 px apart) and it comes out as rings around holes, the honeycomb (Robert,
+  // 2026-11-01: "it just ruins the effect"). Damping every move, or capping it near the spacing,
+  // stopped the rings and also stopped the pool flowing: hot lava could no longer push through
+  // the packed lava above it and the pool lifted off as a slab. The oscillation is the only part
+  // that reverses every pass, so a move that reverses the particle's previous one is taken at
+  // damp of its length and a move that continues it is taken whole: the rings lose their swing,
+  // a particle pushing through, a neck drawing, a skin pulling in, all keep theirs. damp 1 is off.
+  let prev = V[DELTA(i)];
+  if (P.damp < 1.0 && dot(delta, prev) < 0.0) { delta *= P.damp; }
   // Lava hidden in a bottle is capped at fluid.js's RELAX_CAP as well, as simulation.js does.
   var cap = P.reach * P.radius;
   if (F[HOME(i)] >= 0.0) { cap = min(cap, P.relaxCap); }
   cap *= P.jacobi;
   let shift = length(delta);
   if (shift > cap) { delta *= cap / shift; }
+  V[DELTA(i)] = delta;
   let q0 = p + delta;
   let q = contain(i, q0);
   // Glass takes the momentum carried into it, as the side walls do in kick: the part of the
@@ -670,7 +685,7 @@ const PARAM_FLOATS = 52
 // (Robert, 2026-11-01: "getting this weird emergent pattern... can we not add a guard for that to
 // prevent it in code?"). His saved settings carried the CPU's Reach 1 onto the GPU once saves
 // loaded after the backend was known, and the honeycomb followed within minutes.
-const REACH_CAP = 0.5 // the honeycomb itself formed at 0.5 as well; see docs/decisions.md, 2026-11-01 // the Params struct, 49 fields, padded to 208 bytes (a uniform's size is a multiple of 16)
+const REACH_CAP = 0.5 // the honeycomb itself formed at 0.5 as well; see docs/decisions.md, 2026-11-01 // the Params struct, 50 fields, padded to 208 bytes (a uniform's size is a multiple of 16)
 const POWER_COLUMNS = 256
 const MAX_ELEMENTS = 32
 const ELEMENTS_AT = POWER_COLUMNS
@@ -756,7 +771,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
   const buffers = {
     params: device.createBuffer({ size: PARAM_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
     touches: device.createBuffer({ size: MAX_TOUCHES * 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
-    V: storage(5 * vec2Bytes), // pos, posOut, vel, velOut, px
+    V: storage(6 * vec2Bytes), // pos, posOut, vel, velOut, px, delta
     F: storage(6 * f32Bytes), // temp, tempOut, press, pressNear, dens, home
     U: null, // cellOf, sorted, cellStart (sized with the grid)
     A: null, // cellCount, mean accumulator
@@ -917,6 +932,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[46] = gridTop
     pf[47] = STIR_OVERRIDE.finger
     pf[48] = params.liftCap > 0 ? params.liftCap : 10
+    pf[49] = params.damp ?? 0.25 // what is left of a relaxation move that reverses the last one; see relax
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
