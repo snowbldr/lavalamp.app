@@ -188,6 +188,11 @@ export async function start () {
   if (device && reach() > GPU_REACH) reach(GPU_REACH)
 
   const params = {}
+  // ?damp=N tries another damping of a reversing relaxation move on the GPU (see relax in
+  // gpuSimulation.js; 0.25 is the lamp's, 1 is off, 0 drops the move): a knob for finding out,
+  // like ?profile, not a setting.
+  const dampQuery = new URLSearchParams(window.location.search).get('damp')
+  if (dampQuery !== null && !Number.isNaN(Number(dampQuery))) params.damp = Number(dampQuery)
   mirror(particleCount, params, 'particleCount', Math.trunc)
   mirror(interactionRadius, params, 'interactionRadius')
   params.restDensity = REST_DENSITY // Pull is Stiff times Density; see computeDefaultPull
