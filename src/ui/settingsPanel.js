@@ -1,5 +1,5 @@
 import { button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { group, hint, iconChoice, knob, knobs, notify, pair, row, section, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { group, hint, iconChoice, knob, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -186,14 +186,17 @@ export function createSettingsPanel () {
     // what a finger does, the flow field and fullscreen. Everything else is under Advanced, in
     // groups, all folded by default (Robert: "A lot of the controls we have are really power user
     // stuff that no normal human would understand").
-    button({ class: 'panel-close', onclick: close, title: 'Close' }, '×'),
-    button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the controls do' }, '?'),
+    // A bar across the top with the close button, small to look at, with a hit area the size of a
+    // fingertip; the colours card sits under it with no title of its own (Robert: "x and ? look
+    // bad on the panel. We should remove 'Colours' and 'how the heat is painted' and move the
+    // colors card below the buttons. possibly make the buttons a bit smaller too, but keep the
+    // hitboxes bigger so they're still easy on mobile").
+    div({ class: 'panel-bar' }, button({ class: 'panel-close', onclick: close, title: 'Close', 'aria-label': 'Close' }, '×')),
     section(
       null, null,
       // The colours as a boxed sub panel like Touch (Robert: "Let's do the colors in a sub panel
       // like that too").
       div({ class: 'sub-panel' },
-      div({ class: 'sub-title' }, span('Colours'), span({ class: 'sub-sub' }, 'how the heat is painted')),
       swatchRow('Heat colours', always, true,
         swatch('Cold', 'heatCold', heatCold),
         swatch('Cool', 'heatCool', heatCool),
@@ -239,7 +242,8 @@ export function createSettingsPanel () {
         ['Fullscreen', 'The lamp over the whole screen with nothing around it. Esc brings the browser back.']
       ])
     ),
-    section(
+    sectionWith(
+      button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the controls do', 'aria-label': 'What the controls do' }, '?'),
       'Advanced', advancedOpen,
       div({ class: 'panel-note' }, backendLabel.bindAs(() => `Backend: ${backendLabel()}`)),
       div({ class: 'panel-note' }, fpsLabel.bindAs(() => fpsLabel())),

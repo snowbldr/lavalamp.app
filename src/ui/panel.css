@@ -28,16 +28,19 @@
   -webkit-user-select: none;
 }
 .panel * { box-sizing: border-box; }
+.panel-bar { display: flex; justify-content: flex-end; align-items: center; height: 26px; margin: -2px 0 2px; }
 .panel-close {
-  position: absolute; top: 8px; right: 10px;
-  width: 30px; height: 30px;
+  position: relative;
+  width: 22px; height: 22px;
   border: 0; border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
-  color: inherit; font-size: 18px; line-height: 30px; text-align: center;
-  cursor: pointer;
+  color: rgba(236, 236, 236, 0.8); font-size: 14px; line-height: 22px; text-align: center;
+  cursor: pointer; padding: 0;
 }
+/* The hit area is a fingertip, the drawn button is not. */
+.panel-close::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
 .panel-close:hover { background: rgba(255, 255, 255, 0.16); }
-.panel-help { right: 46px; font-size: 15px; font-weight: 600; }
+.panel-help { font-size: 12px; font-weight: 600; margin-left: 8px; }
 .panel-help.on { background: var(--accent); color: #1c1c1e; }
 .hint { font-size: 11px; line-height: 1.35; color: rgba(236, 236, 236, 0.6); padding: 2px 0 8px; }
 .hint div + div { margin-top: 2px; }
@@ -50,7 +53,9 @@
   color: rgba(236, 236, 236, 0.7); font: inherit; font-size: 11px; font-weight: 600;
   letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; text-align: left;
 }
-.panel-section-title .chevron { transition: transform 0.2s; margin-right: 34px; }
+.panel-section-head { display: flex; align-items: center; }
+.panel-section-head .panel-section-title { flex: 1; }
+.panel-section-title .chevron { transition: transform 0.2s; margin-right: 4px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 34px; align-items: center; }
 .pair-cell { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel-rows > .swatch-row:first-child { padding-top: 0; }
@@ -142,7 +147,6 @@
 .sub-panel { margin: 6px 0 4px; padding: 10px 12px 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); }
 .sub-panel:first-child { margin-top: 0; }
 .sub-title { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; margin-bottom: 8px; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.9); }
-.sub-panel:first-child .sub-title { padding-right: 76px; }
 .sub-sub { font-size: 11px; letter-spacing: 0; text-transform: none; color: rgba(236, 236, 236, 0.55); }
 .sub-panel .swatch-row:first-of-type { padding-top: 0; }
 .sub-panel .swatch-caption { padding-right: 0; }

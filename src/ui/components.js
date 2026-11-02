@@ -422,14 +422,21 @@ export const pair = (titleA, controlA, titleB, controlB) => div(
 )
 
 // A section. With `open` (a fnstate holding whether it is open) the title bar folds it away;
-// without, it is untitled and always open (Robert: "Remove the word lamp").
-export const section = (title, open, ...rows) => open
+// without, it is untitled and always open (Robert: "Remove the word lamp"). `tools`, when
+// given, sit on the title bar beside the chevron (the help button lives by Advanced; Robert:
+// "probably can move the ? down by advanced").
+export const section = (title, open, ...rows) => sectionWith(null, title, open, ...rows)
+export const sectionWith = (tools, title, open, ...rows) => open
   ? div(
     { class: open.bindAttr(() => open() ? 'panel-section' : 'panel-section closed') },
-    button(
-      { class: 'panel-section-title', onclick: () => open(!open()) },
-      span(title),
-      span({ class: 'chevron' }, '▾')
+    div(
+      { class: 'panel-section-head' },
+      button(
+        { class: 'panel-section-title', onclick: () => open(!open()) },
+        span(title),
+        span({ class: 'chevron' }, '▾')
+      ),
+      ...(tools ? [tools] : [])
     ),
     div({ class: 'panel-rows' }, ...rows)
   )
