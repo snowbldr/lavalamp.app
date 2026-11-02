@@ -268,8 +268,21 @@ export async function start () {
   // keeps the display's rate however long a step takes; ?mainthread keeps it on the page's thread.
   const remote = !device && typeof Worker === 'function' && !new URLSearchParams(window.location.search).has('mainthread')
   const overlayWants = () => ({ flow: showFlow() ? FLOW_SPACING : 0, heater: showHeater() ? HEATER_CELL : 0, cups: !!showCups() })
+  // When the browser takes the GPU device away the lamp cannot go on (see createGpuSimulation):
+  // say so and start the page over, which asks for a device again. Not more than three times in
+  // two minutes, so a GPU that is gone for good does not reload the page forever; after that
+  // the lamp stays stopped with the reason on screen.
+  const onLost = info => {
+    let losses = []
+    try { losses = JSON.parse(sessionStorage.getItem('lavalamp.app-gpu-lost') || '[]').filter(t => Date.now() - t < 120000) } catch (e) { /* no storage */ }
+    losses.push(Date.now())
+    try { sessionStorage.setItem('lavalamp.app-gpu-lost', JSON.stringify(losses)) } catch (e) { /* no storage */ }
+    if (losses.length > 3) { notify('GPU lost again (', info.reason || 'unknown', '): lamp stopped'); return }
+    notify('GPU lost (', info.reason || 'unknown', '): restarting the lamp')
+    setTimeout(() => location.reload(), 1500)
+  }
   const sim = device
-    ? createGpuLamp({ device, width, height, params })
+    ? createGpuLamp({ device, width, height, params, onLost })
     : remote
       ? createWorkerLamp({ width, height, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
       : createSimulation({ width, height, params })
@@ -437,7 +450,7 @@ export async function start () {
   // kept on window.lavaProfile, for finding what a slow device is spending its time on.
   const profiling = new URLSearchParams(window.location.search).has('profile')
   look.profile = profiling
-  if (profiling) window.lavalamp = { sim, params, look, gloop } // for timing the running lamp from the console
+  if (profiling) window.lavalamp = { sim, params, look, gloop, device } // for timing the running lamp from the console
   const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
   // The busiest 20 px cell, in particles: 40 or so is lava at rest, hundreds is a pile the
   // solver's neighbour loops pay for (the eddies packing the pots was 814, and single digit fps).

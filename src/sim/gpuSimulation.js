@@ -712,7 +712,18 @@ export function getGpuDevice () {
   return devicePromise
 }
 
-export function createGpuSimulation ({ device, width: width0, height: height0, params, random = Math.random }) {
+export function createGpuSimulation ({ device, width: width0, height: height0, params, random = Math.random, onLost = null }) {
+  // The browser can take the device away at any time (its GPU process restarts, the machine
+  // sleeps, a driver resets): every call on it then fails, and a step kept running on it
+  // threw "Instance dropped in popErrorScope" sixty times a second until the tab was closed
+  // (Robert: "I experienced a crash on my mac"). Once lost, step does nothing and whoever
+  // created the lamp is told once, with the browser's reason.
+  let lost = null
+  device.lost.then(info => {
+    lost = info
+    console.error('gpu device lost:', info.reason, info.message)
+    if (onLost) onLost(info)
+  })
   let width = width0
   let height = height0
   // Room for params.capacity particles if given (the lamp passes its GPU budget: the count follows
@@ -967,6 +978,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
   }
 
   function step (dt) {
+    if (lost) return
     const target = Math.min(capacity, Math.trunc(params.particleCount) + reserve)
     if (target !== alive) fill(target)
     fitGrid()
@@ -1012,7 +1024,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     }
     device.pushErrorScope('validation')
     device.queue.submit([encoder.finish()])
-    device.popErrorScope().then(e => { if (e && !warned) { warned = true; console.error('gpu validation', e.message) } })
+    device.popErrorScope().then(e => { if (e && !warned) { warned = true; console.error('gpu validation', e.message) } }).catch(() => {}) // rejects once the device is lost
     if (set) readBack(set)
     time += dt
   }
@@ -1058,10 +1070,10 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
 // shell also lays out the bottles and pots, which go up as a table whenever they change (a
 // resize, the Bottles knob); the shell itself holds no lava (worldOnly), so its reservoirs do not
 // fill with CPU particles.
-export function createGpuLamp ({ device, width, height, params }) {
+export function createGpuLamp ({ device, width, height, params, onLost }) {
   const shellParams = new Proxy(params, { get (t, k) { if (k === 'particleCount') return 0; if (k === 'worldOnly') return true; return t[k] } })
   const shell = createSimulation({ width, height, params: shellParams })
-  const gpu = createGpuSimulation({ device, width, height, params })
+  const gpu = createGpuSimulation({ device, width, height, params, onLost })
   const floats = new Float32Array(WORLD_FLOATS)
   let bottlesSeen = null
   let potsSeen = null
