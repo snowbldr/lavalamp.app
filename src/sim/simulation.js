@@ -237,8 +237,6 @@ export const STIR_OVERRIDE = { finger: 4, speed: 100, peak: [120, 240] }
 // over a few seconds, spinning either way. Each is a Gaussian vortex, so it is divergence free
 // and moves the lava around without squashing it. The gap between eddies, their size and their
 // life are drawn from these ranges; `turbulence` in params is the peak speed in px/s.
-const EDDY_GAP = [6, 18] // seconds between one eddy starting and the next, at low turbulence
-const EDDY_MAX = 150 // the slider's top; the gap shrinks to a quarter there ("more frequent at the highest setting")
 const EDDY_RADIUS = [0.15, 0.3] // of the shorter side of the lamp
 const EDDY_LIFE = [4, 10] // seconds
 const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated speed
@@ -321,13 +319,13 @@ export function createSimulation ({ width, height, params }) {
   let spawnAreaNow = params.spawnArea || SPAWN_AREA // floor area per settled particle, px², for the spawn slab and the reservoirs
   let meanDensity = 0 // the lava's mean density as of the last step, for the kick's surface test
   const eddies = []
-  let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
   let nextDrifter = randomRange(...DRIFT_GAP)
   // A log normal gap: the sum of three uniforms is near enough normal, scaled so the gap is
   // DRIFT_GAP_MEAN at the middle, about 2 s a standard deviation below it and 15 s above.
   const driftGap = () => { const z = (random() + random() + random() - 1.5) * 2; return DRIFT_GAP_MEAN * Math.exp(0.7 * z) }
   const carried = [0, 0] // scratch: the other eddies' flow at an eddy
+  let startEase = 0 // the kick over the first second, 0 to 1, so the spawn's settling is not thrown into velocity
   // Where an eddy may be born on a side wall: above the lava's rest level by EDDY_CLEARANCE of
   // the height (Robert: "we only want to spawn eddies like at least 5% of the screen above where
   // the lava would rest. that should fix the weird pulse push down issue"). The rest level is
@@ -382,12 +380,21 @@ export function createSimulation ({ width, height, params }) {
 
   // In the visible slab `depth` px above the bottom edge, or, with `hidden`, inside a floor
   // bottle (one picked by area, a point picked uniformly inside its bulb or neck).
-  function spawn (i, depth, hidden = false) {
+  // The visible slab is a hexagonal lattice at the liquid's rest spacing, each particle jittered
+  // a tenth of a spacing, so the lava starts where it would settle and the first passes have
+  // nothing to do; thrown down at random it crossed itself and the whole pool jumped (Robert:
+  // "there's a little explosion at start from the lava settling"). `slot` counts the visible
+  // particles; the same two draws are spent as before, so the GPU lamp's spawn matches.
+  function spawn (i, depth, hidden = false, slot = 0) {
     const list = hidden ? floorBottleList() : []
     state.home[i] = -1
     state.id[i] = nextId++
-    state.x[i] = randomBetween(0, width)
-    state.y[i] = randomRange(height - depth, height)
+    const s = Math.sqrt(spawnAreaNow / 0.866)
+    const cols = Math.max(1, Math.floor(width / s))
+    const row = Math.floor(slot / cols)
+    const col = slot % cols
+    state.x[i] = ((col + 0.5 + 0.5 * (row & 1)) * (width / cols) + (random() - 0.5) * 0.2 * s + width) % width
+    state.y[i] = height - (row + 0.5) * s * 0.866 + (random() - 0.5) * 0.2 * s
     if (list.length) {
       let total = 0
       for (const b of list) total += bottleArea(b)
@@ -432,8 +439,26 @@ export function createSimulation ({ width, height, params }) {
   // ones, bounce them off the walls, and replace the ones that have died.
   function stirEddies (dt, turbulence, drifters) {
     time += dt
-    // Stronger turbulence is also more frequent: the gap scales from 1 at zero to 1/4 at the top.
-    const pace = 1 - 0.75 * Math.min(1, Math.abs(turbulence) / EDDY_MAX)
+    startEase = Math.min(1, time)
+    const bornEddy = () => {
+      const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
+      // These too are born on an edge and travel inward, slowing as the drifters do (Robert,
+      // seeing one appear mid lamp: "all eddies spawn from anywhere on the edges").
+      const side = [0, 1, 3][Math.floor(random() * 3)] // never the floor
+      const along = random()
+      const heading = eddyHeading(side, side === 0 ? 0 : along)
+      eddies.push({
+        x: side === 1 ? width : side === 3 ? 0 : along * width,
+        y: side === 0 ? 0 : along * eddyCeilingY(),
+        speed: (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY),
+        hx: Math.cos(heading),
+        hy: Math.sin(heading),
+        radius,
+        spin: random() < 0.5 ? -1 : 1,
+        start: time,
+        life: randomRange(...EDDY_LIFE)
+      })
+    }
     const bornDrifter = () => {
       const core = randomRange(...DRIFT_CORE)
       const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
@@ -465,10 +490,15 @@ export function createSimulation ({ width, height, params }) {
     // normal distribution with a lean toward less frequent"): the gap is log normal about
     // DRIFT_GAP_MEAN s (most 2 to 10, a tail to 15 and more); at a birth, one in DRIFT_BURST_ALL
     // times every missing eddy is born at once, otherwise a number leaning hard toward one.
-    if (drifting.length < drifters && time >= nextDrifter) {
-      const missing = drifters - drifting.length
+    // The Eddies knob counts every eddy alive, the drifting tornadoes and the in-place vortices
+    // both (Robert, at Eddies 2: "there was also frequently more than 2 spawned, I think I saw up
+    // to 5"; the in-place ones had their own clock and no cap). Each birth is one kind or the
+    // other at random.
+    const alive = drifting.length + eddies.length
+    if (alive < drifters && time >= nextDrifter) {
+      const missing = drifters - alive
       const burst = random() < DRIFT_BURST_ALL ? missing : 1 + Math.floor(random() * random() * missing)
-      for (let b = 0; b < burst; b++) bornDrifter()
+      for (let b = 0; b < burst; b++) { if (random() < 0.5) bornDrifter(); else bornEddy() }
       nextDrifter = time + driftGap()
     }
     for (let k = drifting.length - 1; k >= 0; k--) {
@@ -488,27 +518,7 @@ export function createSimulation ({ width, height, params }) {
       if (e.x < half) { e.x = half; e.hx = Math.abs(e.hx) } else if (e.x > width - half) { e.x = width - half; e.hx = -Math.abs(e.hx) }
       if (e.y < half) { e.y = half; e.hy = Math.abs(e.hy) } else if (e.y > height - half) { e.y = height - half; e.hy = -Math.abs(e.hy) }
     }
-    if (drifting.length > drifters) drifting.length = drifters
-    if (time >= nextEddy) {
-      const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
-      // These too are born on an edge and travel inward, slowing as the drifters do (Robert,
-      // seeing one appear mid lamp: "all eddies spawn from anywhere on the edges").
-      const side = [0, 1, 3][Math.floor(random() * 3)] // never the floor
-      const along = random()
-      const heading = eddyHeading(side, side === 0 ? 0 : along)
-      eddies.push({
-        x: side === 1 ? width : side === 3 ? 0 : along * width,
-        y: side === 0 ? 0 : along * eddyCeilingY(),
-        speed: (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY),
-        hx: Math.cos(heading),
-        hy: Math.sin(heading),
-        radius,
-        spin: random() < 0.5 ? -1 : 1,
-        start: time,
-        life: randomRange(...EDDY_LIFE)
-      })
-      nextEddy = time + randomRange(...EDDY_GAP) * pace
-    }
+    while (drifting.length + eddies.length > drifters) { if (drifting.length) drifting.pop(); else eddies.pop() }
     for (let k = eddies.length - 1; k >= 0; k--) {
       const e = eddies[k]
       if (time - e.start > e.life) { eddies.splice(k, 1); continue }
@@ -575,7 +585,7 @@ export function createSimulation ({ width, height, params }) {
     const start = alive
     while (alive < target) {
       const i = alive++
-      spawn(i, depth, i - start < hidden)
+      spawn(i, depth, i - start < hidden, Math.max(0, i - start - hidden))
     }
   }
 
@@ -1080,8 +1090,8 @@ export function createSimulation ({ width, height, params }) {
       // Carrying the bulk pressure's kicks as well made the whole pool slosh like water even at a
       // tenth of a second. Walls and glass never kick: contain comes after.
       if (wobble > 0 && surface) {
-        vx[i] += (x[i] - px[i]) / dt * wobbleKick
-        vy[i] += (y[i] - py[i]) / dt * wobbleKick
+        vx[i] += (x[i] - px[i]) / dt * wobbleKick * startEase
+        vy[i] += (y[i] - py[i]) / dt * wobbleKick * startEase
         const speed = Math.hypot(vx[i], vy[i])
         const limit = wobbleMax * gravity
         if (speed > limit) { vx[i] *= limit / speed; vy[i] *= limit / speed }

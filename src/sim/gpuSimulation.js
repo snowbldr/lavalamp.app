@@ -939,9 +939,16 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     for (let i = 0; i < alive; i++) { xs[2 * i] = state.x[i]; xs[2 * i + 1] = state.y[i]; ts[i] = state.temp[i]; homes[i] = state.home[i] }
     const areas = floor.map(areaOf)
     const total = areas.reduce((a, b) => a + b, 0)
+    const s = Math.sqrt(spawnArea / 0.866)
+    const cols = Math.max(1, Math.floor(width / s))
     for (let i = alive; i < target; i++) {
-      let x = random() * width
-      let y = (height - depth) + random() * depth // the same draws as simulation.js's spawn, so a seed gives both the same slab
+      // The hexagonal lattice of simulation.js's spawn, the same two draws, so a seed gives both
+      // the same slab; the slab starts settled instead of jumping.
+      const slot = Math.max(0, i - alive - hidden)
+      const row = Math.floor(slot / cols)
+      const col = slot % cols
+      let x = ((col + 0.5 + 0.5 * (row & 1)) * (width / cols) + (random() - 0.5) * 0.2 * s + width) % width
+      let y = height - (row + 0.5) * s * 0.866 + (random() - 0.5) * 0.2 * s
       if (i - alive < hidden && floor.length) {
         let pick = random() * total
         let k = floor.length - 1
@@ -990,7 +997,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[4] = width; pf[5] = height; pf[6] = interactionRadius; pf[7] = cell
     pf[8] = dt; pf[9] = stiffness; pf[10] = stiffnessNear; pf[11] = restDensity
     pf[12] = maxTemp; pf[13] = gravity; pf[14] = particleSize; pf[15] = conduction
-    pf[16] = wobble; pf[17] = wobbleKick; pf[18] = wobbleMax; pf[19] = viscosity
+    pf[16] = wobble; pf[17] = wobbleKick * Math.min(1, time); pf[18] = wobbleMax; pf[19] = viscosity // the kick over the first second, so the spawn's settling is not thrown into velocity
     pf[20] = Math.min(REACH_CAP, Number.isFinite(reach) ? reach : 1e9); pf[21] = kickBelow; pf[22] = wallPush; pf[23] = share
     pf[24] = heater ? 1 : 0; pf[25] = Math.min(1, heaterTime / 2); pf[26] = touchHeat
     pf[27] = touchRadius > 0 ? touchRadius : Math.max(80, 0.12 * Math.min(width, height))
