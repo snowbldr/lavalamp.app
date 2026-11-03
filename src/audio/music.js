@@ -65,6 +65,34 @@ const CALM_DB = 6
 const DROP_SURGE = 2
 const DROP_DB = 4
 const DROP_HOLD = 8 // seconds a drop holds the section busy while the score catches up
+// A drop is also the bass coming back after a cut, busy or not (Robert, on Nate Band's Drugs I
+// Like: "it didn't fire when the drop hit. drop is at :43-:44"). Scanned: that song reads busy
+// from 0:03, so the drop out of a calm part never came; a build to 41.6 s, then the bass (20 to
+// 150 Hz) cut to silence, 47 dB under the build, to 43.4 s, then the drop. The kick was gone
+// 1.93 s, and the old first-kick-back rule wanted 2. C-C has the same cut, 53.7 to 54.9 s. A cut
+// is the bass CUT_DB under the recent kicks' peak for CUT_TIME seconds; the first beat within
+// CUT_AFTER seconds of its end is the drop.
+const CUT_DB = 20
+const CUT_TIME = 1
+const CUT_AFTER = 0.3
+const SETTLE = 6 // seconds from the start before a drop: the averages start from the silence before the music, and Drugs I Like's first second read as one
+// The boom: a deep sub bass note (Robert, on C-C after the drop: "there's like this deep
+// BWOONNNNNGGGG sound, and I would expect some lava bursts to be timed with those"). Scanned
+// offline: after 0:55 a note at 23 to 70 Hz every 8 beats (3.45 s at 140 bpm), held 1.5 to
+// 2.5 s, its onset jumping 8 dB or more in four frames out of a sub that sat 17 to 30 dB lower
+// the half second before, often with the mids ducking. The kick lifts the sub as far but lands
+// on a sub that is already sounding (inside a note, or the intro's bass line), so it is judged
+// against the half second before, not against its average. A boom is the sub rising BOOM_RISE
+// dB over BEAT_RISE_FRAMES frames, BOOM_OVER dB above its mean from BOOM_BEFORE to BOOM_GAP
+// seconds before, within BOOM_PEAK dB of the loudest sub lately, at most every BOOM_REFRACTORY.
+const BOOM_RANGE = [20, 60]
+const BOOM_RISE = 8
+const BOOM_OVER = 17
+const BOOM_BEFORE = 0.6
+const BOOM_GAP = 0.1
+const BOOM_PEAK = 14
+const BOOM_PEAK_FALL = 0.6 // dB a second
+const BOOM_REFRACTORY = 1
 const SECTION_SMOOTH = 2 // seconds the section's power is eased over
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 // The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
@@ -105,7 +133,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -132,6 +160,11 @@ export function createMusic () {
   const midsHistory = new Array(BEAT_RISE_FRAMES).fill(0)
   const averages = { heat: 0, eddy: 0, kick: 0 }
   let lastBeat = -1
+  let lastBoom = -1e9
+  let cutSince = -1 // when the bass went under the cut, -1 while it is sounding
+  let cutEndedAt = -1e9 // when the last long enough cut ended
+  let boomPeak = -90
+  const subHistory = [] // [time, dB] of the sub over the last BOOM_BEFORE seconds
   let beatCount = 0
   const beatTimes = []
   let clock = 0
@@ -402,7 +435,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; cutSince = -1; cutEndedAt = -1e9
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -424,6 +457,7 @@ export function createMusic () {
     update (dt, sensitivity = 1, ranges, frame) {
       levels.beat = false
       levels.hat = false
+      levels.boom = false
       if (frame) {
         // A frame given rather than read (docs/methods/tools/song-scan.js runs a whole song
         // through this offline, faster than it plays): its bytes and Hz a bin.
@@ -467,6 +501,11 @@ export function createMusic () {
       // Near the recent kicks too, within 12 dB (a sixteenth of their power), so in a breakdown
       // the leak of hats and pads into the bass does not count.
       beatPeak = Math.max(bassPower, beatPeak - (beatPeak - bassPower) * Math.min(1, dt / BEAT_PEAK_MEMORY))
+      // The cut (see CUT_DB): the bass and the sub together, against the kicks' held peak.
+      const lowPower = power([20, ranges.beat[1]])
+      if (lowPower < beatPeak * Math.pow(10, -CUT_DB / 10)) { if (cutSince < 0) cutSince = clock }
+      else if (cutSince >= 0) { if (clock - cutSince >= CUT_TIME) cutEndedAt = clock; cutSince = -1 }
+      raw.cut = cutSince >= 0 ? clock - cutSince : 0
       if (raw.beat > BEAT_FLOOR && bassPower > beatPeak / 16 && bassRise > BEAT_POWER_RISE / Math.max(0.3, Math.sqrt(sensitivity)) && bassRise > midsRise * BEAT_BASS_LEAD && clock - lastBeat > BEAT_REFRACTORY) {
         levels.beat = true
         lastBeat = clock
@@ -478,6 +517,21 @@ export function createMusic () {
         hear(clock)
       }
       levels.sinceBeat = levels.beat ? 0 : levels.sinceBeat + dt
+      // The boom (see BOOM_RISE), in the analyser's decibels: a byte is 80/255 dB.
+      const subDb = -90 + band(BOOM_RANGE) * 80
+      const rising = subHistory.slice(-BEAT_RISE_FRAMES)
+      let before = 0
+      let counted = 0
+      for (const [t, v] of subHistory) if (clock - t >= BOOM_GAP) { before += v; counted++ }
+      boomPeak = Math.max(subDb, boomPeak - BOOM_PEAK_FALL * dt)
+      raw.boomRise = rising.length ? subDb - Math.min(...rising.map(r => r[1])) : 0
+      raw.boomOver = counted ? subDb - before / counted : 0
+      if (rising.length === BEAT_RISE_FRAMES && counted && raw.boomRise > BOOM_RISE && raw.boomOver > BOOM_OVER && subDb > boomPeak - BOOM_PEAK && clock - lastBoom > BOOM_REFRACTORY) {
+        levels.boom = true
+        lastBoom = clock
+      }
+      subHistory.push([clock, subDb])
+      while (subHistory.length && clock - subHistory[0][0] > BOOM_BEFORE) subHistory.shift()
       const total = power([40, 12000])
       if (!surgeSlow) surgeFast = surgeSlow = total
       surgeFast += (total - surgeFast) * Math.min(1, dt / SURGE_FAST)
@@ -500,8 +554,9 @@ export function createMusic () {
       levels.reference = reference
       levels.score = score
       levels.drop = false
-      if (clock - startedAt > 3) {
-        if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock }
+      if (clock - startedAt > SETTLE) {
+        if (levels.beat && clock - cutEndedAt < CUT_AFTER) { levels.drop = true; levels.calm = false; droppedAt = clock; cutEndedAt = -1e9 }
+        else if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock }
         else if (levels.calm && score > -BUSY_DB) levels.calm = false
         else if (!levels.calm && score < -CALM_DB && clock - droppedAt > DROP_HOLD) levels.calm = true
       }

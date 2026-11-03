@@ -119,6 +119,10 @@ import {
   defaultMusicActivity,
   musicDrop,
   defaultMusicDrop,
+  musicBoom,
+  defaultMusicBoom,
+  musicBusyEddies,
+  defaultMusicBusyEddies,
   defaultMusicMotion,
   showSpectrum,
   defaultMusicRanges,
@@ -529,13 +533,15 @@ export function createSettingsPanel () {
         subgroup('Timing',
             knob('Lead', 'music-lead', musicLead, { min: 0, max: 4, step: 0.1 }, () => defaultMusicLead, seconds),
             knob('Activity', 'music-activity', musicActivity, { min: 0, max: 1, step: 0.05 }, () => defaultMusicActivity, fixed(2)),
-            knob('Drop', 'music-drop', musicDrop, { min: 0, max: 3, step: 0.1 }, () => defaultMusicDrop, times)
+            knob('Drop', 'music-drop', musicDrop, { min: 0, max: 3, step: 0.1 }, () => defaultMusicDrop, times),
+            knob('Boom', 'music-boom', musicBoom, { min: 0, max: 3, step: 0.1 }, () => defaultMusicBoom, times)
           ),
         subgroup('Motion',
             knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
             knob('Pulse', 'music-pulse', musicPulse, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.pulse, fixed(2)),
             knob('Spawn', 'music-spawn', musicSpawn, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spawn, fixed(2)),
-            knob('Spin', 'music-spin', musicSpin, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spin, fixed(2))
+            knob('Spin', 'music-spin', musicSpin, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spin, fixed(2)),
+            knob('Busy eddies', 'music-busy-eddies', musicBusyEddies, { min: 0, max: 8, step: 1 }, () => defaultMusicBusyEddies, fixed(0))
           ),
         subgroup('Ranges',
             knob('Beat Lo', 'music-beat-lo', musicBeatLo, HZ, () => defaultMusicRanges.beatLo, hz),
@@ -562,6 +568,8 @@ export function createSettingsPanel () {
           ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
           ['Lead', 'With Drop at 0: how many seconds before a beat a pot is lit, so the blob lifts on the beat rather than after it. The lamp learns the beat from the music and predicts the next one; 0 lights the pot as the beat is heard.'],
           ['Drop', 'One pot is kept closed and superheating; on the beat it opens and is blasted, so a hot glob leaves exactly on the beat, and the next pot closes. It opens every Every beats, and on the first kick after a breakdown, when it has charged longest and goes up hottest. 0 lights the pots ahead of the beat instead, by Lead.'],
+          ['Boom', 'A deep bass note, one that comes in out of a quiet low end and holds, opens a pot while the song is busy, so a burst of lava goes up with it. Sets how hard it is blasted; 0 is off.'],
+          ['Busy eddies', 'While the song is busy, at least this many eddies; an Eddies setting above it is kept. 0 leaves Eddies as set.'],
           ['Activity', 'How much the song\'s sections change the lamp: calm in a breakdown, busy where everything is playing. 0 ignores them.'],
           ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
           ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
