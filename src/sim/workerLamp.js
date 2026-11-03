@@ -28,7 +28,6 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let light = 0 // pots to light at the next frame (the music's beat)
   let eddy = 0 // eddies to bear at the next frame (the music's beat)
   let pulse = 0 // pulse waves to send
-  let spring = 0 // a spring hit's px, 0 for none
   let sentParams = ''
   const empty = new Float32Array(0)
   const state = { x: empty, y: empty, vx: empty, vy: empty, temp: empty, id: new Int32Array(0) }
@@ -98,12 +97,11 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, spring, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
       pulse = 0
-      spring = 0
       if (!wantNow.cups) { cups = null }
     },
     // Fill `shown` with the positions for this instant, between the last two states, and give
@@ -131,7 +129,6 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     lightElement () { light++ },
     spawnEddy () { eddy++ },
     pulseWave () { pulse++ },
-    springHit (px) { spring = px },
     setTouches (list) { touches = list || [] },
     transform (fn) {
       const map = affine(fn)

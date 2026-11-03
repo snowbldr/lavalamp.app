@@ -305,17 +305,12 @@ export function createSimulation ({ width, height, params }) {
   let heaterTime = 0
   let lightRequests = 0 // pots asked to light on demand (the music's beat), taken at the next step
   let eddyRequests = 0 // eddies asked for on demand (the music's beat), born at the next step if there is room
-  // The music's bass, on the eddies (Robert: "I would like to see the eddies have a spring like
-  // effect from the bass hits, like it springs forward a bit then bounces back. should be quite
-  // noticeable, like 2-3mm"; "bass notes should cause a wave"). A hit sets every eddy springing:
-  // the lava about it is carried SPRING_PX forward along its spin, then back, a damped sine. And
-  // a hit may send a pulse: a ring from an eddy's centre (or a point above the pool) travelling
+  // The music's bass, on the eddies ("bass notes should cause a wave"). The spring that went with
+  // it, the lava about every eddy lurched forward along its spin and back, is gone (Robert: "the
+  // eddies doing the back and forth looks bad. let's remove that and only keep the pulse
+  // version"). A hit may send a pulse: a ring from an eddy's centre (or a point above the pool) travelling
   // out at PULSE_SPEED, pushing the lava ahead of it out and the lava behind it back in, a
   // pressure wave with no net move, fading over its life.
-  let springAt = -1e9 // world time of the last spring hit
-  let springPx = 0
-  const SPRING_HZ = 2.5
-  const SPRING_TAU = 0.35 // s
   const pulses = []
   let pulseRequests = 0
   const PULSE_SPEED = 260 // px/s
@@ -619,11 +614,7 @@ export function createSimulation ({ width, height, params }) {
       // Speed: rising linearly to the peak at the core's edge, then 2 r rc / (r^2 + rc^2),
       // which is one over distance in the tail, inside a Gaussian cutoff at the reach.
       const q = r / e.core
-      let speed = e.gain * strength * envelope * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
-      // The spring: displacement X e^(-t/tau) sin(wt), so a speed X w e^(-t/tau) cos(wt), shaped
-      // like the eddy itself (1 at the core's edge), in the eddy's own spin.
-      const ts = time - springAt
-      if (springPx > 0 && ts < 5 * SPRING_TAU) speed += springPx * 2 * Math.PI * SPRING_HZ * Math.exp(-ts / SPRING_TAU) * Math.cos(2 * Math.PI * SPRING_HZ * ts) * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
+      const speed = e.gain * strength * envelope * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
       out[0] += -dy / r * speed * e.spin
       out[1] += dx / r * speed * e.spin
     }
@@ -1624,7 +1615,6 @@ export function createSimulation ({ width, height, params }) {
     lightElement () { lightRequests++ },
     spawnEddy () { eddyRequests++ },
     pulseWave () { pulseRequests++ },
-    springHit (px) { springAt = time; springPx = px },
     transform,
     flowAt,
     overrideAt,

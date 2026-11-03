@@ -1222,7 +1222,6 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     lightElement: shell.lightElement,
     spawnEddy: shell.spawnEddy,
     pulseWave: shell.pulseWave,
-    springHit: shell.springHit,
     ceilingAt: shell.ceilingAt,
     floorAt: shell.floorAt,
     bottles: shell.bottles,

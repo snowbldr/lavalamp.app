@@ -110,7 +110,6 @@ import {
   musicEvery,
   defaultMusicEvery,
   musicTempo,
-  musicSpring,
   musicPulse,
   musicSpawn,
   musicSpin,
@@ -531,7 +530,6 @@ export function createSettingsPanel () {
           ),
         subgroup('Motion',
             knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
-            knob('Spring', 'music-spring', musicSpring, { min: 0, max: 40, step: 1 }, () => defaultMusicMotion.spring, v => `${v} px`),
             knob('Pulse', 'music-pulse', musicPulse, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.pulse, fixed(2)),
             knob('Spawn', 'music-spawn', musicSpawn, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spawn, fixed(2)),
             knob('Spin', 'music-spin', musicSpin, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spin, fixed(2))
@@ -561,7 +559,6 @@ export function createSettingsPanel () {
           ['Lead', 'How many seconds before a beat a pot is lit, so the blob lifts on the beat rather than after it. The lamp learns the beat from the music and predicts the next one; 0 lights the pot as the beat is heard.'],
           ['Activity', 'How much the song\'s sections change the lamp: calm in a breakdown, busy where everything is playing. 0 ignores them.'],
           ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
-          ['Spring', 'On every bass hit the eddies spring: the lava about them lurches this far along their spin and bounces back.'],
           ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
           ['Spawn', 'The chance a bass hit brings in a new eddy, more often the more energetic the music.'],
           ['Spin', 'The chance a hi-hat brings in a spinning eddy, also more often as the music gets energetic.'],

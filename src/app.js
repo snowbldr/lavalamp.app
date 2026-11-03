@@ -119,7 +119,6 @@ import {
   musicSensitivity,
   musicEvery,
   musicTempo,
-  musicSpring,
   musicPulse,
   musicSpawn,
   musicSpin,
@@ -415,15 +414,13 @@ export async function start () {
   spectrumView.show(showSpectrum())
   showSpectrum.subscribe(on => spectrumView.show(on))
   // The leads, in seconds of the lamp's own time: an eddy spins up over half a second
-  // (simulation.js, driftEnvelope) and the spring's lurch peaks a quarter of its 2.5 Hz period in.
-  // They are turned into real seconds by the pace. The analyser hears a beat about AUDIO_LAG
+  // (simulation.js, driftEnvelope). They are turned into real seconds by the pace. The analyser hears a beat about AUDIO_LAG
   // late (its smoothing and the frame), and the clock is built from those late beats, so every
   // lead carries it too.
   const EDDY_LEAD = 0.5
-  const SPRING_LEAD = 0.1
   const AUDIO_LAG = 0.04
   // For each move, the last beat number it was fired for, so it fires once a beat.
-  const firedFor = { pot: -1, eddy: -1, spring: -1, pulse: -1 }
+  const firedFor = { pot: -1, eddy: -1, pulse: -1 }
   let wasLocked = false
   const driveMusic = dt => {
     if (!listener.enabled) return
@@ -450,7 +447,7 @@ export async function start () {
     // start, a breakdown with no kick), they fire on the beat as heard, late but never wrong.
     const pace1 = Math.max(0.05, pace() * tempoPace)
     // Each move's lead in real seconds.
-    const leadOf = name => Math.max(0, (name === 'pot' ? musicLead() : name === 'eddy' ? EDDY_LEAD / pace1 : name === 'spring' ? SPRING_LEAD / pace1 : 0) + AUDIO_LAG)
+    const leadOf = name => Math.max(0, (name === 'pot' ? musicLead() : name === 'eddy' ? EDDY_LEAD / pace1 : 0) + AUDIO_LAG)
     // The next beat is number clock.index + 1, clock.until seconds away, the ones after it a
     // period apart: the latest within the lead, if it has not had this move yet.
     const latestWithin = name => clock.index + 1 + Math.floor((leadOf(name) - clock.until) / clock.period)
@@ -464,7 +461,6 @@ export async function start () {
     // Newly locked: start each move from the beat it is now inside the lead of, not a burst.
     if (clock.locked && !wasLocked) for (const k in firedFor) firedFor[k] = latestWithin(k)
     wasLocked = clock.locked
-    const spring = () => { if (sim.springHit && musicSpring() > 0) sim.springHit(musicSpring() * Math.min(1.5, busy)) }
     const pulse = () => { if (sim.pulseWave && Math.random() < musicPulse() * chance) sim.pulseWave() }
     const spawn = () => { if (sim.spawnEddy && Math.random() < musicSpawn() * act * chance) sim.spawnEddy() }
     const every = () => Math.max(1, Math.round(musicEvery())) * (musicActivity() > 0 && act < 0.3 ? 2 : 1)
@@ -476,8 +472,6 @@ export async function start () {
     // finds its pot already lit.
     const onPhrase = beat => (beat - clock.sectionAt) % every() === 0
     if (clock.locked) {
-      const s = due('spring')
-      if (s !== false && clock.hearing) spring()
       const w = due('pulse')
       if (w !== false && clock.hearing) pulse()
       const e = due('eddy')
@@ -486,7 +480,7 @@ export async function start () {
       if (p !== false && onPhrase(p)) potNow()
       if (musicLead() <= 0 && m.beat) { beatsHeard++; if (beatsHeard % every() === 0) potNow() }
     } else if (m.beat) {
-      spring(); pulse(); spawn()
+      pulse(); spawn()
       beatsHeard++
       if (beatsHeard % every() === 0) { potNow(); if (sim.spawnEddy) sim.spawnEddy() }
     }
