@@ -69,12 +69,25 @@ const DROP_HOLD = 8 // seconds a drop holds the section busy while the score cat
 // Like: "it didn't fire when the drop hit. drop is at :43-:44"). Scanned: that song reads busy
 // from 0:03, so the drop out of a calm part never came; a build to 41.6 s, then the bass (20 to
 // 150 Hz) cut to silence, 47 dB under the build, to 43.4 s, then the drop. The kick was gone
-// 1.93 s, and the old first-kick-back rule wanted 2. C-C has the same cut, 53.7 to 54.9 s. A cut
-// is the bass CUT_DB under the recent kicks' peak for CUT_TIME seconds; the first beat within
-// CUT_AFTER seconds of its end is the drop.
+// 1.93 s, and the old first-kick-back rule wanted 2. C-C has the same cut, 53.7 to 54.9 s. And
+// Skrillex's Bangarang (Robert: "it's doing really bad with skrillex bangarang, which is ironic
+// because basically dubstep invented the drop"): its second drop, 2:46.97, comes after a gap of
+// only 0.65 s in which the bass flickers back for a frame or two, so a cut counted as unbroken
+// never reached its length. A beat is a drop when the bass (20 to 150 Hz) was CUT_DB under the
+// kicks' peak for CUT_SHARE of the CUT_TIME seconds before it (up to CUT_SKIP before it, the
+// beat's own rise), and the frame is within CUT_LEVEL dB of the reference: the bass of a
+// breakdown coming back quiet (Bangarang's at 2:21 and 2:29, 9 dB under) is not a drop.
 const CUT_DB = 20
-const CUT_TIME = 1
-const CUT_AFTER = 0.3
+const CUT_TIME = 0.5
+const CUT_SHARE = 0.85 // 0.75 let the Bangarang intro's hits at 0:06 and 0:08 through
+const CUT_SKIP = 0.07
+const CUT_LEVEL = 6
+// And something quieter or thinner came first: the section score (below) under CUT_BEFORE_SCORE
+// at some point in the CUT_BEFORE seconds before the gap. In a full part dubstep's half-time bars
+// leave gaps in the bass all through (Bangarang 1:20, 1:55; Drugs I Like 1:39), with the score
+// at -0.5 to -3.2; before the real drops it dipped to -4.1 to -6 (and -53 out of the intro).
+const CUT_BEFORE = 8
+const CUT_BEFORE_SCORE = -4
 const SETTLE = 6 // seconds from the start before a drop: the averages start from the silence before the music, and Drugs I Like's first second read as one
 // The boom: a deep sub bass note (Robert, on C-C after the drop: "there's like this deep
 // BWOONNNNNGGGG sound, and I would expect some lava bursts to be timed with those"). Scanned
@@ -161,8 +174,8 @@ export function createMusic () {
   const averages = { heat: 0, eddy: 0, kick: 0 }
   let lastBeat = -1
   let lastBoom = -1e9
-  let cutSince = -1 // when the bass went under the cut, -1 while it is sounding
-  let cutEndedAt = -1e9 // when the last long enough cut ended
+  const scoreHistory = [] // [time, score] ten times a second over the last CUT_BEFORE seconds
+  const lowHistory = [] // [time, whether the bass was under the cut] over the last CUT_TIME and CUT_SKIP
   let boomPeak = -90
   const subHistory = [] // [time, dB] of the sub over the last BOOM_BEFORE seconds
   let beatCount = 0
@@ -443,7 +456,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; cutSince = -1; cutEndedAt = -1e9
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -511,9 +524,13 @@ export function createMusic () {
       beatPeak = Math.max(bassPower, beatPeak - (beatPeak - bassPower) * Math.min(1, dt / BEAT_PEAK_MEMORY))
       // The cut (see CUT_DB): the bass and the sub together, against the kicks' held peak.
       const lowPower = power([20, ranges.beat[1]])
-      if (lowPower < beatPeak * Math.pow(10, -CUT_DB / 10)) { if (cutSince < 0) cutSince = clock }
-      else if (cutSince >= 0) { if (clock - cutSince >= CUT_TIME) cutEndedAt = clock; cutSince = -1 }
-      raw.cut = cutSince >= 0 ? clock - cutSince : 0
+      let low = 0
+      let lowCounted = 0
+      for (const [t, under] of lowHistory) if (clock - t >= CUT_SKIP) { lowCounted++; if (under) low++ }
+      raw.cut = lowCounted ? low / lowCounted : 0
+      const cutBefore = lowCounted > 0 && clock - lowHistory[0][0] >= CUT_TIME + CUT_SKIP - 0.05 && low >= CUT_SHARE * lowCounted
+      lowHistory.push([clock, lowPower < beatPeak * Math.pow(10, -CUT_DB / 10)])
+      while (lowHistory.length && clock - lowHistory[0][0] > CUT_TIME + CUT_SKIP) lowHistory.shift()
       if (raw.beat > BEAT_FLOOR && bassPower > beatPeak / 16 && bassRise > BEAT_POWER_RISE / Math.max(0.3, Math.sqrt(sensitivity)) && bassRise > midsRise * BEAT_BASS_LEAD && clock - lastBeat > BEAT_REFRACTORY) {
         levels.beat = true
         lastBeat = clock
@@ -562,8 +579,11 @@ export function createMusic () {
       levels.reference = reference
       levels.score = score
       levels.drop = false
+      if (!scoreHistory.length || clock - scoreHistory[scoreHistory.length - 1][0] >= 0.1) scoreHistory.push([clock, score])
+      while (scoreHistory.length && clock - scoreHistory[0][0] > CUT_BEFORE) scoreHistory.shift()
+      const dippedBefore = () => scoreHistory.some(([t, v]) => clock - t > CUT_TIME + CUT_SKIP && v < CUT_BEFORE_SCORE)
       if (clock - startedAt > SETTLE) {
-        if (levels.beat && clock - cutEndedAt < CUT_AFTER) { levels.drop = true; levels.calm = false; droppedAt = clock; cutEndedAt = -1e9 }
+        if (levels.beat && cutBefore && dippedBefore() && 10 * Math.log10(Math.max(1e-12, total)) > reference - CUT_LEVEL) { levels.drop = true; levels.calm = false; droppedAt = clock }
         else if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock }
         else if (levels.calm && score > -BUSY_DB) levels.calm = false
         else if (!levels.calm && score < -CALM_DB && clock - droppedAt > DROP_HOLD) levels.calm = true

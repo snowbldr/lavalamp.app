@@ -475,6 +475,8 @@ export async function start () {
   const DROP_GAP = 8 // seconds: one drop at most this often
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
+  const BOOM_POT_GAP = 3 // seconds between pots on deep notes
+  let lastBoomPotAt = -1e9
   const musicLog = []
   let musicLogAt = 0
   let musicLogStart = 0
@@ -579,10 +581,13 @@ export async function start () {
       // switch directions up to one time during their life time triggered by rareish music
       // events"); the two just asked for are born after this and keep their spin.
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip())
-    } else if (m.boom && !calm && musicBoom() > 0) {
-      if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
+    } else if (m.boom && !calm && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP) {
       // A deep note (music.js, the boom): a burst of lava with it, the lidded pot blasted by Boom,
-      // or with Drop 0 a pot lit as it is heard.
+      // or with Drop 0 a pot lit as it is heard; at most every BOOM_POT_GAP, since dubstep's sub
+      // lands every bar (Bangarang: about one a second through its full parts, against C-C's
+      // one every 3.45 s).
+      lastBoomPotAt = musicNow
+      if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
       if (lidded) open(musicBoom()); else potNow()
     } else if (lidded && onBeatPot) open(musicDrop())
     // A busy part keeps at least Busy eddies alive, never fewer than the Eddies knob.
