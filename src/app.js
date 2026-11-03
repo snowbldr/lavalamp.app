@@ -118,6 +118,11 @@ import {
   musicSource,
   musicSensitivity,
   musicEvery,
+  musicTempo,
+  musicSpring,
+  musicPulse,
+  musicSpawn,
+  musicSpin,
   showSpectrum,
   musicBeatLo,
   musicBeatHi,
@@ -392,7 +397,7 @@ export async function start () {
     musicPending(false)
   }
   // Off puts every knob the music drives back to the knob's own value.
-  const unMusic = () => { params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick() }
+  const unMusic = () => { tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick() }
   music.subscribe(on => { if (on) listen(); else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
@@ -401,6 +406,8 @@ export async function start () {
   const musicMeter = { bass: 0, mid: 0, high: 0, beat: 0 }
   const musicRanges = { beat: [0, 0], heat: [0, 0], eddy: [0, 0], kick: [0, 0] }
   let beatsHeard = 0
+  let lastMusicAt = performance.now()
+  let tempoPace = 1 // the pace's multiplier from the music's tempo, 1 with no music
   const spectrumView = createSpectrumView()
   document.body.append(spectrumView.element)
   spectrumView.show(showSpectrum())
@@ -422,6 +429,21 @@ export async function start () {
     // Every Nth beat, a pot fires and an eddy is born if there is room: on the phrase, not at
     // random. The eddies' strength rides the eddy band's envelope above, so each hit shoves.
     let fired = false
+    // The bass on the eddies: a spring every hit, a wave some of the time, a new eddy now and
+    // then the more energetic the music is; a hi-hat brings a spinning eddy now and then.
+    const energy = Math.min(1, m.level * 1.5)
+    if (m.beat) {
+      if (sim.springHit && musicSpring() > 0) sim.springHit(musicSpring())
+      if (sim.pulseWave && Math.random() < musicPulse()) sim.pulseWave()
+      if (sim.spawnEddy && Math.random() < musicSpawn() * energy) sim.spawnEddy()
+    }
+    if (m.hat && sim.spawnEddy && Math.random() < musicSpin() * energy * 0.25) sim.spawnEddy()
+    // Pace follows the tempo a little: against 120 bpm, by Tempo, held to 0.75 to 1.3 times,
+    // eased over two seconds so it breathes rather than jumps.
+    if (m.bpm > 40) {
+      const target = Math.max(0.75, Math.min(1.3, 1 + musicTempo() * (Math.max(0.6, Math.min(1.6, m.bpm / 120)) - 1)))
+      tempoPace += (target - tempoPace) * Math.min(1, dt / 2)
+    }
     if (m.beat) {
       beatsHeard++
       if (beatsHeard % Math.max(1, Math.round(musicEvery())) === 0) {
@@ -708,11 +730,11 @@ export async function start () {
     if (sim.remote) {
       // The worker steps on its own clock; this frame hands over the inputs and draws between
       // the last two states it sent.
-      sim.frame(pace(), overlayWants())
+      sim.frame(pace() * tempoPace, overlayWants())
       count = sim.interpolate(shown, performance.now())
     } else {
       if (still) Object.assign(params, STILL)
-      due += pace()
+      due += pace() * tempoPace
       while (due >= 1) {
         due -= 1
         remember()
@@ -749,7 +771,11 @@ export async function start () {
     shownView = view
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view })
     if (gloop.enabled) gloop.update(sim.state, sim.count, width, height, params.gravity, FRAME * pace(), params.interactionRadius)
-    driveMusic(FRAME)
+    // Real time for the music, not the lamp's fixed step: at 120 Hz FRAME ran its clock at
+    // double speed and a 120 bpm song read as 62.
+    const musicNow = performance.now()
+    driveMusic(Math.min(0.1, Math.max(0.001, (musicNow - lastMusicAt) / 1000)))
+    lastMusicAt = musicNow
     if (profiling) {
       const t2 = performance.now()
       tally.frames++

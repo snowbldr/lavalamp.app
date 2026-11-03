@@ -40,7 +40,9 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, bpm: 0, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  let hatAverage = 0
+  let lastHat = -1
   let device = '' // the chosen audio input's deviceId, '' for the default
   let bassAverage = 0
   const averages = { heat: 0, eddy: 0, kick: 0 }
@@ -161,6 +163,7 @@ export function createMusic () {
     // Hz ({ beat, heat, eddy, kick }, each [lo, hi]); `sensitivity` scales them.
     update (dt, sensitivity = 1, ranges) {
       levels.beat = false
+      levels.hat = false
       if (!enabled || !analyser) return levels
       clock += dt
       analyser.getByteFrequencyData(bins)
@@ -175,6 +178,9 @@ export function createMusic () {
         levels[k] = ease(levels[k], Math.min(1.5, punch * sensitivity), dt)
       }
       levels.level = ease(levels.level, Math.min(1.5, (raw.heat + raw.eddy + raw.kick) / 3 * sensitivity), dt)
+      // A hat: the same test on the kick range, quicker (a hi-hat runs eighths and sixteenths).
+      hatAverage += (raw.kick - hatAverage) * Math.min(1, dt / 0.6)
+      if (raw.kick > 0.04 && raw.kick > hatAverage * (1.25 / Math.max(0.3, Math.sqrt(sensitivity))) && clock - lastHat > 0.11) { levels.hat = true; lastHat = clock }
       // The beat: the instant energy in the beat range against its running average.
       bassAverage += (raw.beat - bassAverage) * Math.min(1, dt / BEAT_AVERAGE)
       const ratio = BEAT_RATIO / Math.max(0.3, Math.sqrt(sensitivity))

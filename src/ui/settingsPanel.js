@@ -109,6 +109,12 @@ import {
   defaultMusicSensitivity,
   musicEvery,
   defaultMusicEvery,
+  musicTempo,
+  musicSpring,
+  musicPulse,
+  musicSpawn,
+  musicSpin,
+  defaultMusicMotion,
   showSpectrum,
   defaultMusicRanges,
   musicBeatLo,
@@ -524,6 +530,16 @@ export function createSettingsPanel () {
               knob('Eddies', 'music-turb', musicTurb, { min: 0, max: 4, step: 0.1 }, () => defaultMusicTurb, times),
               knob('Kick', 'music-kick', musicKick, { min: 0, max: 3, step: 0.1 }, () => defaultMusicKick, times)
             ),
+            div({ class: 'subgroup-title' }, 'Motion'),
+            knobs(
+              knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
+              knob('Spring', 'music-spring', musicSpring, { min: 0, max: 40, step: 1 }, () => defaultMusicMotion.spring, v => `${v} px`),
+              knob('Pulse', 'music-pulse', musicPulse, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.pulse, fixed(2)),
+              knob('Spawn', 'music-spawn', musicSpawn, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spawn, fixed(2))
+            ),
+            knobs(
+              knob('Spin', 'music-spin', musicSpin, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spin, fixed(2))
+            ),
             div({ class: 'subgroup-title' }, 'Frequency ranges'),
             knobs(
               knob('Beat Lo', 'music-beat-lo', musicBeatLo, HZ, () => defaultMusicRanges.beatLo, hz),
@@ -545,6 +561,11 @@ export function createSettingsPanel () {
               ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
               ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
               ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
+              ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
+              ['Spring', 'On every bass hit the eddies spring: the lava about them lurches this far along their spin and bounces back.'],
+              ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
+              ['Spawn', 'The chance a bass hit brings in a new eddy, more often the more energetic the music.'],
+              ['Spin', 'The chance a hi-hat brings in a spinning eddy, also more often as the music gets energetic.'],
               ['Beat Lo', 'The frequencies the beat is counted in, Lo to Hi: around 40 to 150 Hz is the kick drum.'],
               ['Heat Lo', 'The frequencies that heat the lava, Lo to Hi.'],
               ['Eddy Lo', 'The frequencies that swell the eddies, Lo to Hi.'],
