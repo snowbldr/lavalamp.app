@@ -325,7 +325,7 @@ export function createSimulation ({ width, height, params }) {
   // No eddy for the first EDDY_FIRST seconds: the lava is still settling and the pots have not
   // fired, so the first eddy at Turb 600 drove straight into a flat cold pool (Robert: "the eddie
   // blast into the bottom is still too severe on startup").
-  const EDDY_FIRST = 8
+  const EDDY_FIRST = 15 // Robert: "the first eddie should not fire until at least 15 seconds has passed" (lamp seconds: at Pace under 1 that is longer on the clock)
   let nextDrifter = EDDY_FIRST + randomRange(...DRIFT_GAP)
   // A log normal gap: the sum of three uniforms is near enough normal, scaled so the gap is
   // DRIFT_GAP_MEAN at the middle, about 2 s a standard deviation below it and 15 s above.
