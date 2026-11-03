@@ -103,7 +103,7 @@ export const computeDefaultElementLife = () => cpu() ? 7 : 15 // CPU 7 (final CP
 // said 300 because the knob stopped there when it was made, "uhhh my turb is set to 600"): one
 // strong eddy on a quiet lamp. The CPU lamp keeps 150 and 6.
 export const computeDefaultTurbulence = () => cpu() ? 150 : 600
-export const computeDefaultDrifters = () => cpu() ? 6 : 2 // Robert's final v2 link, 2026-11-03 (he had tried 1)
+export const computeDefaultDrifters = () => cpu() ? 6 : 1 // Robert, 2026-11-03: "I meant to have that at 1 for the default" (his final link said 2)
 export const computeDefaultWobbleKick = () => cpu() ? 10 : 6
 export const computeDefaultViscosity = () => cpu() ? 9 : 32
 export const computeDefaultElementRate = () => cpu() ? 3 : 4
