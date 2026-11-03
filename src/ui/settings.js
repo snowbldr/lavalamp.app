@@ -329,12 +329,15 @@ export const touchStrength = fnstate(defaultTouchStrength)
 // How the eddies travel: born at Speed px/s (times a random 0.7 to 1.3), falling off with age by
 // the Curve at the Fall off rate (Robert: "Can I get knobs for the motion? initial speed, fall
 // off rate, linear/logarithmic/exponential fall off").
-export const defaultEddySpeed = 120
+// Robert's numbers from his link (2026-11-02: "high speed with exponential drop off was the right
+// move"): 400 px/s, falling off exponentially at 1.7.
+export const defaultEddySpeed = 400
 export const eddySpeed = fnstate(defaultEddySpeed)
-export const defaultEddyFalloff = 1.5
+export const defaultEddyFalloff = 1.7
 export const eddyFalloff = fnstate(defaultEddyFalloff)
 export const eddyCurves = ['log', 'linear', 'exp']
-export const eddyCurve = fnstate('log')
+export const defaultEddyCurve = 'exp'
+export const eddyCurve = fnstate(defaultEddyCurve)
 
 // Themes: a name and every colour at once, the heat gradient, the back and the flow arrows
 // (Robert: "themes that set all of the colors"). Six contrast presets, gradients that jump hue

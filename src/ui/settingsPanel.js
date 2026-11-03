@@ -282,14 +282,14 @@ export function createSettingsPanel () {
             knob('Stir', 'stir', stir, { min: -60, max: 60, step: 1 }, () => defaultStir)
           ),
         subgroup('Eddies',
-            knob('Turb', 'turbulence', turbulence, { min: 0, max: () => Math.max(150, defaultTurbulence() * 2), step: 1 }, () => defaultTurbulence()),
+            knob('Turb', 'turbulence', turbulence, { min: 0, max: () => Math.max(900, defaultTurbulence() * 6), step: 1 }, () => defaultTurbulence()),
             knob('Eddies', 'drifters', drifters, { min: 0, max: () => Math.max(6, defaultDrifters() * 2), step: 1 }, () => defaultDrifters())
           ),
         subgroup('Clock',
             knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
           ),
         subgroup('Travel',
-            knob('Speed', 'eddy-speed', eddySpeed, { min: 10, max: 400, step: 5 }, () => defaultEddySpeed, v => `${v} px/s`),
+            knob('Speed', 'eddy-speed', eddySpeed, { min: 10, max: 1000, step: 5 }, () => defaultEddySpeed, v => `${v} px/s`),
             knob('Fall off', 'eddy-falloff', eddyFalloff, { min: 0, max: 4, step: 0.1 }, () => defaultEddyFalloff, fixed(1))
           ),
         row('Curve', segmented('eddy-curve', eddyCurve, eddyCurves)),
