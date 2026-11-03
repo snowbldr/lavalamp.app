@@ -318,6 +318,27 @@ export const sound = fnstate(false)
 export const soundPending = fnstate(false) // on while the audio is starting, for the switch to show it
 export const soundBeds = ['simmer', 'glug', 'noise', 'hum', 'none']
 export const soundBed = fnstate('simmer')
+// The lamp listening to music (Robert: "one thing I would love is a music sync"). Listening is
+// never saved (browsers want a gesture); the source is remembered; the depths are numbers saved
+// and shared with the rest. Each depth is how much the music adds on top of the knob's value:
+// Floor and Lift from the bass, Turb from the mids, Kick from the highs, and Beat is the chance
+// that a beat lights a pot.
+export const music = fnstate(false)
+export const musicPending = fnstate(false)
+export const musicSources = ['mic', 'tab']
+export const musicSource = fnstate('mic')
+export const defaultMusicSensitivity = 1
+export const musicSensitivity = fnstate(defaultMusicSensitivity)
+export const defaultMusicBeat = 0.2 // at 1 every beat lit a pot and all eleven were burning within seconds at 120 bpm
+export const musicBeat = fnstate(defaultMusicBeat)
+export const defaultMusicFloor = 1.5
+export const musicFloor = fnstate(defaultMusicFloor)
+export const defaultMusicLift = 0.5
+export const musicLift = fnstate(defaultMusicLift)
+export const defaultMusicTurb = 1
+export const musicTurb = fnstate(defaultMusicTurb)
+export const defaultMusicKick = 0.5
+export const musicKick = fnstate(defaultMusicKick)
 // The lamp over the whole screen, no browser around it (Robert: "a full screen mode that has no
 // border"). Not saved: the browser forgets fullscreen on reload anyway. Follows the browser too,
 // so Esc flips the switch back.
@@ -395,7 +416,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, seed }
+const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicBeat, musicFloor, musicLift, musicTurb, musicKick, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 // touchStrength and eddyFalloff: their knobs go to 0 (found by the round trip check, 2026-11-03).
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
@@ -504,8 +525,8 @@ const adoptLegacySave = () => {
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
 // reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
 const VIEW_KEY = `lavalamp.app-v${CURRENT}-views`
-const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps }
-const viewChoices = { touchMode: touchModes, soundBed: soundBeds }
+const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource }
+const viewChoices = { touchMode: touchModes, soundBed: soundBeds, musicSource: musicSources }
 const saveViews = () => {
   try {
     const out = {}

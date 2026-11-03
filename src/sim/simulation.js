@@ -303,6 +303,7 @@ export function createSimulation ({ width, height, params }) {
   let alive = 0
   let nextId = 0 // birth index of the next particle spawned: never reused, so an id names one particle for the lamp's life
   let heaterTime = 0
+  let lightRequests = 0 // pots asked to light on demand (the music's beat), taken at the next step
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -878,6 +879,23 @@ export function createSimulation ({ width, height, params }) {
     const halfWidth = width / 2
     if (elements.length === 0) layoutElements()
     const shorter = Math.min(width, height)
+    // Light an element now, as its clock would; also on demand (lightElement, the music's beat).
+    const ignite = el => {
+      el.heat = randomRange(elementHeatTop * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeatTop)
+      el.start = heaterTime
+      let lifeScale = 1
+      if (ELEMENTS_ARE_CUPS) {
+        // A bigger cup burns longer, by its area over the smallest cup's, up to elementLifeScale.
+        lifeScale = Math.min(elementLifeScale, el.areaRatio)
+        // This lighting's core: narrow to the whole cup, leaning narrow; wider burns shorter.
+        const coreMin = Math.min(el.cupHalf, elementCore * shorter / width)
+        const u = random()
+        el.coreFraction = coreMin + (el.cupHalf - coreMin) * u * u
+        lifeScale = Math.max(1, lifeScale * coreMin / el.coreFraction)
+      }
+      el.life = randomRange(elementLifeTop * ELEMENT_LIFE[0] / ELEMENT_LIFE[1], elementLifeTop) * lifeScale
+      el.next = 0
+    }
     // Once warmed up, elements light on their own clocks (see ELEMENT_GAP and ELEMENT_RATE).
     if (progress >= 1 && heatSpots > 0 && heater) {
       let weight = 0
@@ -906,24 +924,24 @@ export function createSimulation ({ width, height, params }) {
           el.next = heaterTime + wait * (el.fresh ? randomRange(0, 1) : randomRange(0.5, 1.5))
           el.fresh = false
         }
-        if (heaterTime >= el.next) {
-          el.heat = randomRange(elementHeatTop * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeatTop)
-          el.start = heaterTime
-          let lifeScale = 1
-          if (ELEMENTS_ARE_CUPS) {
-            // A bigger cup burns longer, by its area over the smallest cup's, up to elementLifeScale.
-            lifeScale = Math.min(elementLifeScale, el.areaRatio)
-            // This lighting's core: narrow to the whole cup, leaning narrow; wider burns shorter.
-            const coreMin = Math.min(el.cupHalf, elementCore * shorter / width)
-            const u = random()
-            el.coreFraction = coreMin + (el.cupHalf - coreMin) * u * u
-            lifeScale = Math.max(1, lifeScale * coreMin / el.coreFraction)
-          }
-          el.life = randomRange(elementLifeTop * ELEMENT_LIFE[0] / ELEMENT_LIFE[1], elementLifeTop) * lifeScale
-          el.next = 0
+        if (heaterTime >= el.next) ignite(el)
+      }
+      // Pots asked for on demand (the music's beat): one of the unlit ones, drawn by weight, so
+      // the small pots near the middle answer most, as the clocks' lightings do.
+      while (lightRequests > 0) {
+        lightRequests--
+        let total = 0
+        for (const el of elements) if (el.heat <= 0) total += el.weight
+        if (total <= 0) break
+        let pick = random() * total
+        for (const el of elements) {
+          if (el.heat > 0) continue
+          pick -= el.weight
+          if (pick <= 0) { ignite(el); break }
         }
       }
     } else {
+      lightRequests = 0
       for (const el of elements) {
         el.heat = 0
         el.next = 0
@@ -1554,6 +1572,8 @@ export function createSimulation ({ width, height, params }) {
     resize,
     push,
     setTouches,
+    // Light a pot at the next step, as its clock would have (the music's beat).
+    lightElement () { lightRequests++ },
     transform,
     flowAt,
     overrideAt,

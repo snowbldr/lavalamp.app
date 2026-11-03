@@ -201,6 +201,11 @@ input[type="range"].slider::-webkit-slider-runnable-track { height: 6px; border-
 input[type="range"].slider::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 input[type="range"].slider::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); }
 input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
+/* The music meter: three bars for bass, mids and highs, and a dot that flashes on the beat. */
+.meter { display: grid; grid-template-columns: 1fr 1fr 1fr 18px; gap: 6px; align-items: center; height: 14px; margin: 2px 0 8px; }
+.meter-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.meter-bar > div { height: 100%; width: 0; border-radius: 3px; background: var(--accent); }
+.meter-beat { width: 12px; height: 12px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); }
 .reset { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: #ececec; font-size: 15px; line-height: 1; cursor: pointer; padding: 0; }
 
 /* The Advanced list: each group a card, knobs packed four to a row, the subgroup named in small

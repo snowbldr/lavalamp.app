@@ -7,6 +7,7 @@ import { createRenderer } from './render/renderer.js'
 import { createMotionInput } from './input/motion.js'
 import { createPointerInput } from './input/pointer.js'
 import { createGloop } from './audio/gloop.js'
+import { createMusic } from './audio/music.js'
 import { TURNS, lampSizeFor, lampToPage, pageToLamp, pageVectorToLamp } from './input/frame.js'
 import { notify } from './ui/components.js'
 import { takeUpgrade, v1SettingsBanner } from './versions.js'
@@ -111,6 +112,15 @@ import {
   motionLabel,
   fpsLabel,
   soundBed,
+  music,
+  musicPending,
+  musicSource,
+  musicSensitivity,
+  musicBeat,
+  musicFloor,
+  musicLift,
+  musicTurb,
+  musicKick,
   showHeater,
   settle,
   smooth,
@@ -354,6 +364,33 @@ export async function start () {
   gloop.setBed(soundBed())
   soundBed.subscribe(name => gloop.setBed(name))
   sound.subscribe(on => { soundPending(!!on); gloop.set(on).then(() => soundPending(false)) })
+  // Music: the switch starts listening (a click, the gesture the microphone wants); the source
+  // can be changed while listening. A failure (no permission, no audio in the tab) puts the
+  // switch back off and says why.
+  const listener = createMusic()
+  const listen = async () => {
+    musicPending(true)
+    try { await listener.start(musicSource()) } catch (e) { music(false); notify('Music: ', listener.error || 'could not listen') }
+    musicPending(false)
+  }
+  music.subscribe(on => { if (on) listen(); else listener.stop() })
+  musicSource.subscribe(() => { if (music()) listen() })
+  // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
+  // bands add to them, so a quiet room is the lamp as tuned (see settings.js, musicFloor and
+  // the rest). A beat lights a pot through the simulation's own lighting.
+  const musicMeter = { bass: 0, mid: 0, high: 0, beat: 0 }
+  const driveMusic = dt => {
+    if (!listener.enabled) return
+    const m = listener.update(dt, musicSensitivity())
+    params.floorHeat = floorHeat() * (1 + musicFloor() * m.bass)
+    params.liftCap = lift() * (1 + musicLift() * m.bass)
+    params.turbulence = turbulence() * (1 + musicTurb() * m.mid)
+    params.wobbleKick = wobbleKick() * (1 + musicKick() * m.high)
+    if (m.beat && sim.lightElement && Math.random() < musicBeat()) sim.lightElement()
+    musicMeter.bass = m.bass; musicMeter.mid = m.mid; musicMeter.high = m.high
+    if (m.beat) musicMeter.beat = 1; else musicMeter.beat *= 0.85
+    if (settingsPanel.meter) settingsPanel.meter(musicMeter)
+  }
   // Fullscreen: the switch asks the browser, and the browser's own changes (Esc, the window's
   // button) are read back so the switch stays honest. The lamp refits on the resize that follows.
   const root = document.documentElement
@@ -527,7 +564,7 @@ export async function start () {
   // kept on window.lavaProfile, for finding what a slow device is spending its time on.
   const profiling = new URLSearchParams(window.location.search).has('profile')
   look.profile = profiling
-  if (profiling) window.lavalamp = { sim, params, look, gloop, device } // for timing the running lamp from the console
+  if (profiling) window.lavalamp = { sim, params, look, gloop, device, music: listener } // for timing the running lamp from the console
   const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
   // The busiest 20 px cell, in particles: 40 or so is lava at rest, hundreds is a pile the
   // solver's neighbour loops pay for (the eddies packing the pots was 814, and single digit fps).
@@ -668,6 +705,7 @@ export async function start () {
     shownView = view
     renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, view })
     if (gloop.enabled) gloop.update(sim.state, sim.count, width, height, params.gravity, FRAME * pace(), params.interactionRadius)
+    driveMusic(FRAME)
     if (profiling) {
       const t2 = performance.now()
       tally.frames++
