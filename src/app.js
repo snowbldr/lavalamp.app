@@ -399,11 +399,32 @@ export async function start () {
     get: () => listener.device,
     set: id => { listener.device = id; try { localStorage.setItem(DEVICE_KEY, id) } catch (e) {} if (music() && musicSource() === 'mic') listen() }
   })
-  // The File source's song, as read by the panel's picker (kept for this page only).
+  // The File source's song, as read by the panel's picker, and kept in this browser's own
+  // storage (IndexedDB, nothing leaves the machine) so a reload has it ready: one click on
+  // Listen or Record plays it (Robert: "if I save settings it'll repick the same mp3"). The
+  // browser will not start sound before a click, so that one is still needed.
   let musicFile = null
+  const SONG_DB = 'lavalamp-song'
+  const songStore = mode => new Promise((resolve, reject) => {
+    const open = indexedDB.open(SONG_DB, 1)
+    open.onupgradeneeded = () => open.result.createObjectStore('song')
+    open.onerror = () => reject(open.error)
+    open.onsuccess = () => resolve(open.result.transaction('song', mode).objectStore('song'))
+  })
+  const keepSong = async (name, data) => {
+    try { const store = await songStore('readwrite'); store.put({ name, data }, 'last') } catch (e) {}
+  }
+  ;(async () => {
+    try {
+      const store = await songStore('readonly')
+      const req = store.get('last')
+      req.onsuccess = () => { if (req.result && !musicFile) { musicFile = req.result.data; musicFileName(req.result.name) } }
+    } catch (e) {}
+  })()
   window.addEventListener('lavalamp-music-file', e => {
     musicFile = e.detail.data
     musicFileName(e.detail.name)
+    keepSong(e.detail.name, e.detail.data)
     if (musicSource() !== 'file') musicSource('file')
     else if (music()) listen()
   })
