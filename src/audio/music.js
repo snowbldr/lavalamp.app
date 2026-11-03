@@ -92,6 +92,19 @@ const CUT_BEFORE_SCORE = -4
 // gap is itself the different thing before it; the score, eased over 2 s, dipped only to -1.7). Bangarang's drop at 0:27.3 (Robert: "big pot built but did
 // not fire on big drop... that's the drop at :25-:26") has the kick gone 0:23 to 0:27 and the
 // level down 3 or 4 dB, but no cut in the bass and no surge.
+// The switch: a new tempo (Robert, on Bohemian Rhapsody's rock at his 4:06: "there's a hard drum
+// beat that should trigger it"). The hits there are no harder (a rise of 1.5 to 2.3, as before)
+// but come 0.27 s apart where they came 0.42. A switch is TEMPO_NEW beats whose gaps agree within
+// TEMPO_AGREE of their mean, against the gaps of the beats TEMPO_FROM to TEMPO_TO seconds back, of
+// which TEMPO_STEADY agree within 15% of their median; the new gap off that median, and off half
+// and twice it, by more than TEMPO_OFF of each. Bohemian Rhapsody 4:10.0 in the video's mp3; C-C,
+// Drugs I Like, Bangarang: none (an agreement of 20% let Drugs I Like's 2:14.9 in).
+const TEMPO_NEW = 3
+const TEMPO_AGREE = 0.15
+const TEMPO_FROM = 2
+const TEMPO_TO = 6
+const TEMPO_STEADY = 0.7
+const TEMPO_OFF = 0.2
 const KICK_GONE = 2.5 // 2 added drops in Drugs I Like's full parts (1:11, 2:49, 3:03)
 const SETTLE = 6 // seconds from the start before a drop: the averages start from the silence before the music, and Drugs I Like's first second read as one
 // The boom: a deep sub bass note (Robert, on C-C after the drop: "there's like this deep
@@ -211,6 +224,8 @@ export function createMusic () {
   const averages = { heat: 0, eddy: 0, kick: 0 }
   let lastBeat = -1
   let lastBoom = -1e9
+  let lastSwitch = -1e9 // when the last tempo switch was, so a new tempo counts once
+  const recentBeats = [] // times of the beats over the last TEMPO_TO seconds and a few more
   const scoreHistory = [] // [time, score] ten times a second over the last CUT_BEFORE seconds
   const bandHistory = [] // [time, the STAB_BANDS in dB] over STAB_BEFORE
   let stabPending = null // a calm beat being judged: { at, before, peak }
@@ -498,7 +513,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -666,9 +681,25 @@ export function createMusic () {
       }
       if (!scoreHistory.length || clock - scoreHistory[scoreHistory.length - 1][0] >= 0.1) scoreHistory.push([clock, score])
       while (scoreHistory.length && clock - scoreHistory[0][0] > CUT_BEFORE) scoreHistory.shift()
+      if (levels.beat) { recentBeats.push(clock); while (recentBeats.length && clock - recentBeats[0] > TEMPO_TO + 2) recentBeats.shift() }
+      const tempoSwitched = () => {
+        if (levels.calm || recentBeats.length < TEMPO_NEW + 2) return false
+        const gaps = []
+        for (let j = recentBeats.length - TEMPO_NEW; j < recentBeats.length; j++) gaps.push(recentBeats[j] - recentBeats[j - 1])
+        const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length
+        if (gaps.some(g => Math.abs(g - mean) > TEMPO_AGREE * mean)) return false
+        const before = []
+        for (let j = 1; j < recentBeats.length; j++) { const age = clock - recentBeats[j]; if (age >= TEMPO_FROM && age <= TEMPO_TO) before.push(recentBeats[j] - recentBeats[j - 1]) }
+        if (before.length < 5) return false
+        const median = before.slice().sort((a, b) => a - b)[Math.floor(before.length / 2)]
+        if (before.filter(g => Math.abs(g - median) <= 0.15 * median).length < TEMPO_STEADY * before.length) return false
+        const r = mean / median
+        return Math.min(Math.abs(r - 1), Math.abs(r / 0.5 - 1), Math.abs(r / 2 - 1)) > TEMPO_OFF
+      }
       const dippedBefore = () => scoreHistory.some(([t, v]) => clock - t > CUT_TIME + CUT_SKIP && v < CUT_BEFORE_SCORE)
       if (clock - startedAt > SETTLE) {
-        if (levels.beat && ((cutBefore && dippedBefore()) || kickGoneFor >= KICK_GONE) && 10 * Math.log10(Math.max(1e-12, total)) > reference - CUT_LEVEL) { levels.drop = true; levels.calm = false; droppedAt = clock }
+        if (levels.beat && clock - lastSwitch > TEMPO_TO && tempoSwitched()) { levels.drop = true; levels.calm = false; droppedAt = clock; lastSwitch = clock }
+        else if (levels.beat && ((cutBefore && dippedBefore()) || kickGoneFor >= KICK_GONE) && 10 * Math.log10(Math.max(1e-12, total)) > reference - CUT_LEVEL) { levels.drop = true; levels.calm = false; droppedAt = clock }
         else if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock }
         else if (levels.calm && score > -BUSY_DB) levels.calm = false
         else if (!levels.calm && score < -CALM_DB && clock - droppedAt > DROP_HOLD) levels.calm = true
