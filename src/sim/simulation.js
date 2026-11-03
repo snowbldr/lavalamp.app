@@ -323,6 +323,15 @@ export function createSimulation ({ width, height, params }) {
   const drifting = []
   let nextDrifter = randomRange(...DRIFT_GAP)
   const carried = [0, 0] // scratch: the other eddies' flow at an eddy
+  // Where an eddy may be born on a side wall: above the lava's rest level by EDDY_CLEARANCE of
+  // the height (Robert: "we only want to spawn eddies like at least 5% of the screen above where
+  // the lava would rest. that should fix the weird pulse push down issue"). The rest level is
+  // the spawn slab's: floor area per particle times the visible count over the width.
+  const EDDY_CLEARANCE = 0.05
+  const eddyCeilingY = () => {
+    const restDepth = spawnAreaNow * Math.max(0, (params.particleCount || 0)) / width
+    return Math.max(0, height - restDepth - EDDY_CLEARANCE * height)
+  }
   // An eddy's travel speed at its age: its birth speed times the chosen fall off.
   const travelPace = (e, age) => {
     const k = params.eddyFalloff ?? 1.5
@@ -420,7 +429,7 @@ export function createSimulation ({ width, height, params }) {
       const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
       drifting.push({
         x: side === 1 ? width - core : side === 3 ? core : core + along * (width - 2 * core),
-        y: side === 0 ? core : side === 2 ? height - core : core + along * (height - 2 * core),
+        y: side === 0 ? core : core + along * Math.max(0, eddyCeilingY() - 2 * core),
         speed,
         hx: Math.cos(heading),
         hy: Math.sin(heading),
@@ -463,7 +472,7 @@ export function createSimulation ({ width, height, params }) {
       const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
       eddies.push({
         x: side === 1 ? width : side === 3 ? 0 : along * width,
-        y: side === 0 ? 0 : side === 2 ? height : along * height,
+        y: side === 0 ? 0 : along * eddyCeilingY(),
         speed: (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY),
         hx: Math.cos(heading),
         hy: Math.sin(heading),
