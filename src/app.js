@@ -502,7 +502,17 @@ export async function start () {
   let bufferAt = -1e9
   let lavaLow = false
   const VENT_TIME = 0.3 // seconds the lid is lifted for
-  const BOOM_POT_GAP = 3 // seconds between pots on deep notes
+  // Seconds between pots on deep notes: 3 skipped C-C's 0:57.1 (1.9 s after the one at the drop);
+  // 1.5 keeps C-C's, 1.75 to 3.5 s apart, and half of Bangarang's, about 1.1 s apart.
+  const BOOM_POT_GAP = 1.5
+  // A deep note within this of a drop is the drop's own: the drop at 0:55.2 opened the big pot,
+  // and the boom at the note's peak opened a second one 0.02 s later.
+  const BOOM_AFTER_DROP = 1
+  // A beat's pot waits BEAT_POT_WAIT, and is let go if a deep note's attack is heard meanwhile:
+  // the attack's kick can be heard a frame or two before the attack counts, and its pot spent the
+  // charge the boom wanted (C-C 1:15.62 and 1:15.64, 1:22.52 and 1:22.60).
+  const BEAT_POT_WAIT = 0.035
+  let beatPotAt = -1
   let lastBoomPotAt = -1e9
   const SILENT_DB = -65 // the analyser's floor is -80; a song's quietest bars sit around -55
   const SILENT_AFTER = 15 // seconds
@@ -630,7 +640,12 @@ export async function start () {
       for (let i = 0; i < n; i++) if (st.y[i] > 0.8 * H) low++
       lavaLow = low / n < BUFFER
     }
-    const onBeatPot = m.beat && !calm && !lavaLow && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
+    // A deep note's attack is also a kick: its beat pot spent the charge, and the boom at the
+    // note's peak a few frames later opened a pot closed that instant, with nothing in it (C-C
+    // 1:02.22 and 1:02.26, 1:15.61 and 1:15.64; Robert: "the bwongs on c-c are still not
+    // triggering the pots... sometimes it does seem like it fires, but I'm not sure why the
+    // inconsistency"). While a boom waits for its peak, the beat pots wait too.
+    const onBeatPot = m.beat && !calm && !lavaLow && !m.boomPending && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
     const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
     if (isDrop) {
       lastDropAt = musicNow
@@ -646,7 +661,7 @@ export async function start () {
       // and nothing else changes (Robert: "send a bolt of lightning did not release a pot! one
       // was ready though"; "don't change anythign else").
       open(musicDrop() * 1.5)
-    } else if (m.boom && !calm && !lavaLow && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP) {
+    } else if (m.boom && !calm && !lavaLow && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP && musicNow - lastDropAt >= BOOM_AFTER_DROP) {
       // A deep note (music.js, the boom): a burst of lava with it, the lidded pot blasted by Boom,
       // or with Drop 0 a pot lit as it is heard; at most every BOOM_POT_GAP, since dubstep's sub
       // lands every bar (Bangarang: about one a second through its full parts, against C-C's
@@ -654,12 +669,17 @@ export async function start () {
       lastBoomPotAt = musicNow
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
       if (lidded) open(musicBoom()); else potNow()
-    } else if (lidded && onBeatPot) open(musicDrop())
+      beatPotAt = -1
+    } else if (lidded && onBeatPot) beatPotAt = musicNow
     else if (lidded && m.beat && !lavaLow && Math.random() < musicVent()) {
       // A vent (Robert: "what if we occasionally pulse the pre heated pots to release pulses of
       // heat to match the music"): on a beat that opens nothing, now and then the charged pot's
       // lid lifts for VENT_TIME and a puff of its lava goes up with the beat.
       if (sim.ventPot) sim.ventPot(VENT_TIME)
+    }
+    if (beatPotAt >= 0) {
+      if (m.boomPending || m.boom || fired) beatPotAt = -1 // a drop, a stab or a boom has the pot
+      else if (musicNow - beatPotAt >= BEAT_POT_WAIT) { beatPotAt = -1; if (lidded) open(musicDrop()) }
     }
     // A busy part keeps at least Busy eddies alive, never fewer than the Eddies knob.
     params.drifters = calm ? drifters() : Math.max(drifters(), musicBusyEddies())

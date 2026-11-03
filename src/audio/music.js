@@ -198,7 +198,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -626,6 +626,7 @@ export function createMusic () {
         boomArmed.max = Math.max(boomArmed.max, lowDb)
         if (lowDb < boomArmed.max - BOOM_FALL || clock - boomArmed.at >= BOOM_WAIT) { levels.boom = true; boomArmed = null }
       }
+      levels.boomPending = !!boomArmed
       subHistory.push([clock, subDb])
       while (subHistory.length && clock - subHistory[0][0] > BOOM_BEFORE) subHistory.shift()
       const total = power([40, 12000])
