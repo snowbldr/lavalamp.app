@@ -272,7 +272,7 @@ fn contain(i: u32, pIn: vec2f) -> vec2f {
     // The drop's lid: the lidded pot's lava that reaches the floor's line is held under it.
     // Each held a different depth under the line (0.5 to 6.5 px, by the particle's number): held
     // all at one depth they stacked in flat rows against the lid and left in stripes.
-    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height) { p.y = P.height + 0.5 + f32((i * 2654435761u) >> 29u) * 0.857; }
+    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height) { p.y = P.height + 12.0 + f32((i * 2654435761u) >> 29u) * 0.857; } // 12 px under (simulation.js LID_DEPTH): at 0.5 it glowed above the line as a white streak
     if (p.y > P.height) {
       if (P.floorBottles > 0u) { p = containIn(i, p, P.ceilingBottles, P.floorBottles); } else { p.y = P.height; F[HOME(i)] = -1.0; }
     } else if (p.y < 0.0) {

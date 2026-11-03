@@ -330,6 +330,7 @@ export function createSimulation ({ width, height, params }) {
   // one is passed over for RESERVE_REST seconds.
   let retireRequest = false
   const RESERVE_REST = 5
+  const RETIRE_COOL = 3 // seconds a handed back pot cools with its lid on before it opens
   const DROP_BLAST = 3
   // The lidded pot heats to CHARGE_LIFT gravities and no further (the drift up is temperature
   // over gravity, capped at Lift gravities, so the cap is also never past full lift). Uncapped,
@@ -340,7 +341,11 @@ export function createSimulation ({ width, height, params }) {
   // the opened pot's lava to 4433 and half the lamp's lava ended in the ceiling bottles by 28 s
   // (Drop 0: 10 to 20%).
   const CHARGE_LIFT = 3 // the drop's pot
-  const CHARGE_LIFT_BEAT = 2 // a beat's pot: at 3 its lava parked in the ceiling bottles at 1200 against 850 with no lids, and the ceiling held 59% of the lava by 40 s
+  // The lid holds its lava LID_DEPTH under the floor's line (and 6 px more at most): at 0.5 its glow
+  // showed above the line as a white streak along the bottom (Robert: "can we hid this hot white
+  // streak on the bottom?").
+  const LID_DEPTH = 12
+  const CHARGE_LIFT_BEAT = 1.5 // 2 until the trains (Robert: "the pots stay hot too long and they just shoot up white spheres that don't intereact with anything cause it's all hot"). A beat's pot: at 3 its lava parked in the ceiling bottles at 1200 against 850 with no lids, and the ceiling held 59% of the lava by 40 s
   const DROP_LIFE = 2 // seconds
   let eddyRequests = 0 // eddies asked for on demand (the music's beat), born at the next step if there is room
   // The music's bass, on the eddies ("bass notes should cause a wave"). The spring that went with
@@ -1060,12 +1065,17 @@ export function createSimulation ({ width, height, params }) {
           lidPot = charged.pot
         }
       }
-      if (charged && charged.mode === 'charge') {
+      if (charged && charged.mode === 'charge' && !(charged.coolUntil > 0)) {
         if (chargeLevel > 0) charged.heat = elementHeatTop * chargeLevel
         else if (dropRequest <= 0) unlid() // called off
       }
-      if (retireRequest) { if (charged && charged.mode === 'charge' && !charged.big) { charged.restUntil = heaterTime + RESERVE_REST; unlid() } retireRequest = false }
-      if (ventRequest > 0) { if (charged && charged.mode === 'charge' && !(ventSmallOnly && charged.big)) ventUntil = heaterTime + ventRequest; ventRequest = 0; ventSmallOnly = false }
+      // Handed back cooling: the heat off and the lid kept RETIRE_COOL seconds, then opened (opened
+      // at once, the rest of its hot lava flew up as white spheres).
+      if (retireRequest) { if (charged && charged.mode === 'charge' && !charged.big && !(charged.coolUntil > heaterTime)) charged.coolUntil = heaterTime + RETIRE_COOL; retireRequest = false }
+      if (charged && charged.coolUntil > 0) {
+        if (heaterTime >= charged.coolUntil) { charged.coolUntil = 0; charged.restUntil = heaterTime + RESERVE_REST; unlid() } else charged.heat = 0
+      }
+      if (ventRequest > 0) { if (charged && charged.mode === 'charge' && !(ventSmallOnly && charged.big) && !(charged.coolUntil > 0)) ventUntil = heaterTime + ventRequest; ventRequest = 0; ventSmallOnly = false }
       if (charged && charged.mode === 'charge') lidPot = heaterTime < ventUntil ? -1 : charged.pot
       if (dropRequest > 0) {
         const el = charged || biggestCold()
@@ -1413,7 +1423,7 @@ export function createSimulation ({ width, height, params }) {
     if (cupDepthNow > 0) {
       // The drop's lid: lava of the lidded pot that reaches the mouth's line is held under it.
       // A home is an index into its own row, so only one just above the floor's line counts.
-      if (lidPot >= 0 && state.home[i] === lidPot && y[i] <= height && y[i] > height - 4 * interactionRadiusNow) { y[i] = height + 0.5 + (Math.imul(i, 2654435761) >>> 29) * 0.857; if (vy[i] < 0) vy[i] = 0 } // each a different depth under the line: at one depth they stacked in rows and left in stripes
+      if (lidPot >= 0 && state.home[i] === lidPot && y[i] <= height && y[i] > height - 4 * interactionRadiusNow) { y[i] = height + LID_DEPTH + (Math.imul(i, 2654435761) >>> 29) * 0.857; if (vy[i] < 0) vy[i] = 0 } // each a different depth under the line: at one depth they stacked in rows and left in stripes
       if (y[i] > height) containIn(floorBottleList(), i)
       else if (y[i] < CUP_LIP * Math.min(width, height)) containIn(ceilingBottleList(), i)
       else state.home[i] = -1
