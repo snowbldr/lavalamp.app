@@ -443,9 +443,18 @@ export function createSimulation ({ width, height, params }) {
     if (drifting.length > drifters) drifting.length = drifters
     if (time >= nextEddy) {
       const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
+      // These too are born on an edge and travel inward, slowing as the drifters do (Robert,
+      // seeing one appear mid lamp: "all eddies spawn from anywhere on the edges").
+      const side = Math.floor(random() * 4)
+      const along = random()
+      const inward = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][side]
+      const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
       eddies.push({
-        x: randomRange(radius / 2, width - radius / 2),
-        y: randomRange(radius / 2, height - radius / 2),
+        x: side === 1 ? width : side === 3 ? 0 : along * width,
+        y: side === 0 ? 0 : side === 2 ? height : along * height,
+        speed: randomRange(...DRIFT_SPEED_START),
+        hx: Math.cos(heading),
+        hy: Math.sin(heading),
         radius,
         spin: random() < 0.5 ? -1 : 1,
         start: time,
@@ -454,7 +463,13 @@ export function createSimulation ({ width, height, params }) {
       nextEddy = time + randomRange(...EDDY_GAP) * pace
     }
     for (let k = eddies.length - 1; k >= 0; k--) {
-      if (time - eddies[k].start > eddies[k].life) eddies.splice(k, 1)
+      const e = eddies[k]
+      if (time - e.start > e.life) { eddies.splice(k, 1); continue }
+      const pace = e.speed / (1 + DRIFT_SLOWING * Math.log(1 + time - e.start))
+      e.x += pace * e.hx * dt
+      e.y += pace * e.hy * dt
+      if (e.x < 0) { e.x = 0; e.hx = Math.abs(e.hx) } else if (e.x > width) { e.x = width; e.hx = -Math.abs(e.hx) }
+      if (e.y < 0) { e.y = 0; e.hy = Math.abs(e.hy) } else if (e.y > height) { e.y = height; e.hy = -Math.abs(e.hy) }
     }
   }
 
