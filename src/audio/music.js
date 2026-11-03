@@ -57,6 +57,16 @@ const SURGE_SLOW = 6
 // surge past DROP_SURGE that lands within DROP_DB of the reference; the section turns busy at once.
 const REFERENCE_DB = -36
 const REFERENCE_FALL = 1 / 15
+// The floor under the reference sinks for a quiet recording: a song that has not come within
+// FLOOR_NEAR dB of it for FLOOR_PATIENCE seconds is quiet, not in an intro, and the floor falls
+// FLOOR_FALL dB a second (to FLOOR_LOWEST at most). Kleiber's 1975 Fifth runs -44 to -62 dB, so
+// under -36 it read calm the whole first movement, its 5:36 climax at -44 included (Robert:
+// "symphony no 5 looked a little too calm around 5:36. I guess that's the beethoven drop right
+// htere lol"); C-C, Drugs I Like and Bangarang reach the floor in their first minute.
+const FLOOR_NEAR = 3
+const FLOOR_PATIENCE = 90
+const FLOOR_FALL = 1 / 10
+const FLOOR_LOWEST = -60
 const BREADTH_FALL = 1 / 60 // of itself a second, the held peak of the breadth
 const BREADTH_WEIGHT = 1.5
 const SCORE_SMOOTH = 2
@@ -215,6 +225,8 @@ export function createMusic () {
   let surgeSlow = 0
   let sectionPower = 0
   let peakDb = -90
+  let floorDrop = 0 // dB the reference's floor has sunk for a quiet recording (see FLOOR_PATIENCE)
+  let farFromFloor = 0 // seconds since the song came within FLOOR_NEAR of the floor
   let breadth = 0
   let breadthPeak = 0.05
   let score = null
@@ -516,7 +528,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; floorDrop = 0; farFromFloor = 0; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -640,7 +652,10 @@ export function createMusic () {
       const db = 10 * Math.log10(Math.max(1e-12, sectionPower))
       const fastDb = 10 * Math.log10(Math.max(1e-12, surgeFast))
       peakDb = Math.max(db, peakDb - REFERENCE_FALL * dt)
-      const reference = Math.max(peakDb, REFERENCE_DB - 10 * Math.log10(Math.max(0.2, sensitivity)))
+      const floorTop = REFERENCE_DB - 10 * Math.log10(Math.max(0.2, sensitivity))
+      if (db > floorTop + floorDrop - FLOOR_NEAR) { farFromFloor = 0; floorDrop = Math.min(0, floorDrop + FLOOR_FALL * dt) } else farFromFloor += dt
+      if (farFromFloor > FLOOR_PATIENCE) floorDrop = Math.max(FLOOR_LOWEST - floorTop, floorDrop - FLOOR_FALL * dt)
+      const reference = Math.max(peakDb, floorTop + floorDrop)
       let byteSum = 0
       for (let k = 1; k < bins.length; k++) byteSum += bins[k]
       breadth += (byteSum / ((bins.length - 1) * 255) - breadth) * Math.min(1, dt)
