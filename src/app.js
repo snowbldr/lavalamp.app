@@ -131,6 +131,10 @@ import {
 const FRAME = 1 / 60
 // How hard a bump to the device shoves the lava.
 const MOTION_GAIN = 2
+// How hard a shake of the window moves the lava (1 is the window's own speed) and the most it
+// moves it in one frame, in px.
+const WINDOW_SHAKE_GAIN = 1
+const WINDOW_SHAKE_MAX = 60
 // How long gravity has to point at a new edge before the lamp turns to it, in seconds.
 const TURN_DELAY = 0.6
 
@@ -562,6 +566,7 @@ export async function start () {
     tally.frames = 0; tally.sim = 0; tally.steps = 0; tally.render = 0; tally.span = 0; tally.phases = {}
   }
   let leaning = 0 // seconds gravity has pointed at an edge other than the current one
+  let lastScreen = null // the window's place on the screen last frame, for shaking it
   // Frames a second for the panel: a counter and one string a second, nothing else.
   let fpsFrames = 0
   let fpsSince = performance.now()
@@ -577,6 +582,23 @@ export async function start () {
     // A shake is a shove, in the lamp's frame.
     const [ax, ay] = pageVectorToLamp(turns, ...motion.consume())
     sim.push(ax / FRAME * MOTION_GAIN, ay / FRAME * MOTION_GAIN)
+    // Shaking the window shakes the lava, as a shake of the phone does (Robert: "could we make
+    // shaking the window shake the lava like on mobile?"). The window's move since the last frame
+    // is a velocity; the lava, by its inertia, keeps its place in the world, so for this step it
+    // moves the other way at that speed, and the glass catches it. Capped, and a move of a pixel
+    // or two (a resize settling, a dock) is ignored.
+    const wx = window.screenX
+    const wy = window.screenY
+    if (lastScreen) {
+      const dx = wx - lastScreen[0]
+      const dy = wy - lastScreen[1]
+      if (Math.abs(dx) + Math.abs(dy) > 2) {
+        const [lx, ly] = pageVectorToLamp(turns, -dx, -dy)
+        const k = Math.min(1, WINDOW_SHAKE_MAX / Math.hypot(lx, ly)) * WINDOW_SHAKE_GAIN / FRAME
+        sim.push(lx * k, ly * k)
+      }
+    }
+    lastScreen = [wx, wy]
     // Gravity picks the floor.
     const wanted = motion.downEdge(edge)
     leaning = wanted === edge ? 0 : leaning + FRAME
