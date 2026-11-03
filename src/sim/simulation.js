@@ -318,6 +318,24 @@ export function createSimulation ({ width, height, params }) {
   let charged = null
   let lidPot = -1
   let dropRequest = 0
+  // The pump (Robert: "on the drop, the heat should radiate up into the lamp from the pot that
+  // fires. that way it gets motion even if the pot is completely empty. it should follow a gradient
+  // of some kind. one realistic version of this would be a pulse pump that shot hot fluid from the
+  // bottom, which is basically our heaters just simplified... with extra pressure I guess"): a
+  // column of heat and push over the firing pot, a Gaussian across (PLUME_WIDTH_MIN of the width
+  // at least, or the pot's mouth and a half) falling off upward over PLUME_REACH of the height,
+  // swelling in over PLUME_RISE, full to PLUME_HOLD, gone at PLUME_LIFE. Lava in the tank only;
+  // on the GPU lamp (gpuSimulation.js drift), not the CPU one.
+  let plume = null
+  const PLUME_WIDTH_MIN = 0.04
+  const PLUME_REACH = 0.35
+  const PLUME_RISE = 0.1
+  const PLUME_HOLD = 0.6
+  const PLUME_LIFE = 1.5
+  // At 6 and 160 px/s, with the push overriding the inertia, the lava tore into a spray of white
+  // dots and left the lid's rows as stripes.
+  const PLUME_HEAT = 3 // per step at the floor, at strength 1 (an element's top is 8)
+  const PLUME_PUSH = 60 // px/s up at the floor, at strength 1
   // A vent: the lid lifted for a moment, so the top of the charged pot's lava puffs out and the
   // pot closes again and goes on charging (Robert: "what if we occasionally pulse the pre heated
   // pots to release pulses of heat to match the music"). Lava that rises past the floor's line
@@ -341,10 +359,10 @@ export function createSimulation ({ width, height, params }) {
   // the opened pot's lava to 4433 and half the lamp's lava ended in the ceiling bottles by 28 s
   // (Drop 0: 10 to 20%).
   const CHARGE_LIFT = 3 // the drop's pot
-  // The lid holds its lava LID_DEPTH under the floor's line (and 6 px more at most): at 0.5 its glow
-  // showed above the line as a white streak along the bottom (Robert: "can we hid this hot white
-  // streak on the bottom?").
-  const LID_DEPTH = 12
+  // The lid holds its lava LID_DEPTH under the floor's line (and 6 px more at most). Held 12 px down
+  // to hide its white glow over the line, it left a black gap in the pool instead; the renderers
+  // now draw pot lava no hotter than half neutral, and it is held at 0.5 again.
+  const LID_DEPTH = 0.5
   const CHARGE_LIFT_BEAT = 1.5 // 2 until the trains (Robert: "the pots stay hot too long and they just shoot up white spheres that don't intereact with anything cause it's all hot"). A beat's pot: at 3 its lava parked in the ceiling bottles at 1200 against 850 with no lids, and the ceiling held 59% of the lava by 40 s
   const DROP_LIFE = 2 // seconds
   let eddyRequests = 0 // eddies asked for on demand (the music's beat), born at the next step if there is room
@@ -1086,6 +1104,8 @@ export function createSimulation ({ width, height, params }) {
           el.life = DROP_LIFE
           if (!el.big) el.life = DROP_LIFE / 2
           el.next = 0
+          // The pump: heat and a push up into the tank over the pot (see PLUME_LIFE).
+          plume = { x: el.fx * width, width: Math.max(PLUME_WIDTH_MIN * width, (el.cupHalf || 0.05) * width * 1.5), start: heaterTime, strength: dropRequest }
         }
         charged = null
         lidPot = -1
@@ -1747,6 +1767,15 @@ export function createSimulation ({ width, height, params }) {
     ventPot (seconds, smallOnly) { ventRequest = Math.max(ventRequest, seconds || 0); ventSmallOnly = !!smallOnly },
     retirePot () { retireRequest = true },
     get lid () { return lidPot },
+    // The pump now: { x, width, reach, heat, push }, or null.
+    get plume () {
+      if (!plume) return null
+      const age = heaterTime - plume.start
+      if (age > PLUME_LIFE) { plume = null; return null }
+      const env = age < PLUME_RISE ? age / PLUME_RISE : age < PLUME_HOLD ? 1 : 1 - (age - PLUME_HOLD) / (PLUME_LIFE - PLUME_HOLD)
+      const s = Math.min(2, plume.strength) * env
+      return { x: plume.x, width: plume.width, reach: PLUME_REACH * height, heat: PLUME_HEAT * s, push: PLUME_PUSH * s }
+    },
     transform,
     flowAt,
     overrideAt,

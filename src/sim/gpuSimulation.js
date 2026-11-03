@@ -108,6 +108,11 @@ struct Params {
   wallPull: f32,
   touchStrength: f32,
   lid: f32, // the drop's lidded pot as a HOME value, -1 for none (simulation.js lidPot)
+  plumeX: f32, // the drop's pump (simulation.js plume): its centre, width and reach in px,
+  plumeWidth: f32, // its heat a step and its push up in px/s at the floor, 0 for none
+  plumeReach: f32,
+  plumeHeat: f32,
+  plumePush: f32,
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -272,7 +277,7 @@ fn contain(i: u32, pIn: vec2f) -> vec2f {
     // The drop's lid: the lidded pot's lava that reaches the floor's line is held under it.
     // Each held a different depth under the line (0.5 to 6.5 px, by the particle's number): held
     // all at one depth they stacked in flat rows against the lid and left in stripes.
-    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height) { p.y = P.height + 12.0 + f32((i * 2654435761u) >> 29u) * 0.857; } // 12 px under (simulation.js LID_DEPTH): at 0.5 it glowed above the line as a white streak
+    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height) { p.y = P.height + 0.5 + f32((i * 2654435761u) >> 29u) * 0.857; } // simulation.js LID_DEPTH; the renderers keep its glow from showing white
     if (p.y > P.height) {
       if (P.floorBottles > 0u) { p = containIn(i, p, P.ceilingBottles, P.floorBottles); } else { p.y = P.height; F[HOME(i)] = -1.0; }
     } else if (p.y < 0.0) {
@@ -365,6 +370,15 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     if (tc.mode == 0u) { let u = select(vec2f(0.0), d / r, r > 0.0); finger += (250.0 * P.touchStrength * u + vec2f(tc.vx, tc.vy)) * w; }
     else if (tc.mode == 1u) { if (r > 0.0) { let speed = min(250.0 * P.touchStrength * w, r / P.dt); finger += -d / r * speed + vec2f(tc.vx, tc.vy) * w; } }
     else if (tc.mode == 2u) { let core = P.touchRadius * 0.5; let c = r / core; let speed = 300.0 * P.touchStrength * 2.0 * c / (1.0 + c * c) * exp(-(q * q) / 4.0); if (r > 0.0) { finger += vec2f(-d.y, d.x) / r * speed + vec2f(tc.vx, tc.vy) * w; } }
+  }
+  // The drop's pump (simulation.js plume): heat and a push up over the firing pot, falling off
+  // across and upward, in the tank only; it moves the lava even out of an empty pot.
+  if (P.plumeHeat > 0.0 && F[HOME(i)] < 0.0) {
+    let dx = (p.x - P.plumeX) / P.plumeWidth;
+    let up = max(0.0, fromFloor) / P.plumeReach;
+    let g = exp(-dx * dx - up);
+    t += P.plumeHeat * g;
+    finger += vec2f(0.0, -P.plumePush * g);
   }
   t = clamp(t, 0.0, P.maxTemp);
   F[TEMP(i)] = t;
@@ -755,7 +769,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 56 // the Params struct, 54 fields, padded to 224 bytes (a uniform's size is a multiple of 16)
+const PARAM_FLOATS = 60 // the Params struct, 59 fields, padded to 240 bytes (a uniform's size is a multiple of 16)
 // The most a relaxation pass may move a particle, in radii, whatever Reach says. The Jacobi
 // solver resolves a packed cold pool only a few rows a pass, and moves of a whole radius let the
 // floor compress and burst (the GPU's Reach default has been 0.5 since that was measured, 979 to
@@ -1032,6 +1046,8 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[50] = params.wallNear ?? 0; pf[51] = params.wallPull ?? 0 // the glass as particles; see wallLattice
     pf[52] = params.touchStrength ?? 1
     pf[53] = world && world.lid >= 0 ? ceiling.length + world.lid : -1
+    const plume = world && world.plume
+    pf[54] = plume ? plume.x : 0; pf[55] = plume ? plume.width : 1; pf[56] = plume ? plume.reach : 1; pf[57] = plume ? plume.heat : 0; pf[58] = plume ? plume.push : 0
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
@@ -1207,7 +1223,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
         if (stirring) { const [vx, vy] = shell.flowAt(gx * gridCell, gy * gridCell); floats[o] = vx; floats[o + 1] = vy; floats[o + 2] = shell.overrideAt(gx * gridCell, gy * gridCell) } else { floats[o] = 0; floats[o + 1] = 0; floats[o + 2] = 0 }
       }
     }
-    gpu.setWorld(floats, { elementCount: n, gridCols, gridRows, gridCell, lid: shell.lid })
+    gpu.setWorld(floats, { elementCount: n, gridCols, gridRows, gridCell, lid: shell.lid, plume: shell.plume })
   }
   // The fingers act on the GPU side, so the shell steps and is sampled without them (they would
   // land twice through the flow grid); they are given back to it after, so the flow field drawn
