@@ -1,5 +1,5 @@
 import { button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { group, helpList, hint, iconChoice, knob, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { group, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -202,7 +202,7 @@ export function createSettingsPanel () {
   })
 
   panel = div(
-    { class: 'panel', onclick: e => e.stopPropagation() },
+    { class: knobStyle.bindAttr(() => knobStyle() === 'sliders' ? 'panel sliders' : 'panel'), onclick: e => e.stopPropagation() },
     // No title bar (Robert: "remove the lavalamp.app from the panel tons of wasted space"); the
     // buttons sit in the corner beside the first colour row's caption. Always in view: the colours,
     // what a finger does, the flow field and fullscreen. Everything else is under Advanced, in
@@ -269,6 +269,7 @@ export function createSettingsPanel () {
     sectionWith(
       button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the controls do', 'aria-label': 'What the controls do' }, '?'),
       'Advanced', advancedOpen,
+      row('Controls', segmented('knob-style', knobStyle, knobStyles)),
       div({ class: 'panel-note' }, backendLabel.bindAs(() => `Backend: ${backendLabel()}`)),
       div({ class: 'panel-note' }, fpsLabel.bindAs(() => fpsLabel())),
       div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),

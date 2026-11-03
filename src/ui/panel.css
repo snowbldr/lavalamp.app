@@ -182,7 +182,16 @@
 .icon-choice button .icon { display: block; line-height: 0; }
 .icon-choice button.on { background: var(--accent); border-color: var(--accent); color: #1c1c1e; font-weight: 600; }
 
-/* Sliders in place of the dials on touch screens, with a reset button each. */
+/* Every knob carries a dial and a slider; the panel shows one (the Controls choice). */
+.knob-dual { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.knob-dual > .slider-row { display: none; }
+.panel.sliders .knobs:not(.sliders) { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+.panel.sliders .knob-dual { align-items: stretch; }
+.panel.sliders .knob-dual > .knob-cell { display: none; }
+.panel.sliders .knob-dual > .slider-row { display: grid; }
+.panel.sliders .knob-sub { height: auto; margin: 6px 0 0; }
+.panel.sliders .knob-sub:empty { display: none; }
+/* Sliders in place of the dials, with a reset button each. */
 .knobs.sliders { display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
 .slider-row { display: grid; grid-template-columns: 72px 1fr 56px 30px; align-items: center; gap: 8px; min-height: 40px; }
 .slider-label { font-size: 12px; color: rgba(236, 236, 236, 0.85); }

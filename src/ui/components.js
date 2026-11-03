@@ -41,6 +41,14 @@ export const DECADES = [1, 10, 100, 1000, 10000, 100000]
 // should have a separate button for reset, tap on mobile will be annoying with a slider").
 // ?touch on the page shows the sliders on a desktop, for checking them.
 export const TOUCH_UI = (typeof window !== 'undefined') && (window.matchMedia('(pointer: coarse)').matches || new URLSearchParams(window.location.search).has('touch'))
+// Dials or sliders, by choice at the top of Advanced (Robert: "let's add a switch for changing
+// from the knobs to the sliders, I feel like some people will hate the knobs"). A touch screen
+// starts on sliders, anything else on dials; the choice is remembered in this browser. Every knob
+// carries both controls and the panel's class shows one, so switching is instant.
+const KNOB_STYLE_KEY = 'lavalamp.app-v2-knob-style'
+export const knobStyles = ['dials', 'sliders']
+export const knobStyle = fnstate((() => { try { const v = localStorage.getItem(KNOB_STYLE_KEY); if (knobStyles.includes(v)) return v } catch {} return TOUCH_UI ? 'sliders' : 'dials' })())
+knobStyle.subscribe(v => { try { localStorage.setItem(KNOB_STYLE_KEY, v) } catch {} })
 
 // `slider: true` draws the slider on every screen (Touch Strength; Robert: "let's make touch
 // strength always a slider, it looks bad as a knob").
@@ -78,11 +86,11 @@ export const knob = (title, id, state, { min, max, step, scales, slider = false 
   }
   const nudge = steps => state(clamp(state() + steps * stepOf()))
   const nextScale = () => { const i = scales.indexOf(scale()); scale(scales[(i + 1) % scales.length]) }
-  if (TOUCH_UI || slider) {
-    // The same mapping as the dial (the default at the middle of the travel), on a native range
-    // input with a big thumb, a value, and a reset button.
+  // The same mapping as the dial (the default at the middle of the travel), on a native range
+  // input with a big thumb, a value, and a reset button.
+  const sliderRow = () => {
     const range = input({
-      id,
+      id: slider ? id : `${id}-slider`,
       class: 'slider',
       type: 'range',
       min: 0,
@@ -100,6 +108,7 @@ export const knob = (title, id, state, { min, max, step, scales, slider = false 
       resetTo ? button({ class: 'reset', title: 'Reset to default', 'aria-label': `Reset ${title}`, onclick: () => state(resetTo()) }, '↺') : span()
     )
   }
+  if (slider) return sliderRow()
   let drag = null
   const dial = div(
     {
@@ -160,8 +169,8 @@ export const knob = (title, id, state, { min, max, step, scales, slider = false 
       div({ class: 'knob-pointer' })
     )
   )
-  return div(
-    { class: 'knob-cell', 'data-knob': title },
+  const dialCell = div(
+    { class: 'knob-cell' },
     dial,
     label({ class: 'knob-label', for: id }, title),
     span(
@@ -170,10 +179,11 @@ export const knob = (title, id, state, { min, max, step, scales, slider = false 
     ),
     scale ? span({ class: 'knob-scale', title: 'Command or control click the knob for the next scale' }, scale.bindAs(() => `to ${scale()}`)) : ''
   )
+  return div({ class: 'knob-dual', 'data-knob': title }, dialCell, sliderRow())
 }
 
 // A row of knobs; on a touch screen a stack of sliders.
-export const knobs = (...cells) => div({ class: TOUCH_UI || cells.some(c => c.classList && c.classList.contains('slider-row')) ? 'knobs sliders' : 'knobs' }, ...cells)
+export const knobs = (...cells) => div({ class: cells.every(c => c.classList && c.classList.contains('slider-row')) ? 'knobs sliders' : 'knobs' }, ...cells)
 
 // The Advanced list: each group a card like Colours and Touch, its knobs packed four to a row
 // in one grid with the subgroup named in small print over its first knob, the other rows
@@ -191,21 +201,20 @@ export const group = (title, ...rows) => {
   let helpFor = null
   for (const r of rows) {
     if (r && r.subgroup !== undefined) {
-      if (TOUCH_UI) packed.push(div({ class: 'subgroup-title' }, r.subgroup))
       r.cells.forEach((cell, i) => {
-        if (!TOUCH_UI) cell.prepend(div({ class: 'knob-sub' }, i === 0 ? r.subgroup : ''))
+        cell.prepend(div({ class: 'knob-sub' }, i === 0 ? r.subgroup : ''))
         packed.push(cell)
       })
     } else if (r && r.entries) helpFor = r
     else rest.push(r)
   }
   // Rows of four dials, each followed by its four hints; sliders one to a row with their hint.
-  const perRow = TOUCH_UI ? 1 : 4
+  const perRow = 4
   const out = []
   let rowCells = []
   const flush = () => {
     if (!rowCells.length) return
-    out.push(div({ class: TOUCH_UI ? 'knobs sliders' : 'knobs' }, ...rowCells))
+    out.push(div({ class: 'knobs' }, ...rowCells))
     if (helpFor) {
       const names = rowCells.map(c => c.dataset && c.dataset.knob).filter(Boolean)
       const entries = names.map(n => helpFor.entries.find(e => e[0] === n)).filter(Boolean)
