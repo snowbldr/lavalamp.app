@@ -47,6 +47,7 @@ export function drawHeater (context, width, height, scale, look, heaterAt, eleme
 
 // Wind map arrows: one per grid cell, pointing with the flow, as long and as bright as the flow
 // is fast, from look.flowSlow to look.flowFast.
+const FLOW_HALF_SPEED = 60 // px/s: an arrow is half its full length and half way to the fast colour here
 export function drawFlow (context, width, height, scale, look, flowAt) {
   const step = FLOW_SPACING * scale
   const reach = step * 0.8
@@ -61,9 +62,13 @@ export function drawFlow (context, width, height, scale, look, flowAt) {
     }
   }
   speeds.sort((a, b) => a - b)
-  const typical = speeds[speeds.length >> 1]
   const fastest = speeds[speeds.length - 1]
   if (fastest < 0.5) return
+  // Against an absolute speed, not the frame's own median: with one eddy fading in an otherwise
+  // still lamp the median was near zero and the eddy drew full length and full colour to its
+  // last breath (Robert: "the arrows don't get shorter as it fades, still big long yellow
+  // arrows"). Half length at FLOW_HALF_SPEED px/s.
+  const typical = FLOW_HALF_SPEED
   const slow = look.flowSlow || { r: 255, g: 255, b: 255 }
   const fast = look.flowFast || slow
   context.lineWidth = 1
@@ -73,7 +78,7 @@ export function drawFlow (context, width, height, scale, look, flowAt) {
     const vx = samples[k + 2]
     const vy = samples[k + 3]
     const speed = samples[k + 4]
-    if (speed < fastest * 0.02) continue
+    if (speed < 1) continue
     const share = speed / (speed + typical) // 0 to 1, half at the typical speed
     const length = reach * share
     const [r, g, b] = mix(slow, fast, share)
