@@ -262,6 +262,7 @@ const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated
 // The curves keep a floor of TRAVEL_FLOOR of the birth speed, so an eddy always hobbles.
 const TRAVEL_FLOOR = 0.15
 const DRIFT_SPIN_TAU = 0.3 // of the life
+const DRIFT_FADE_OUT = 0.35 // the last share of the life over which the spin tapers smoothly to nothing
 const DRIFT_ADVECT = 1
 const EDDY_DEPTH_FADE = [0.6, 0.12]
 const DRIFT_LIFE = [12, 30] // seconds
@@ -356,7 +357,15 @@ export function createSimulation ({ width, height, params }) {
     return e.speed * Math.max(TRAVEL_FLOOR, f)
   }
   // A drifter's spin over its life: half a second to spin up, then dying away exponentially.
-  const driftEnvelope = e => { const age = time - e.start; return Math.min(1, age / 0.5) * Math.exp(-age / (DRIFT_SPIN_TAU * e.life)) }
+  // The exponential alone still had 4% of the spin left at death and the eddy vanished with it
+  // (Robert: "the eddies need to fade out more gracefully... it should gradually dissipate in
+  // strength"), so the last DRIFT_FADE_OUT of the life is a smooth taper to nothing.
+  const driftEnvelope = e => {
+    const age = time - e.start
+    const t = age / e.life
+    const tail = t < 1 - DRIFT_FADE_OUT ? 1 : (() => { const u = Math.min(1, (1 - t) / DRIFT_FADE_OUT); return u * u * (3 - 2 * u) })()
+    return Math.min(1, age / 0.5) * Math.exp(-age / (DRIFT_SPIN_TAU * e.life)) * tail
+  }
   // The eddies' push fades with depth, so they skim the pool rather than squash it.
   const depthFade = py => { const t = py / height; if (t <= EDDY_DEPTH_FADE[0]) return 1; const u = Math.min(1, (t - EDDY_DEPTH_FADE[0]) / (1 - EDDY_DEPTH_FADE[0])); return 1 + (EDDY_DEPTH_FADE[1] - 1) * u * u * (3 - 2 * u) }
 
