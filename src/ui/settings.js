@@ -175,7 +175,7 @@ export const defaultFlowFast = { r: 255, g: 220, b: 0 }
 export const defaultPull = fnstate(computeDefaultPull(window.innerWidth, window.innerHeight))
 export const defaultStiffnessNear = fnstate(computeDefaultStiffnessNear(window.innerWidth, window.innerHeight))
 // Peak speed of the convection roll that stirs the lava, in pixels per second. 0 turns it off.
-export const defaultStir = 20
+export const defaultStir = 0 // the convection roll had no lanes left to break (Robert, 2026-11-02: "set it to zero and keep the knob")
 // Conduction was 0.005 with a flat floor, where 0.02 was the top of the slider and a lamp that never
 // lifted. With heating in depth the top became the lamp Robert wanted ("max needs to be the new mid
 // and default. This is the mechanism we were missing for maximum lava gloopiness").

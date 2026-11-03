@@ -328,6 +328,19 @@ export function createSimulation ({ width, height, params }) {
   // the lava would rest. that should fix the weird pulse push down issue"). The rest level is
   // the spawn slab's: floor area per particle times the visible count over the width.
   const EDDY_CLEARANCE = 0.05
+  // Where an eddy points at birth. From the top: down, within 60 degrees of straight down (it
+  // may end in the pool). From a side: at most a graze downward (20 degrees), horizontal, or up
+  // and away, the more so the nearer the lava it was born, since there is no reason to shoot up
+  // from the top (Robert: "we should prevent eddies from being pointed directly into the
+  // bottom... either end in the bottom (pointed down from the top or a high angle) or graze the
+  // bottom at most (pointed horizontally). pointing up and away from the bottom is also allowed
+  // as long as it's close enough to the bottom"). `low` is 0 at the top of the band, 1 at the
+  // lava; the angle is in page terms, y down.
+  const eddyHeading = (side, low) => {
+    if (side === 0) return Math.PI / 2 + randomRange(-Math.PI / 3, Math.PI / 3)
+    const tilt = randomRange(-20, 20 + 50 * low) * Math.PI / 180 // up is positive
+    return side === 3 ? -tilt : Math.PI + tilt // from the left wall heading right, from the right wall heading left
+  }
   const eddyCeilingY = () => {
     const restDepth = spawnAreaNow * Math.max(0, (params.particleCount || 0)) / width
     return Math.max(0, height - restDepth - EDDY_CLEARANCE * height)
@@ -425,8 +438,7 @@ export function createSimulation ({ width, height, params }) {
       // degrees of straight in.
       const side = [0, 1, 3][Math.floor(random() * 3)]
       const along = random()
-      const inward = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][side] // down from the top, left from the right, up from the floor, right from the left
-      const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
+      const heading = eddyHeading(side, side === 0 ? 0 : along)
       drifting.push({
         x: side === 1 ? width - core : side === 3 ? core : core + along * (width - 2 * core),
         y: side === 0 ? core : core + along * Math.max(0, eddyCeilingY() - 2 * core),
@@ -468,8 +480,7 @@ export function createSimulation ({ width, height, params }) {
       // seeing one appear mid lamp: "all eddies spawn from anywhere on the edges").
       const side = [0, 1, 3][Math.floor(random() * 3)] // never the floor
       const along = random()
-      const inward = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][side]
-      const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
+      const heading = eddyHeading(side, side === 0 ? 0 : along)
       eddies.push({
         x: side === 1 ? width : side === 3 ? 0 : along * width,
         y: side === 0 ? 0 : along * eddyCeilingY(),
