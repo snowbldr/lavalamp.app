@@ -99,8 +99,10 @@ export const computeDefaultElementLife = () => cpu() ? 7 : 15 // CPU 7 (final CP
 // (Turb 150, Eddies 6, Kick 10, Viscosity 9 against the GPU's 45, 2, 6, 32). Then Turb 150 and
 // Eddies 6 went to the GPU too (Robert, 2026-11-01: "also make turb 150 and eddies 6 default on
 // gpu version"); they stay as functions beside the others.
-export const computeDefaultTurbulence = () => 150
-export const computeDefaultDrifters = () => 6
+// GPU Turb 300 and Eddies 2 from Robert's link of 2026-11-03 ("these are the new defaults for v2":
+// two strong eddies on a quiet lamp); the CPU lamp keeps 150 and 6.
+export const computeDefaultTurbulence = () => cpu() ? 150 : 300
+export const computeDefaultDrifters = () => cpu() ? 6 : 2
 export const computeDefaultWobbleKick = () => cpu() ? 10 : 6
 export const computeDefaultViscosity = () => cpu() ? 9 : 32
 export const computeDefaultElementRate = () => cpu() ? 3 : 4
