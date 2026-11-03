@@ -38,6 +38,12 @@ const BEAT_POWER_RISE = 1.5
 const BEAT_RISE_FRAMES = 4
 const BEAT_MIDS = [300, 4000]
 const BEAT_BASS_LEAD = 1
+// The surge: the whole spectrum's power over the last SURGE_FAST seconds against the last
+// SURGE_SLOW, so a drop that arrives as everything coming in at once (Robert, on Tom Vek's C-C:
+// "at 0:54-0:55 or so, there's a big bass drop and then highly active music"), with no gap in the
+// kick before it, still reads as one.
+const SURGE_FAST = 0.4
+const SURGE_SLOW = 6
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 // The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
 // lift a blob, an eddy half a second to spin up), and live audio cannot be heard early, so the
@@ -77,7 +83,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, sinceBeat: 0, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -90,6 +96,8 @@ export function createMusic () {
   let device = '' // the chosen audio input's deviceId, '' for the default
   let bassAverage = 0
   let beatPeak = 0
+  let surgeFast = 0
+  let surgeSlow = 0
   let bassPowerAverage = 0
   let midsPowerAverage = 0
   const bassHistory = new Array(BEAT_RISE_FRAMES).fill(0)
@@ -352,7 +360,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = 0; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -419,11 +427,18 @@ export function createMusic () {
         hear(clock)
       }
       levels.sinceBeat = levels.beat ? 0 : levels.sinceBeat + dt
+      const total = power([40, 12000])
+      if (!surgeSlow) surgeFast = surgeSlow = total
+      surgeFast += (total - surgeFast) * Math.min(1, dt / SURGE_FAST)
+      surgeSlow += (total - surgeSlow) * Math.min(1, dt / SURGE_SLOW)
+      levels.surge = surgeFast / Math.max(1e-9, surgeSlow)
+      raw.total = total
       tickClock()
       activity(dt)
       return levels
     },
     get beats () { return beatCount },
+    get time () { return clock }, // seconds this module has been listening, all told
     // The beat clock: locked or not, whether the kick is being heard (not in a breakdown), the
     // period, seconds to the next predicted beat (number index + 1), the beat the current
     // section began on, and whether a predicted beat fell in this frame.

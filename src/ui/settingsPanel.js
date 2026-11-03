@@ -548,6 +548,7 @@ export function createSettingsPanel () {
             knob('Kick Hi', 'music-kick-hi', musicKickHi, HZ, () => defaultMusicRanges.kickHi, hz)
           ),
         pair('Spectrum', toggle('spectrum', showSpectrum)),
+        row('Log', button({ class: 'small', title: 'Save what the lamp heard and did since Listen went on, ten rows a second, as a file', onclick: () => window.dispatchEvent(new Event('lavalamp-music-log')) }, 'Save')),
         ...(GLOOPS_SHOWN
           ? [pair('Gloops', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
               row('Bed', segmented('bed', soundBed, soundBeds))]
@@ -570,6 +571,7 @@ export function createSettingsPanel () {
           ['Heat Lo', 'The frequencies that heat the lava, Lo to Hi.'],
           ['Eddy Lo', 'The frequencies that swell the eddies, Lo to Hi.'],
           ['Kick Lo', 'The frequencies that sharpen the Kick, Lo to Hi.'],
+          ['Log', 'Saves what the lamp heard and did since Listen went on (activity, beats, surges, pots, drops), ten rows a second, as a file to tune by.'],
           ['Spectrum', 'A strip along the bottom of the screen showing what the lamp hears: frequency up the side, low red to high violet, the four ranges as coloured lines, each sync\'s level along the top with the song\'s activity in violet, a white tick on every beat heard, a grey one on every beat predicted, and a white bar where a pot fires.'],
           ...(GLOOPS_SHOWN ? [['Gloops', 'Sounds made up from the lava as it moves: a bloop where a neck snaps or a blob lands, and a bed that follows how stirred up the lava is.']] : [])
         ])

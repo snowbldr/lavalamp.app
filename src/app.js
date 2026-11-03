@@ -98,6 +98,7 @@ import {
   interactionRadius,
   loadSavedSettings,
   applySettings,
+  getSettings,
   saveSettings,
   maxTemp,
   pace,
@@ -402,7 +403,7 @@ export async function start () {
   let quietBefore = 0 // seconds without a kick before this frame, for the drop
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
   const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick() }
-  music.subscribe(on => { if (on) listen(); else { listener.stop(); unMusic() } })
+  music.subscribe(on => { if (on) { musicLog.length = 0; musicLogStart = listener.time; listen() } else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
   // bands add to them, so a quiet room is the lamp as tuned (see settings.js, musicFloor and
@@ -426,6 +427,29 @@ export async function start () {
   const firedFor = { pot: -1, eddy: -1, pulse: -1 }
   let wasLocked = false
   const DROP_WAIT = 2 // seconds without a kick before the drop's pot is charged
+  const DROP_SURGE = 2 // the surge (see music.js) a kick has to come in on to be a drop: +3 dB
+  const DROP_GAP = 8 // seconds: one drop at most this often
+  const DROP_SETTLE = 3 // seconds after Listen before a drop can be: the surge's slow average starts from the silence before the music, and the test's first kick read as a drop
+  const CALM = 0.35 // activity under this is a calm part
+  let lastDropAt = -1e9
+  const musicLog = []
+  let musicLogAt = 0
+  let musicLogStart = 0
+  let musicLogBeats = 0
+  let musicLogHats = 0
+  let musicLogPots = 0
+  let musicLogDrops = 0
+  const MUSIC_LOG_COLUMNS = ['t', 'activity', 'loud', 'full', 'onsets', 'surge', 'power', 'bassRise', 'midsRise', 'beats', 'hats', 'pots', 'drops', 'clock (0 free, 1 coasting, 2 hearing)', 'bpm', 'calm']
+  // Save the recorder as a file, from the Music card's button (an event, so the panel needs no
+  // handle on the lamp); it starts again each time Listen is switched on.
+  window.addEventListener('lavalamp-music-log', () => {
+    const blob = new Blob([JSON.stringify({ columns: MUSIC_LOG_COLUMNS, settings: getSettings(), rows: musicLog })], { type: 'application/json' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `lavalamp-music-log-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+  })
   const driveMusic = dt => {
     if (!listener.enabled) return
     let dropped = false
@@ -483,14 +507,28 @@ export async function start () {
     // kick after the kick has been gone DROP_WAIT seconds (a breakdown, or the start before any
     // kick): that is the drop, and a breakdown has charged its pot all the while, so it goes up
     // the hottest. Drop 0 is the pots as before: lit Lead seconds ahead of a predicted beat.
+    // A calm part (the activity under CALM, or the kick gone) is left to the lamp's own clocks:
+    // no pots on the beat, and the lid sits on the biggest pot, charging for the drop (Robert:
+    // "The whole lamp should be relatively calm, with maybe some eddies spawning and normal lamp
+    // firings"). A drop is the first kick after the kick was gone, or a kick in a surge (the
+    // whole spectrum's power over the last 0.4 s at DROP_SURGE times its last 6 s): the big pot
+    // opens and two eddies come in ("I would expect to see a big pot fire and probably an eddie
+    // or two spawn at the same time because of all the activity"). Then the beat pots, while busy.
     const lidded = musicDrop() > 0 && !!sim.chargePot
-    if (lidded) { sim.chargePot(2 * musicDrop(), m.sinceBeat > DROP_WAIT); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
+    const calm = m.sinceBeat > DROP_WAIT || (musicActivity() > 0 && act < CALM)
+    if (lidded) { sim.chargePot(2 * musicDrop(), calm); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
     const heardNumber = clock.locked ? (clock.until < clock.period / 2 ? clock.index + 1 : clock.index) : -1
-    const isDrop = m.beat && quietBefore > DROP_WAIT
+    const musicNow = listener.time
+    const isDrop = m.beat && (quietBefore > DROP_WAIT || m.surge > DROP_SURGE) && musicNow - lastDropAt > DROP_GAP && musicNow - musicLogStart > DROP_SETTLE
     if (m.beat) beatsHeard++
-    const onBeatPot = m.beat && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
+    const onBeatPot = m.beat && !calm && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
     const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
-    if (lidded && isDrop) { open(musicDrop() * 1.5); dropped = true } else if (lidded && onBeatPot) open(musicDrop())
+    if (isDrop) {
+      lastDropAt = musicNow
+      dropped = true
+      if (lidded) open(musicDrop() * 1.5)
+      if (sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
+    } else if (lidded && onBeatPot) open(musicDrop())
     quietBefore = m.sinceBeat
     if (clock.locked) {
       const w = due('pulse')
@@ -513,6 +551,18 @@ export async function start () {
       tempoPace += (target - tempoPace) * Math.min(1, dt / 2)
     }
     if (showSpectrum()) spectrumView.draw(listener.spectrum(), m, musicRanges, fired || dropped, clock.tick)
+    // The recorder: ten rows a second of what the lamp heard and did, for tuning against a song
+    // (Robert's C-C: calm to 0:54, the drop, busy to 1:50). Saved from the Music card.
+    musicLogBeats += m.beat ? 1 : 0
+    musicLogHats += m.hat ? 1 : 0
+    if (fired) musicLogPots++
+    if (dropped) musicLogDrops++
+    if (musicNow - musicLogAt >= 0.1) {
+      musicLogAt = musicNow
+      musicLog.push([+(musicNow - musicLogStart).toFixed(2), +m.activity.toFixed(3), +m.parts.loud.toFixed(3), +m.parts.full.toFixed(3), +m.parts.onsets.toFixed(3), +m.surge.toFixed(2), +(m.raw.total || 0).toExponential(2), +(m.raw.rise || 0).toFixed(2), +(m.raw.midsRise || 0).toFixed(2), musicLogBeats, musicLogHats, musicLogPots, musicLogDrops, clock.locked ? (clock.hearing ? 2 : 1) : 0, m.bpm, calm ? 1 : 0])
+      musicLogBeats = musicLogHats = musicLogPots = musicLogDrops = 0
+      if (musicLog.length > 6000) musicLog.shift() // ten minutes
+    }
     musicMeter.bass = m.heat; musicMeter.mid = m.eddy; musicMeter.high = m.kick
     if (m.beat) musicMeter.beat = 1; else musicMeter.beat *= 0.85
     if (settingsPanel.meter) settingsPanel.meter(musicMeter)
