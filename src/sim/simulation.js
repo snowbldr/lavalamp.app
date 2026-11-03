@@ -121,8 +121,11 @@ const CUP_GAP = 0.02 // mean gap between mouths, of the shorter side
 // The floor's row a little narrower, so it holds a few more pots, and its biggest smaller (Robert,
 // with three reserves closed at once: "We might need to add a few more pots also. Maybe make the
 // biggest ones slightly smaller to account for the extra reserved lava").
-const FLOOR_CUP_WIDTH = [0.17, 0.08]
-const FLOOR_CUP_WIDTH_RANGE = [0.14, 0.45]
+// Tried at 0.17, 0.08, 0.14 to 0.45: more pots hid more of the lava under the floor and, with three
+// reserves shut, C-C at 1:23 had 62% of it in the ceiling, 8% in the pots, 4% in the visible pool.
+// Back to the ceiling's widths while that is sorted out.
+const FLOOR_CUP_WIDTH = CUP_WIDTH
+const FLOOR_CUP_WIDTH_RANGE = CUP_WIDTH_RANGE
 // The lip was 4% of the shorter side below the top edge, which left a black bar above the lava
 // (Robert: "The bottles at the top should be exactly at the top of the screen instead of
 // protruding so they don't cause this black bar"); the mouths are in the top edge itself now.

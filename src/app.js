@@ -475,7 +475,7 @@ export async function start () {
   const trainLastAt = { boom: -1e9, beat: -1e9 }
   let dropCharged = false // a pot is lidded and heating (see driveMusic)
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
-  const unMusic = () => { if (dropCharged && sim.chargePots) sim.chargePots({}); dropCharged = false; trains.boom = trains.beat = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters() }
+  const unMusic = () => { if (dropCharged && sim.chargePots) sim.chargePots({}); dropCharged = false; trains.boom = trains.beat = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters(); params.ceilingCool = 1 }
   music.subscribe(on => { if (on) { musicLog.length = 0; musicLogStart = listener.time; listen() } else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
@@ -503,6 +503,8 @@ export async function start () {
   const DROP_GAP = 6 // seconds: one drop at most this often (8 let Drugs I Like's kick coming in at 0:36.6 block its drop at 0:44)
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
+  const CEILING_SHARE = 0.2
+  const CEILING_COOL = 5
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
   let bufferAt = -1e9
   let lavaLow = false
@@ -639,8 +641,16 @@ export async function start () {
       bufferAt = musicNow
       const st = sim.state, n = sim.count, H = sim.height || window.innerHeight
       let low = 0
-      for (let i = 0; i < n; i++) if (st.y[i] > 0.8 * H) low++
+      let up = 0
+      for (let i = 0; i < n; i++) { if (st.y[i] > 0.8 * H) low++; else if (st.y[i] < 0) up++ }
       lavaLow = low / n < BUFFER
+      // The lava budget: hot lava parks in the ceiling bottles (they cool at the tank's rate, the
+      // floor pots at 0.3 of it), and with three reserves shut the lamp starved: C-C at 1:09, half
+      // the lava white-hot up there, the floor pots empty outlines, a sliver of pool, and a released
+      // pot or a glob had nothing to throw (Robert: "pot primes but never fires on the drop"; "I
+      // also do not see 4 globs on the beat pulses"). Over CEILING_SHARE in the ceiling, its lava
+      // cools faster, up to CEILING_COOL times at twice that share, so it comes back down.
+      params.ceilingCool = 1 + (CEILING_COOL - 1) * Math.max(0, Math.min(1, (up / n - CEILING_SHARE) / CEILING_SHARE))
     }
     // A deep note's attack is also a kick: its beat pot spent the charge, and the boom at the
     // note's peak a few frames later opened a pot closed that instant, with nothing in it (C-C

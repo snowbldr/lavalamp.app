@@ -108,6 +108,7 @@ struct Params {
   wallPull: f32,
   touchStrength: f32,
   lid: f32, // the reserves' lids, a bit per floor pot (simulation.js lidMask), 0 for none; exact as a float under 2^24
+  ceilingCool: f32, // how much faster lava in the ceiling bottles cools (the music's lava budget, app.js), 1 as tuned
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -312,7 +313,7 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
   // heat.js nextTemperature: cooling, then contact heating near the floor.
   // Lava hidden in a pot below the floor cools at heat.js's RESERVE_COOLING: the base of a lamp
   // is glass over the bulb and holds its warmth.
-  if (t > 0.0) { t -= skewedNormal(i, 1u, 0.25, 2.75, 1.8) * P.cooling * select(1.0, ${RESERVE_COOLING}, p.y > P.height); }
+  if (t > 0.0) { t -= skewedNormal(i, 1u, 0.25, 2.75, 1.8) * P.cooling * select(1.0, ${RESERVE_COOLING}, p.y > P.height) * select(1.0, max(1.0, P.ceilingCool), p.y < 0.0); }
   let fromFloor = P.height - p.y;
   if (p.y > P.height * 0.8 && t < P.maxTemp) {
     let d = max(1.0, abs(fromFloor));
@@ -761,7 +762,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 56 // the Params struct, 54 fields, padded to 224 bytes (a uniform's size is a multiple of 16)
+const PARAM_FLOATS = 56 // the Params struct, 55 fields, padded to 224 bytes (a uniform's size is a multiple of 16)
 // The most a relaxation pass may move a particle, in radii, whatever Reach says. The Jacobi
 // solver resolves a packed cold pool only a few rows a pass, and moves of a whole radius let the
 // floor compress and burst (the GPU's Reach default has been 0.5 since that was measured, 979 to
@@ -1038,6 +1039,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[50] = params.wallNear ?? 0; pf[51] = params.wallPull ?? 0 // the glass as particles; see wallLattice
     pf[52] = params.touchStrength ?? 1
     pf[53] = world && world.lid > 0 ? world.lid : 0
+    pf[54] = params.ceilingCool ?? 1
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
