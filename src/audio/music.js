@@ -88,6 +88,11 @@ const CUT_LEVEL = 6
 // at -0.5 to -3.2; before the real drops it dipped to -4.1 to -6 (and -53 out of the intro).
 const CUT_BEFORE = 8
 const CUT_BEFORE_SCORE = -4
+// The kick back: the first beat after KICK_GONE seconds with none, landing near the reference (the
+// gap is itself the different thing before it; the score, eased over 2 s, dipped only to -1.7). Bangarang's drop at 0:27.3 (Robert: "big pot built but did
+// not fire on big drop... that's the drop at :25-:26") has the kick gone 0:23 to 0:27 and the
+// level down 3 or 4 dB, but no cut in the bass and no surge.
+const KICK_GONE = 2.5 // 2 added drops in Drugs I Like's full parts (1:11, 2:49, 3:03)
 const SETTLE = 6 // seconds from the start before a drop: the averages start from the silence before the music, and Drugs I Like's first second read as one
 // The boom: a deep sub bass note (Robert, on C-C after the drop: "there's like this deep
 // BWOONNNNNGGGG sound, and I would expect some lava bursts to be timed with those"). Scanned
@@ -541,6 +546,7 @@ export function createMusic () {
         onsetTimes.push(clock)
         hear(clock)
       }
+      const kickGoneFor = levels.sinceBeat // seconds without a beat before this frame
       levels.sinceBeat = levels.beat ? 0 : levels.sinceBeat + dt
       // The boom (see BOOM_RISE), in the analyser's decibels: a byte is 80/255 dB.
       const subDb = -90 + band(BOOM_RANGE) * 80
@@ -583,7 +589,7 @@ export function createMusic () {
       while (scoreHistory.length && clock - scoreHistory[0][0] > CUT_BEFORE) scoreHistory.shift()
       const dippedBefore = () => scoreHistory.some(([t, v]) => clock - t > CUT_TIME + CUT_SKIP && v < CUT_BEFORE_SCORE)
       if (clock - startedAt > SETTLE) {
-        if (levels.beat && cutBefore && dippedBefore() && 10 * Math.log10(Math.max(1e-12, total)) > reference - CUT_LEVEL) { levels.drop = true; levels.calm = false; droppedAt = clock }
+        if (levels.beat && ((cutBefore && dippedBefore()) || kickGoneFor >= KICK_GONE) && 10 * Math.log10(Math.max(1e-12, total)) > reference - CUT_LEVEL) { levels.drop = true; levels.calm = false; droppedAt = clock }
         else if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock }
         else if (levels.calm && score > -BUSY_DB) levels.calm = false
         else if (!levels.calm && score < -CALM_DB && clock - droppedAt > DROP_HOLD) levels.calm = true

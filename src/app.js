@@ -472,7 +472,7 @@ export async function start () {
   const firedFor = { pot: -1, eddy: -1, pulse: -1 }
   let wasLocked = false
   const DROP_WAIT = 2 // seconds without a kick before the drop's pot is charged
-  const DROP_GAP = 8 // seconds: one drop at most this often
+  const DROP_GAP = 6 // seconds: one drop at most this often (8 let Drugs I Like's kick coming in at 0:36.6 block its drop at 0:44)
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
   const BOOM_POT_GAP = 3 // seconds between pots on deep notes
