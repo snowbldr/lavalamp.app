@@ -264,7 +264,8 @@ const TRAVEL_FLOOR = 0.15
 const DRIFT_SPIN_TAU = 0.3 // of the life
 const DRIFT_FADE_OUT = 0.35 // the last share of the life over which the spin tapers smoothly to nothing
 const DRIFT_ADVECT = 1
-const EDDY_DEPTH_FADE = [0.6, 0.12]
+const EDDY_DEPTH_FADE = [0.6, 0.05] // [unused since the fade follows the pool, what is left at the pool's surface]
+const EDDY_FADE_SPAN = 0.15 // of the height above the lava's rest level over which an eddy fades
 const DRIFT_LIFE = [12, 30] // seconds
 const DRIFT_GAP = [2, 6] // seconds before the first birth
 const DRIFT_GAP_MEAN = 5 // seconds between birth bursts at the middle of the log normal; see driftGap
@@ -371,7 +372,23 @@ export function createSimulation ({ width, height, params }) {
     return Math.min(1, age / 0.5) * Math.exp(-age / (DRIFT_SPIN_TAU * e.life)) * tail
   }
   // The eddies' push fades with depth, so they skim the pool rather than squash it.
-  const depthFade = py => { const t = py / height; if (t <= EDDY_DEPTH_FADE[0]) return 1; const u = Math.min(1, (t - EDDY_DEPTH_FADE[0]) / (1 - EDDY_DEPTH_FADE[0])); return 1 + (EDDY_DEPTH_FADE[1] - 1) * u * u * (3 - 2 * u) }
+  // Measured on seed 787847212 after the start delay: the first eddy still dented the pool 54 px
+  // with 308 px/s over it, because the fade was by fixed fractions of the height and the pool's
+  // surface sat at 85% of it, where 43% of the push was left. Now the fade follows the pool:
+  // full down to EDDY_FADE_SPAN of the height above the lava's rest level, EDDY_DEPTH_FADE[1] of
+  // itself at the rest level and below.
+  const poolSurface = () => height - spawnAreaNow * Math.max(0, params.particleCount || 0) / width
+  // An eddy's centre never goes below the top of the fade band: one heading down glances off it
+  // and runs along it, so it skims the pool instead of planting its core in it (the fade alone
+  // still let 5% of a core of 1500 px/s through: a 69 px dent on seed 787847212).
+  const eddyFloorY = () => poolSurface() - EDDY_FADE_SPAN * height
+  const depthFade = py => {
+    const surface = poolSurface()
+    const top = surface - EDDY_FADE_SPAN * height
+    if (py <= top) return 1
+    const u = Math.min(1, (py - top) / (surface - top))
+    return 1 + (EDDY_DEPTH_FADE[1] - 1) * u * u * (3 - 2 * u)
+  }
 
   function allocate (count) {
     return {
@@ -529,7 +546,8 @@ export function createSimulation ({ width, height, params }) {
       e.y += e.vy * dt
       const half = e.core
       if (e.x < half) { e.x = half; e.hx = Math.abs(e.hx) } else if (e.x > width - half) { e.x = width - half; e.hx = -Math.abs(e.hx) }
-      if (e.y < half) { e.y = half; e.hy = Math.abs(e.hy) } else if (e.y > height - half) { e.y = height - half; e.hy = -Math.abs(e.hy) }
+      const floorY = Math.min(height - half, eddyFloorY())
+      if (e.y < half) { e.y = half; e.hy = Math.abs(e.hy) } else if (e.y > floorY) { e.y = floorY; e.hy = -0.3 * Math.abs(e.hy) }
     }
     while (drifting.length + eddies.length > drifters) { if (drifting.length) drifting.pop(); else eddies.pop() }
     for (let k = eddies.length - 1; k >= 0; k--) {
@@ -539,7 +557,8 @@ export function createSimulation ({ width, height, params }) {
       e.x += pace * e.hx * dt
       e.y += pace * e.hy * dt
       if (e.x < 0) { e.x = 0; e.hx = Math.abs(e.hx) } else if (e.x > width) { e.x = width; e.hx = -Math.abs(e.hx) }
-      if (e.y < 0) { e.y = 0; e.hy = Math.abs(e.hy) } else if (e.y > height) { e.y = height; e.hy = -Math.abs(e.hy) }
+      const floorY = Math.min(height, eddyFloorY())
+      if (e.y < 0) { e.y = 0; e.hy = Math.abs(e.hy) } else if (e.y > floorY) { e.y = floorY; e.hy = -0.3 * Math.abs(e.hy) }
     }
   }
 
