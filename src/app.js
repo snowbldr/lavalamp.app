@@ -131,10 +131,11 @@ import {
 const FRAME = 1 / 60
 // How hard a bump to the device shoves the lava.
 const MOTION_GAIN = 2
-// How hard a shake of the window moves the lava (1 is the window's own speed) and the most it
-// moves it in one frame, in px.
-const WINDOW_SHAKE_GAIN = 1
-const WINDOW_SHAKE_MAX = 60
+// How much of a window's move the lava owes (1 is all of it), the most it can owe, and how fast
+// the debt is paid.
+const WINDOW_SHAKE_GAIN = 0.8
+const WINDOW_SHAKE_MAX = 160 // px owed at most
+const WINDOW_SHAKE_EASE = 0.12 // s over which a move is paid out
 // How long gravity has to point at a new edge before the lamp turns to it, in seconds.
 const TURN_DELAY = 0.6
 
@@ -567,6 +568,7 @@ export async function start () {
   }
   let leaning = 0 // seconds gravity has pointed at an edge other than the current one
   let lastScreen = null // the window's place on the screen last frame, for shaking it
+  const shakeDebt = [0, 0] // px the lava still owes the window's moves, paid out smoothly
   // Frames a second for the panel: a counter and one string a second, nothing else.
   let fpsFrames = 0
   let fpsSince = performance.now()
@@ -583,22 +585,33 @@ export async function start () {
     const [ax, ay] = pageVectorToLamp(turns, ...motion.consume())
     sim.push(ax / FRAME * MOTION_GAIN, ay / FRAME * MOTION_GAIN)
     // Shaking the window shakes the lava, as a shake of the phone does (Robert: "could we make
-    // shaking the window shake the lava like on mobile?"). The window's move since the last frame
-    // is a velocity; the lava, by its inertia, keeps its place in the world, so for this step it
-    // moves the other way at that speed, and the glass catches it. Capped, and a move of a pixel
-    // or two (a resize settling, a dock) is ignored.
+    // shaking the window shake the lava like on mobile?"). The lava keeps its place in the world
+    // by inertia, so a move of the window is owed to the lava the other way. Pushed all in the
+    // frame it was seen it read as a glitch (Robert: "reads like a bug related to window position
+    // rather than an intentional feature"): the browser reports a dragged window's position in
+    // bursts, so the lava jumped. Now each move goes into a debt that is paid out smoothly over
+    // about WINDOW_SHAKE_EASE seconds, so a burst becomes a slosh. Capped; moves of a pixel or two
+    // are ignored.
     const wx = window.screenX
     const wy = window.screenY
     if (lastScreen) {
       const dx = wx - lastScreen[0]
       const dy = wy - lastScreen[1]
       if (Math.abs(dx) + Math.abs(dy) > 2) {
-        const [lx, ly] = pageVectorToLamp(turns, -dx, -dy)
-        const k = Math.min(1, WINDOW_SHAKE_MAX / Math.hypot(lx, ly)) * WINDOW_SHAKE_GAIN / FRAME
-        sim.push(lx * k, ly * k)
+        shakeDebt[0] -= dx * WINDOW_SHAKE_GAIN
+        shakeDebt[1] -= dy * WINDOW_SHAKE_GAIN
+        const owed = Math.hypot(shakeDebt[0], shakeDebt[1])
+        if (owed > WINDOW_SHAKE_MAX) { shakeDebt[0] *= WINDOW_SHAKE_MAX / owed; shakeDebt[1] *= WINDOW_SHAKE_MAX / owed }
       }
     }
     lastScreen = [wx, wy]
+    if (Math.abs(shakeDebt[0]) + Math.abs(shakeDebt[1]) > 0.05) {
+      const share = 1 - Math.exp(-FRAME / WINDOW_SHAKE_EASE)
+      const [lx, ly] = pageVectorToLamp(turns, shakeDebt[0] * share, shakeDebt[1] * share)
+      sim.push(lx / FRAME, ly / FRAME)
+      shakeDebt[0] -= shakeDebt[0] * share
+      shakeDebt[1] -= shakeDebt[1] * share
+    }
     // Gravity picks the floor.
     const wanted = motion.downEdge(edge)
     leaning = wanted === edge ? 0 : leaning + FRAME
