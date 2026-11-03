@@ -394,10 +394,9 @@ export const musicFlip = fnstate(defaultMusicFlip)
 // frequently"). 0 is off.
 export const defaultMusicWobble = 1
 export const musicWobble = fnstate(defaultMusicWobble)
-// Glob: seconds of the lamp's time a reserve's lid lifts for each glob of a bass hit's train (see
-// app.js): longer, bigger globs. 0 releases nothing on bass hits. (It was Vent, the chance of a
-// puff on a beat, before the bass hits became trains.)
-export const defaultMusicVent = 0.3 // 0.1 let out only the top sliver, too small to see; 0.3 is the vent Robert liked
+// Vent: the chance a beat lifts the charged pot's lid for a moment, a puff of its lava out (see
+// app.js). 0 is off.
+export const defaultMusicVent = 0.15
 export const musicVent = fnstate(defaultMusicVent)
 export const musicBusyEddies = fnstate(defaultMusicBusyEddies)
 export const defaultMusicRanges = { beatLo: 40, beatHi: 150, heatLo: 40, heatHi: 150, eddyLo: 150, eddyHi: 2000, kickLo: 2000, kickHi: 8000 }
