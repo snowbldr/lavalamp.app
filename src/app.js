@@ -498,6 +498,9 @@ export async function start () {
   const DROP_GAP = 6 // seconds: one drop at most this often (8 let Drugs I Like's kick coming in at 0:36.6 block its drop at 0:44)
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
+  const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
+  let bufferAt = -1e9
+  let lavaLow = false
   const VENT_TIME = 0.3 // seconds the lid is lifted for
   const BOOM_POT_GAP = 3 // seconds between pots on deep notes
   let lastBoomPotAt = -1e9
@@ -514,7 +517,7 @@ export async function start () {
   let musicLogPots = 0
   let musicLogDrops = 0
   let musicLogBooms = 0
-  const MUSIC_LOG_COLUMNS = ['t', 'activity', 'loud', 'full', 'onsets', 'surge', 'power', 'bassRise', 'midsRise', 'beats', 'hats', 'pots', 'drops', 'clock (0 free, 1 coasting, 2 hearing)', 'bpm', 'calm', 'booms', 'eddies floor', 'wobble']
+  const MUSIC_LOG_COLUMNS = ['t', 'activity', 'loud', 'full', 'onsets', 'surge', 'power', 'bassRise', 'midsRise', 'beats', 'hats', 'pots', 'drops', 'clock (0 free, 1 coasting, 2 hearing)', 'bpm', 'calm', 'booms', 'eddies floor', 'wobble', 'lava low']
   // Save the recorder as a file, from the Music card's button (an event, so the panel needs no
   // handle on the lamp); it starts again each time Listen is switched on.
   window.addEventListener('lavalamp-music-log', () => {
@@ -613,7 +616,21 @@ export async function start () {
     // and missed Drugs I Like's drop by 70 ms.
     const isDrop = m.drop && musicNow - lastDropAt > DROP_GAP && musicNow - musicLogStart > DROP_SETTLE
     if (m.beat) beatsHeard++
-    const onBeatPot = m.beat && !calm && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
+    // The lava buffer (Robert: "I think we have a lava starvation problem. We should try to keep a
+    // lava buffer in the pots so that we always can fire something"). Measured on Bangarang, live:
+    // the ceiling bottles held 46% of the lava by 0:20 and 67% by 0:40, the pots and the pool 14%,
+    // then from 0:58 to 1:08 the pots 2 to 4% and the pool 4 to 5% while it rained back down (with
+    // no music the ceiling holds 10 to 20%). Twice a second the lamp counts its lava; while the
+    // pots and the bottom fifth of the tank hold under BUFFER of it, the everyday pots (on the
+    // beat, on a deep note, a vent) wait, and the big moments (a drop, a stab) still go.
+    if (musicNow - bufferAt >= 0.5 && sim.state && sim.count) {
+      bufferAt = musicNow
+      const st = sim.state, n = sim.count, H = sim.height || window.innerHeight
+      let low = 0
+      for (let i = 0; i < n; i++) if (st.y[i] > 0.8 * H) low++
+      lavaLow = low / n < BUFFER
+    }
+    const onBeatPot = m.beat && !calm && !lavaLow && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
     const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
     if (isDrop) {
       lastDropAt = musicNow
@@ -629,7 +646,7 @@ export async function start () {
       // and nothing else changes (Robert: "send a bolt of lightning did not release a pot! one
       // was ready though"; "don't change anythign else").
       open(musicDrop() * 1.5)
-    } else if (m.boom && !calm && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP) {
+    } else if (m.boom && !calm && !lavaLow && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP) {
       // A deep note (music.js, the boom): a burst of lava with it, the lidded pot blasted by Boom,
       // or with Drop 0 a pot lit as it is heard; at most every BOOM_POT_GAP, since dubstep's sub
       // lands every bar (Bangarang: about one a second through its full parts, against C-C's
@@ -638,7 +655,7 @@ export async function start () {
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
       if (lidded) open(musicBoom()); else potNow()
     } else if (lidded && onBeatPot) open(musicDrop())
-    else if (lidded && m.beat && Math.random() < musicVent()) {
+    else if (lidded && m.beat && !lavaLow && Math.random() < musicVent()) {
       // A vent (Robert: "what if we occasionally pulse the pre heated pots to release pulses of
       // heat to match the music"): on a beat that opens nothing, now and then the charged pot's
       // lid lifts for VENT_TIME and a puff of its lava goes up with the beat.
@@ -652,11 +669,11 @@ export async function start () {
       const e = due('eddy')
       if (e !== false) { if (clock.hearing) spawn(); if (onPhrase(e) && sim.spawnEddy) sim.spawnEddy() }
       const p = !lidded && musicLead() > 0 ? due('pot') : false
-      if (p !== false && clock.hearing && onPhrase(p)) potNow()
+      if (p !== false && clock.hearing && onPhrase(p) && !lavaLow) potNow()
       if (!lidded && musicLead() <= 0 && onBeatPot) potNow()
     } else if (m.beat) {
       pulse(); spawn()
-      if (beatsHeard % every() === 0) { if (!lidded) potNow(); if (sim.spawnEddy) sim.spawnEddy() }
+      if (beatsHeard % every() === 0) { if (!lidded && !lavaLow) potNow(); if (sim.spawnEddy) sim.spawnEddy() }
     }
     // A wobble brings eddies while it sweeps, up to Wobble a second at its fullest (Robert: "is
     // there a way to detect that sort of wahwahwah sound that sounds kind of spinny and trigger
@@ -688,7 +705,7 @@ export async function start () {
     if (m.boom) musicLogBooms++
     if (musicNow - musicLogAt >= 0.1) {
       musicLogAt = musicNow
-      musicLog.push([+(musicNow - musicLogStart).toFixed(2), +m.activity.toFixed(3), +m.parts.loud.toFixed(3), +m.parts.full.toFixed(3), +m.parts.onsets.toFixed(3), +m.surge.toFixed(2), +(m.raw.total || 0).toExponential(2), +(m.raw.rise || 0).toFixed(2), +(m.raw.midsRise || 0).toFixed(2), musicLogBeats, musicLogHats, musicLogPots, musicLogDrops, clock.locked ? (clock.hearing ? 2 : 1) : 0, m.bpm, calm ? 1 : 0, musicLogBooms, params.drifters, +m.wobble.toFixed(2)])
+      musicLog.push([+(musicNow - musicLogStart).toFixed(2), +m.activity.toFixed(3), +m.parts.loud.toFixed(3), +m.parts.full.toFixed(3), +m.parts.onsets.toFixed(3), +m.surge.toFixed(2), +(m.raw.total || 0).toExponential(2), +(m.raw.rise || 0).toFixed(2), +(m.raw.midsRise || 0).toFixed(2), musicLogBeats, musicLogHats, musicLogPots, musicLogDrops, clock.locked ? (clock.hearing ? 2 : 1) : 0, m.bpm, calm ? 1 : 0, musicLogBooms, params.drifters, +m.wobble.toFixed(2), lavaLow ? 1 : 0])
       musicLogBeats = musicLogHats = musicLogPots = musicLogDrops = musicLogBooms = 0
       if (musicLog.length > 6000) musicLog.shift() // ten minutes
     }

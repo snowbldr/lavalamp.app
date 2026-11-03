@@ -124,6 +124,8 @@ const BOOM_GAP = 0.1
 const BOOM_PEAK = 14
 const BOOM_PEAK_FALL = 0.6 // dB a second
 const BOOM_REFRACTORY = 1
+const BOOM_FALL = 2 // dB under the note's highest: past its peak (1 fired on frame jitter, 0:55.15 for a peak at 0:55.33)
+const BOOM_WAIT = 0.6 // seconds after the attack at most
 // The wobble: dubstep's wah, a mid bass whose filter sweeps open and shut a few times a second
 // (Robert, on Bangarang at 1:18: "is there a way to detect that sort of wahwahwah sound that
 // sounds kind of spinny and trigger eddies more frequently?"). It shows as the brightness of
@@ -234,6 +236,7 @@ export function createMusic () {
   const brightHistory = [] // [time, octaves] of the wobble band's brightness over WOBBLE_WINDOW
   const lowHistory = [] // [time, whether the bass was under the cut] over the last CUT_TIME and CUT_SKIP
   let boomPeak = -90
+  let boomArmed = null // an attack heard, waiting for its peak: { at, max }
   const subHistory = [] // [time, dB] of the sub over the last BOOM_BEFORE seconds
   let beatCount = 0
   const beatTimes = []
@@ -513,7 +516,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -602,6 +605,7 @@ export function createMusic () {
       levels.sinceBeat = levels.beat ? 0 : levels.sinceBeat + dt
       // The boom (see BOOM_RISE), in the analyser's decibels: a byte is 80/255 dB.
       const subDb = -90 + band(BOOM_RANGE) * 80
+      const lowDb = 10 * Math.log10(power([20, 150]) + 1e-12)
       const rising = subHistory.slice(-BEAT_RISE_FRAMES)
       let before = 0
       let counted = 0
@@ -610,8 +614,17 @@ export function createMusic () {
       raw.boomRise = rising.length ? subDb - Math.min(...rising.map(r => r[1])) : 0
       raw.boomOver = counted ? subDb - before / counted : 0
       if (rising.length === BEAT_RISE_FRAMES && counted && raw.boomRise > BOOM_RISE && raw.boomOver > BOOM_OVER && subDb > boomPeak - BOOM_PEAK && clock - lastBoom > BOOM_REFRACTORY) {
-        levels.boom = true
+        boomArmed = { at: clock, max: lowDb }
         lastBoom = clock
+      }
+      // It fires at the note's peak, not its attack (Robert: "Those long big bwong sounds have like a
+      // peak and slow fade, they should release at that peak"): on C-C the low end (20 to 150 Hz,
+      // the sub and the note's body) peaks 0 to 0.55 s after the attack (0:55.07 at 0:55.33,
+      // 1:02.22 at 1:02.35, 1:19.07 at 1:19.62). Armed at the attack, it fires the first frame the
+      // low end is BOOM_FALL dB under its highest since, or BOOM_WAIT after the attack.
+      if (boomArmed) {
+        boomArmed.max = Math.max(boomArmed.max, lowDb)
+        if (lowDb < boomArmed.max - BOOM_FALL || clock - boomArmed.at >= BOOM_WAIT) { levels.boom = true; boomArmed = null }
       }
       subHistory.push([clock, subDb])
       while (subHistory.length && clock - subHistory[0][0] > BOOM_BEFORE) subHistory.shift()

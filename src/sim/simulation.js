@@ -349,10 +349,15 @@ export function createSimulation ({ width, height, params }) {
   // their life time triggered by rareish music events"): each request is a chance that every eddy
   // not yet flipped turns its spin round, at once.
   const flipRequests = []
-  const PULSE_SPEED = 260 // px/s
-  const PULSE_WIDTH = 40 // px
-  const PULSE_LIFE = 1.6 // s
-  const PULSE_PX = 14 // how far the ring carries the lava at its peak
+  // Four times slower and chunkier than first made (Robert: "the pulse was sick, we should do it
+  // more, but slow it down like 4x or so, so the waves are chunkier but still match the music"):
+  // 260 px/s, 40 px wide, 1.6 s, 14 px. Each still starts on a beat; at most PULSE_MAX alive, as a
+  // ring now lives 6.4 s and one on most beats would run together.
+  const PULSE_SPEED = 65 // px/s
+  const PULSE_WIDTH = 80 // px
+  const PULSE_LIFE = 6.4 // s
+  const PULSE_PX = 28 // how far the ring carries the lava at its peak
+  const PULSE_MAX = 3
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -590,6 +595,7 @@ export function createSimulation ({ width, height, params }) {
     }
     while (pulseRequests > 0) {
       pulseRequests--
+      if (pulses.length >= PULSE_MAX) continue
       const from = drifting.length ? drifting[Math.floor(random() * drifting.length)] : null
       pulses.push({ x: from ? from.x : random() * width, y: from ? from.y : random() * eddyFloorY(), start: time })
     }
