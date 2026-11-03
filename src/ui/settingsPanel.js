@@ -109,6 +109,7 @@ import {
   defaultMusicSensitivity,
   musicEvery,
   defaultMusicEvery,
+  showSpectrum,
   defaultMusicRanges,
   musicBeatLo,
   musicBeatHi,
@@ -193,6 +194,7 @@ export function createSettingsPanel () {
   }
   const help = fnstate(false) // the ? button: one sentence under every control
   const loopbackHelp = fnstate(false)
+  const musicOpen = fnstate(false)
   // The audio inputs, filled from the browser (names only appear once the microphone has been
   // allowed, so the list is asked for again when listening starts and when a device comes or goes).
   const inputSelect = document.createElement('select')
@@ -314,6 +316,48 @@ export function createSettingsPanel () {
         knobs(knob('Strength', 'touch-strength', touchStrength, { min: 0, max: 3, step: 0.1, slider: true }, () => defaultTouchStrength, v => `${Number(v).toFixed(1)}x`))
       ),
       hint(help, 'What a finger or the mouse does to the lava under it: Push shoves it away, Pull gathers it in, Spin whirls it, Heat and Cool change its temperature. Strength is how hard, 1x as tuned.'),
+      // Music in the top section, always in view, folded to its switch (Robert: "let's put music
+      // as a default collapsible group under touch, always visible. It should just have the button
+      // to enable it and set the device. The remaining controls should be in the advanced").
+      div({ class: musicOpen.bindAttr(() => musicOpen() ? 'sub-panel' : 'sub-panel folded') },
+        div({ class: 'sub-title foldable', onclick: e => { if (!e.target.closest('.toggle')) musicOpen(!musicOpen()) } },
+          span('Music'),
+          span({ style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+            div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music)),
+            span({ class: 'chevron' }, '▾')
+          )
+        ),
+        div({ class: 'sub-body' },
+          ...(musicSources.length > 1 ? [row('Source', segmented('music-source', musicSource, musicSources))] : []),
+          // System audio comes only with a screen share, so say plainly what is and is not used
+          // (Robert: "a note explaining that it's required in order to hear the audio playing on
+          // the system and that we do not record any visuals from the screen or connect to any
+          // devices like webcam and only use the audio stream from the screen share").
+          div({ class: 'music-note', style: { display: musicSource.bindStyle(() => musicSource() === 'system' ? 'block' : 'none') } },
+            'To hear what your computer is playing, the browser has to ask to share your screen, because that is the only way it hands a page the system\'s audio. Pick a screen and tick "Share system audio" (or a tab and "Share tab audio"). Only the sound is used: the picture is switched off the moment it arrives and is never shown, kept or sent, nothing is recorded, and no camera or other device is touched.'
+          ),
+          div({ class: 'music-note', style: { display: TOUCH_UI ? 'block' : 'none' } },
+            'On a phone the lamp listens through the microphone: play the song out loud and it follows along.'
+          ),
+          div({ class: 'music-input', style: { display: musicSource.bindStyle(() => musicSource() === 'mic' ? 'grid' : 'none') } },
+            span({ class: 'row-label' }, 'Input'), inputSelect
+          ),
+          // A loopback driver hears every app with no share dialog (Robert: "a little clickable
+          // help thing that suggests installing and setting up black hole. should be hidden on
+          // mobile").
+          ...(TOUCH_UI ? [] : [
+            button({ class: 'music-help-link', onclick: () => loopbackHelp(!loopbackHelp()) }, 'Hear every app, no share dialog (Mac)'),
+            div({ class: 'music-note', style: { display: loopbackHelp.bindStyle(() => loopbackHelp() ? 'block' : 'none') } },
+              div('1. Install BlackHole 2ch, a free audio loopback driver: existential.audio/blackhole, or "brew install blackhole-2ch" in a terminal.'),
+              div('2. Open Audio MIDI Setup, press +, Create Multi-Output Device, and tick your speakers and BlackHole 2ch.'),
+              div('3. In System Settings, Sound, choose that Multi-Output Device as the output, so you still hear the music.'),
+              div('4. Here, choose Mic as the source and BlackHole 2ch as the Input, then Listen.'),
+              div('On Windows, VB-Audio Virtual Cable does the same job.')
+            )
+          ]),
+        )
+      ),
+      hint(help, 'Music: the switch makes the lamp listen and move to the music. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used. What the music does is under Advanced, Sound.'),
       pair('Flow Field', toggle('flow', showFlow), 'Fullscreen', toggle('fullscreen', fullscreen)),
       hint(help, [
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.'],
@@ -467,36 +511,8 @@ export function createSettingsPanel () {
           // card like the others, the switch and the source, a meter so people can see it
           // hearing, and the depths of what the music does.
           div({ class: 'sub-panel' },
-            div({ class: 'sub-title' }, span('Music'), span({ class: 'sub-sub' }, 'the lamp listens and moves to it')),
-            musicSources.length > 1
-              ? pair('Listen', div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music)), 'Source', segmented('music-source', musicSource, musicSources))
-              : pair('Listen', div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music))),
-            // System audio comes only with a screen share, so say plainly what is and is not used
-            // (Robert: "a note explaining that it's required in order to hear the audio playing on
-            // the system and that we do not record any visuals from the screen or connect to any
-            // devices like webcam and only use the audio stream from the screen share").
-            div({ class: 'music-note', style: { display: musicSource.bindStyle(() => musicSource() === 'system' ? 'block' : 'none') } },
-              'To hear what your computer is playing, the browser has to ask to share your screen, because that is the only way it hands a page the system\'s audio. Pick a screen and tick "Share system audio" (or a tab and "Share tab audio"). Only the sound is used: the picture is switched off the moment it arrives and is never shown, kept or sent, nothing is recorded, and no camera or other device is touched.'
-            ),
-            div({ class: 'music-note', style: { display: TOUCH_UI ? 'block' : 'none' } },
-              'On a phone the lamp listens through the microphone: play the song out loud and it follows along.'
-            ),
-            div({ class: 'music-input', style: { display: musicSource.bindStyle(() => musicSource() === 'mic' ? 'grid' : 'none') } },
-              span({ class: 'row-label' }, 'Input'), inputSelect
-            ),
-            // A loopback driver hears every app with no share dialog (Robert: "a little clickable
-            // help thing that suggests installing and setting up black hole. should be hidden on
-            // mobile").
-            ...(TOUCH_UI ? [] : [
-              button({ class: 'music-help-link', onclick: () => loopbackHelp(!loopbackHelp()) }, 'Hear every app, no share dialog (Mac)'),
-              div({ class: 'music-note', style: { display: loopbackHelp.bindStyle(() => loopbackHelp() ? 'block' : 'none') } },
-                div('1. Install BlackHole 2ch, a free audio loopback driver: existential.audio/blackhole, or "brew install blackhole-2ch" in a terminal.'),
-                div('2. Open Audio MIDI Setup, press +, Create Multi-Output Device, and tick your speakers and BlackHole 2ch.'),
-                div('3. In System Settings, Sound, choose that Multi-Output Device as the output, so you still hear the music.'),
-                div('4. Here, choose Mic as the source and BlackHole 2ch as the Input, then Listen.'),
-                div('On Windows, VB-Audio Virtual Cable does the same job.')
-              )
-            ]),
+            div({ class: 'sub-title' }, span('Music'), span({ class: 'sub-sub' }, 'what the music does to the lamp')),
+            pair('Spectrum', toggle('spectrum', showSpectrum)),
             meterRow,
             knobs(
               knob('Sense', 'music-sensitivity', musicSensitivity, { min: 0.2, max: 5, step: 0.1 }, () => defaultMusicSensitivity, times),
@@ -522,7 +538,7 @@ export function createSettingsPanel () {
               knob('Kick Hi', 'music-kick-hi', musicKickHi, HZ, () => defaultMusicRanges.kickHi, hz)
             ),
             hint(help, [
-              ['Listen', 'Start listening. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used.'],
+              ['Spectrum', 'A strip along the bottom of the screen showing what the lamp hears: frequency up the side, low red to high violet, the four ranges as coloured lines, each sync\'s level along the top, a tick on every beat and a white bar where a pot and an eddy fire.'],
               ['Sense', 'How loud the music counts as: turn up for a quiet speaker, down for a loud one. The meter shows the heat, eddy and kick ranges, and flashes on the beat.'],
               ['Every', 'Every this many beats a pot fires under the lava and, if there is room, an eddy comes in: 4 is every bar of most songs, 8 every two, 16 a phrase.'],
               ['Floor', 'How much the heat range turns up the floor heat, on top of the Floor knob: at 1x a full signal doubles it.'],

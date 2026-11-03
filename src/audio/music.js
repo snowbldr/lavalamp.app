@@ -28,6 +28,7 @@ const BEAT_AVERAGE = 1.5 // seconds of bass history the beat is judged against
 const BEAT_RATIO = 1.4 // bass this many times its average is a beat, at Sensitivity 1
 const BEAT_FLOOR = 0.08 // bass under this (of full scale) is never a beat
 const BEAT_REFRACTORY = 0.22 // seconds: faster than 270 bpm is not a beat
+const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 
 export function createMusic () {
   let context = null
@@ -42,6 +43,7 @@ export function createMusic () {
   const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, bpm: 0, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   let device = '' // the chosen audio input's deviceId, '' for the default
   let bassAverage = 0
+  const averages = { heat: 0, eddy: 0, kick: 0 }
   let lastBeat = -1
   let beatCount = 0
   const beatTimes = []
@@ -164,9 +166,14 @@ export function createMusic () {
       analyser.getByteFrequencyData(bins)
       const raw = levels.raw
       raw.beat = band(ranges.beat); raw.heat = band(ranges.heat); raw.eddy = band(ranges.eddy); raw.kick = band(ranges.kick)
-      levels.heat = ease(levels.heat, Math.min(1.5, raw.heat * sensitivity), dt)
-      levels.eddy = ease(levels.eddy, Math.min(1.5, raw.eddy * sensitivity), dt)
-      levels.kick = ease(levels.kick, Math.min(1.5, raw.kick * sensitivity), dt)
+      // Each sync follows its range's punch, how far it is above its own average over the last
+      // PUNCH_AVERAGE seconds, not its loudness: a song's bass sits near 0.8 of full scale the
+      // whole way through, and driven by loudness the floor stayed at three times its heat.
+      for (const k of ['heat', 'eddy', 'kick']) {
+        averages[k] += (raw[k] - averages[k]) * Math.min(1, dt / PUNCH_AVERAGE)
+        const punch = Math.max(0, raw[k] - averages[k]) / Math.max(0.05, averages[k])
+        levels[k] = ease(levels[k], Math.min(1.5, punch * sensitivity), dt)
+      }
       levels.level = ease(levels.level, Math.min(1.5, (raw.heat + raw.eddy + raw.kick) / 3 * sensitivity), dt)
       // The beat: the instant energy in the beat range against its running average.
       bassAverage += (raw.beat - bassAverage) * Math.min(1, dt / BEAT_AVERAGE)
@@ -182,6 +189,8 @@ export function createMusic () {
       return levels
     },
     get beats () { return beatCount },
+    // The analyser's last frame of bins (0 to 255) and Hz a bin, for the spectrum view.
+    spectrum () { return bins && enabled ? { bins, binHz } : null },
     // The audio inputs this browser can choose between; their names are only given once a
     // microphone permission has been granted, so the list is asked for again after listening.
     async inputs () {

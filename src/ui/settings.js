@@ -324,6 +324,9 @@ export const soundBed = fnstate('simmer')
 // Floor and Lift from the bass, Turb from the mids, Kick from the highs, and Beat is the chance
 // that a beat lights a pot.
 export const music = fnstate(false)
+// The spectrum strip along the bottom, for seeing what the music sync hears (a view: remembered
+// per browser, not in links or saves).
+export const showSpectrum = fnstate(false)
 export const musicPending = fnstate(false)
 // A phone can only hear the room, so it gets the microphone alone (Robert: "Phones using mic is
 // fine, makes more sense for mobile too").
@@ -560,7 +563,7 @@ const adoptLegacySave = () => {
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
 // reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
 const VIEW_KEY = `lavalamp.app-v${CURRENT}-views`
-const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource }
+const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource, showSpectrum }
 const viewChoices = { touchMode: touchModes, soundBed: soundBeds, musicSource: musicSources }
 const saveViews = () => {
   try {

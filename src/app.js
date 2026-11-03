@@ -7,6 +7,7 @@ import { createRenderer } from './render/renderer.js'
 import { createMotionInput } from './input/motion.js'
 import { createPointerInput } from './input/pointer.js'
 import { createGloop } from './audio/gloop.js'
+import { createSpectrumView } from './render/spectrum.js'
 import { createMusic } from './audio/music.js'
 import { TURNS, lampSizeFor, lampToPage, pageToLamp, pageVectorToLamp } from './input/frame.js'
 import { notify } from './ui/components.js'
@@ -117,6 +118,7 @@ import {
   musicSource,
   musicSensitivity,
   musicEvery,
+  showSpectrum,
   musicBeatLo,
   musicBeatHi,
   musicHeatLo,
@@ -389,7 +391,9 @@ export async function start () {
     try { await listener.start(musicSource()) } catch (e) { music(false); notify('Music: ', listener.error || 'could not listen') }
     musicPending(false)
   }
-  music.subscribe(on => { if (on) listen(); else listener.stop() })
+  // Off puts every knob the music drives back to the knob's own value.
+  const unMusic = () => { params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick() }
+  music.subscribe(on => { if (on) listen(); else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
   // bands add to them, so a quiet room is the lamp as tuned (see settings.js, musicFloor and
@@ -397,6 +401,10 @@ export async function start () {
   const musicMeter = { bass: 0, mid: 0, high: 0, beat: 0 }
   const musicRanges = { beat: [0, 0], heat: [0, 0], eddy: [0, 0], kick: [0, 0] }
   let beatsHeard = 0
+  const spectrumView = createSpectrumView()
+  document.body.append(spectrumView.element)
+  spectrumView.show(showSpectrum())
+  showSpectrum.subscribe(on => spectrumView.show(on))
   const driveMusic = dt => {
     if (!listener.enabled) return
     musicRanges.beat[0] = musicBeatLo(); musicRanges.beat[1] = musicBeatHi()
@@ -404,19 +412,25 @@ export async function start () {
     musicRanges.eddy[0] = musicEddyLo(); musicRanges.eddy[1] = musicEddyHi()
     musicRanges.kick[0] = musicKickLo(); musicRanges.kick[1] = musicKickHi()
     const m = listener.update(dt, musicSensitivity(), musicRanges)
-    params.floorHeat = floorHeat() * (1 + musicFloor() * m.bass)
-    params.liftCap = lift() * (1 + musicLift() * m.bass)
+    // m.heat, not m.bass: after the ranges came in this read a name that no longer existed, the
+    // floor heat and Lift became NaN every frame, and the whole pool read hot with artifacts
+    // (Robert: "The music mode is causing all of the lava to stay completely hot the whole time").
+    params.floorHeat = floorHeat() * (1 + musicFloor() * m.heat)
+    params.liftCap = lift() * (1 + musicLift() * m.heat)
     params.turbulence = turbulence() * (1 + musicTurb() * m.eddy)
     params.wobbleKick = wobbleKick() * (1 + musicKick() * m.kick)
     // Every Nth beat, a pot fires and an eddy is born if there is room: on the phrase, not at
     // random. The eddies' strength rides the eddy band's envelope above, so each hit shoves.
+    let fired = false
     if (m.beat) {
       beatsHeard++
       if (beatsHeard % Math.max(1, Math.round(musicEvery())) === 0) {
+        fired = true
         if (sim.lightElement) sim.lightElement()
         if (sim.spawnEddy) sim.spawnEddy()
       }
     }
+    if (showSpectrum()) spectrumView.draw(listener.spectrum(), m, musicRanges, fired)
     musicMeter.bass = m.heat; musicMeter.mid = m.eddy; musicMeter.high = m.kick
     if (m.beat) musicMeter.beat = 1; else musicMeter.beat *= 0.85
     if (settingsPanel.meter) settingsPanel.meter(musicMeter)
