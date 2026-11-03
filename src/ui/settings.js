@@ -103,7 +103,7 @@ export const computeDefaultElementLife = () => cpu() ? 7 : 15 // CPU 7 (final CP
 // said 300 because the knob stopped there when it was made, "uhhh my turb is set to 600"): one
 // strong eddy on a quiet lamp. The CPU lamp keeps 150 and 6.
 export const computeDefaultTurbulence = () => cpu() ? 150 : 600
-export const computeDefaultDrifters = () => cpu() ? 6 : 1 // Robert: "I actually think we should set eddies to 1 for default"
+export const computeDefaultDrifters = () => cpu() ? 6 : 2 // Robert's final v2 link, 2026-11-03 (he had tried 1)
 export const computeDefaultWobbleKick = () => cpu() ? 10 : 6
 export const computeDefaultViscosity = () => cpu() ? 9 : 32
 export const computeDefaultElementRate = () => cpu() ? 3 : 4
@@ -336,7 +336,7 @@ export const touchStrength = fnstate(defaultTouchStrength)
 // move"): 400 px/s, falling off exponentially at 1.7.
 export const defaultEddySpeed = 400
 export const eddySpeed = fnstate(defaultEddySpeed)
-export const defaultEddyFalloff = 1.7
+export const defaultEddyFalloff = 0.6 // final v2 link (was 1.7)
 export const eddyFalloff = fnstate(defaultEddyFalloff)
 export const eddyCurves = ['log', 'linear', 'exp']
 export const defaultEddyCurve = 'exp'
