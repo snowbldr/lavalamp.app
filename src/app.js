@@ -132,6 +132,7 @@ import {
   musicBusyEddies,
   musicFlip,
   musicWobble,
+  musicVent,
   showSpectrum,
   musicBeatLo,
   musicBeatHi,
@@ -497,6 +498,7 @@ export async function start () {
   const DROP_GAP = 6 // seconds: one drop at most this often (8 let Drugs I Like's kick coming in at 0:36.6 block its drop at 0:44)
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
+  const VENT_TIME = 0.3 // seconds the lid is lifted for
   const BOOM_POT_GAP = 3 // seconds between pots on deep notes
   let lastBoomPotAt = -1e9
   const SILENT_DB = -65 // the analyser's floor is -80; a song's quietest bars sit around -55
@@ -636,6 +638,12 @@ export async function start () {
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
       if (lidded) open(musicBoom()); else potNow()
     } else if (lidded && onBeatPot) open(musicDrop())
+    else if (lidded && m.beat && Math.random() < musicVent()) {
+      // A vent (Robert: "what if we occasionally pulse the pre heated pots to release pulses of
+      // heat to match the music"): on a beat that opens nothing, now and then the charged pot's
+      // lid lifts for VENT_TIME and a puff of its lava goes up with the beat.
+      if (sim.ventPot) sim.ventPot(VENT_TIME)
+    }
     // A busy part keeps at least Busy eddies alive, never fewer than the Eddies knob.
     params.drifters = calm ? drifters() : Math.max(drifters(), musicBusyEddies())
     if (clock.locked) {

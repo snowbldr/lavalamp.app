@@ -394,6 +394,10 @@ export const musicFlip = fnstate(defaultMusicFlip)
 // frequently"). 0 is off.
 export const defaultMusicWobble = 1
 export const musicWobble = fnstate(defaultMusicWobble)
+// Vent: the chance a beat lifts the charged pot's lid for a moment, a puff of its lava out (see
+// app.js). 0 is off.
+export const defaultMusicVent = 0.15
+export const musicVent = fnstate(defaultMusicVent)
 export const musicBusyEddies = fnstate(defaultMusicBusyEddies)
 export const defaultMusicRanges = { beatLo: 40, beatHi: 150, heatLo: 40, heatHi: 150, eddyLo: 150, eddyHi: 2000, kickLo: 2000, kickHi: 8000 }
 export const musicBeatLo = fnstate(defaultMusicRanges.beatLo)
@@ -489,10 +493,10 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, seed }
+const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, musicVent, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 // touchStrength and eddyFalloff: their knobs go to 0 (found by the round trip check, 2026-11-03).
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff', 'musicTempo', 'musicPulse', 'musicSpawn', 'musicSpin', 'musicLead', 'musicActivity', 'musicDrop', 'musicBoom', 'musicBusyEddies', 'musicFlip', 'musicWobble', 'musicFloor', 'musicLift', 'musicTurb', 'musicKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff', 'musicTempo', 'musicPulse', 'musicSpawn', 'musicSpin', 'musicLead', 'musicActivity', 'musicDrop', 'musicBoom', 'musicBusyEddies', 'musicFlip', 'musicWobble', 'musicVent', 'musicFloor', 'musicLift', 'musicTurb', 'musicKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -566,6 +570,7 @@ const defaults = () => ({
   musicBusyEddies: defaultMusicBusyEddies,
   musicFlip: defaultMusicFlip,
   musicWobble: defaultMusicWobble,
+  musicVent: defaultMusicVent,
   seed: randomSeed()
 })
 

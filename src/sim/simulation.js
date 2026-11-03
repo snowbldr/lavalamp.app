@@ -318,6 +318,12 @@ export function createSimulation ({ width, height, params }) {
   let charged = null
   let lidPot = -1
   let dropRequest = 0
+  // A vent: the lid lifted for a moment, so the top of the charged pot's lava puffs out and the
+  // pot closes again and goes on charging (Robert: "what if we occasionally pulse the pre heated
+  // pots to release pulses of heat to match the music"). Lava that rises past the floor's line
+  // belongs to the pool from then on, so the lid coming back does not pull it in again.
+  let ventUntil = -1
+  let ventRequest = 0
   const DROP_BLAST = 3
   // The lidded pot heats to CHARGE_LIFT gravities and no further (the drift up is temperature
   // over gravity, capped at Lift gravities, so the cap is also never past full lift). Uncapped,
@@ -1050,6 +1056,8 @@ export function createSimulation ({ width, height, params }) {
         if (chargeLevel > 0) charged.heat = elementHeatTop * chargeLevel
         else if (dropRequest <= 0) unlid() // called off
       }
+      if (ventRequest > 0) { if (charged && charged.mode === 'charge') ventUntil = heaterTime + ventRequest; ventRequest = 0 }
+      if (charged && charged.mode === 'charge') lidPot = heaterTime < ventUntil ? -1 : charged.pot
       if (dropRequest > 0) {
         const el = charged || biggestCold()
         if (el) {
@@ -1717,6 +1725,7 @@ export function createSimulation ({ width, height, params }) {
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big },
     dropPot (strength) { dropRequest = Math.max(dropRequest, strength || 0) },
+    ventPot (seconds) { ventRequest = Math.max(ventRequest, seconds || 0) },
     get lid () { return lidPot },
     transform,
     flowAt,

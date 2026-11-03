@@ -29,6 +29,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let eddy = 0 // eddies to bear at the next frame (the music's beat)
   let pulse = 0 // pulse waves to send
   const flip = [] // eddy flips to send, each a chance
+  let vent = 0 // seconds to lift the lid for
   let charge = 0 // the lidded pot's heat, held
   let chargeBig = false // the drop's pot rather than a beat's
   let drop = 0 // a drop's blast strength, 0 for none
@@ -101,11 +102,12 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), charge, chargeBig, drop, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, charge, chargeBig, drop, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
       pulse = 0
+      vent = 0
       drop = 0
       if (!wantNow.cups) { cups = null }
     },
@@ -135,6 +137,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     spawnEddy () { eddy++ },
     pulseWave () { pulse++ },
     flipEddies (chance = 1) { flip.push(chance) },
+    ventPot (seconds) { vent = Math.max(vent, seconds || 0) },
     chargePot (level, big) { charge = level; chargeBig = !!big },
     dropPot (strength) { drop = Math.max(drop, strength) },
     setTouches (list) { touches = list || [] },

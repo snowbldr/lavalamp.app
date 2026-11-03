@@ -129,6 +129,8 @@ import {
   defaultMusicFlip,
   musicWobble,
   defaultMusicWobble,
+  musicVent,
+  defaultMusicVent,
   defaultMusicMotion,
   showSpectrum,
   defaultMusicRanges,
@@ -558,7 +560,8 @@ export function createSettingsPanel () {
             knob('Lead', 'music-lead', musicLead, { min: 0, max: 4, step: 0.1 }, () => defaultMusicLead, seconds),
             knob('Activity', 'music-activity', musicActivity, { min: 0, max: 1, step: 0.05 }, () => defaultMusicActivity, fixed(2)),
             knob('Drop', 'music-drop', musicDrop, { min: 0, max: 3, step: 0.1 }, () => defaultMusicDrop, times),
-            knob('Boom', 'music-boom', musicBoom, { min: 0, max: 3, step: 0.1 }, () => defaultMusicBoom, times)
+            knob('Boom', 'music-boom', musicBoom, { min: 0, max: 3, step: 0.1 }, () => defaultMusicBoom, times),
+            knob('Vent', 'music-vent', musicVent, { min: 0, max: 1, step: 0.05 }, () => defaultMusicVent, fixed(2))
           ),
         subgroup('Motion',
             knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
@@ -598,6 +601,7 @@ export function createSettingsPanel () {
           ['Flip', 'The chance a drop turns an eddy\'s spin round on the spot, so the swirl suddenly runs the other way; a deep bass note does it at an eighth of the chance. Each eddy flips once in its life at most. 0 is off.'],
           ['Wobble', 'While a wobble bass is sweeping (the wah wah of dubstep), an eddy comes in on its second to fourth wah, then another every few wahs while it keeps going: more often turned up, 0 is off. As many as Busy eddies allows, and two more.'],
           ['Busy eddies', 'While the song is busy, at least this many eddies; an Eddies setting above it is kept. 0 leaves Eddies as set.'],
+          ['Vent', 'The chance a beat lifts the lid of the pot that is closed and charging, for a moment: a puff of its superheated lava goes up with the beat, and the pot closes again and keeps charging. 0 is off.'],
           ['Activity', 'How much the song\'s sections change the lamp: calm in a breakdown, busy where everything is playing. 0 ignores them.'],
           ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
           ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
