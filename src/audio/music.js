@@ -128,6 +128,21 @@ const WOBBLE_DB = 24
 // its spread (after falling under the mean), while the wobble is up; a run of them is counted
 // from the first and ends WOBBLE_RUN_END seconds after the wobble goes.
 const WOBBLE_RUN_END = 0.5
+// The stab: a whole-spectrum hit in a calm part, a choir or a band slamming in at once (Robert,
+// on Bohemian Rhapsody's opera, "send a bolt of lightning did not release a pot! one was ready
+// though... probably a new trigger form"). Heard as a beat, but in a calm part a beat opens
+// nothing, and the opera is 10 to 13 dB under the rock's reference, so no drop. Scanned: at the
+// beat and STAB_AFTER seconds after it, each band's highest against its mean over the half second
+// before (to STAB_GAP before): the opera's three stabs (3:14.4, 3:27.9, 3:38.7 in the video's mp3)
+// rise 41 to 47 dB in the bass and 12 to 28 in the rest; Bangarang's last hit 34 and 8; its first
+// kicks 33 and 49 in the bass but 5 to 7 above. A stab is a beat in a calm part with the bass up
+// STAB_BASS and every other band up STAB_REST: in C-C, Drugs I Like and Bangarang, none.
+const STAB_BANDS = [[20, 150], [150, 1000], [1000, 4000], [4000, 12000]]
+const STAB_BEFORE = 0.5
+const STAB_GAP = 0.1
+const STAB_AFTER = 0.05
+const STAB_BASS = 35
+const STAB_REST = 10
 const SECTION_SMOOTH = 2 // seconds the section's power is eased over
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 // The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
@@ -168,7 +183,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, wobble: 0, wobbleNote: false, wobbleRun: 0, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -197,6 +212,8 @@ export function createMusic () {
   let lastBeat = -1
   let lastBoom = -1e9
   const scoreHistory = [] // [time, score] ten times a second over the last CUT_BEFORE seconds
+  const bandHistory = [] // [time, the STAB_BANDS in dB] over STAB_BEFORE
+  let stabPending = null // a calm beat being judged: { at, before, peak }
   let wobbleArmed = true // the brightness has fallen under its mean since the last note
   let wobbleSeen = -1e9 // when the wobble was last up
   const brightHistory = [] // [time, octaves] of the wobble band's brightness over WOBBLE_WINDOW
@@ -481,7 +498,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -624,6 +641,20 @@ export function createMusic () {
         raw.wobble = spread
         levels.wobble = Math.max(0, Math.min(1, (spread - WOBBLE_LO) / (WOBBLE_HI - WOBBLE_LO)))
         levels.wobbleNote = false
+        // The stab (see STAB_BANDS).
+        levels.stab = false
+        const bandsNow = STAB_BANDS.map(r => 10 * Math.log10(power(r) + 1e-12))
+        if (levels.beat && levels.calm && clock - startedAt > SETTLE && bandHistory.length) {
+          const old = bandHistory.filter(h => clock - h[0] >= STAB_GAP)
+          if (old.length) stabPending = { at: clock, before: bandsNow.map((_, j) => old.reduce((a, h) => a + h[1][j], 0) / old.length), peak: bandsNow.slice() }
+        } else if (stabPending) stabPending.peak = stabPending.peak.map((v, j) => Math.max(v, bandsNow[j]))
+        if (stabPending && clock - stabPending.at >= STAB_AFTER) {
+          const rise = stabPending.peak.map((v, j) => v - stabPending.before[j])
+          if (rise[0] >= STAB_BASS && Math.min(...rise.slice(1)) >= STAB_REST) levels.stab = true
+          stabPending = null
+        }
+        bandHistory.push([clock, bandsNow])
+        while (bandHistory.length && clock - bandHistory[0][0] > STAB_BEFORE) bandHistory.shift()
         const now = brightHistory[brightHistory.length - 1][1]
         if (levels.wobble > 0) wobbleSeen = clock
         else if (clock - wobbleSeen > WOBBLE_RUN_END) levels.wobbleRun = 0

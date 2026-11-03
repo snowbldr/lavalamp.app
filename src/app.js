@@ -499,6 +499,10 @@ export async function start () {
   let lastDropAt = -1e9
   const BOOM_POT_GAP = 3 // seconds between pots on deep notes
   let lastBoomPotAt = -1e9
+  const SILENT_DB = -65 // the analyser's floor is -80; a song's quietest bars sit around -55
+  const SILENT_AFTER = 15 // seconds
+  let silentFor = 0
+  let musicResting = false
   let wobbleNext = 3 // the wobble note of this run the next eddy comes on
   const musicLog = []
   let musicLogAt = 0
@@ -527,6 +531,20 @@ export async function start () {
     musicRanges.eddy[0] = musicEddyLo(); musicRanges.eddy[1] = musicEddyHi()
     musicRanges.kick[0] = musicKickLo(); musicRanges.kick[1] = musicKickHi()
     const m = listener.update(dt, musicSensitivity(), musicRanges)
+    // Silence: with Listen on and nothing playing, the closed pot charged on and the knobs stayed
+    // where the music left them, so every pot sat hot (Robert: "when music is enabled but there is
+    // silence, all the pots get stuck hot. we should turn off the effects of music mode after 15
+    // seconds and turn them back on once there's sound again"). After SILENT_AFTER seconds under
+    // SILENT_DB the lamp is its own again (unMusic: the knobs, the lid let go); the meter still
+    // moves, and the first sound picks the music back up.
+    silentFor = m.powerDb < SILENT_DB ? silentFor + dt : 0
+    if (silentFor > SILENT_AFTER) {
+      if (!musicResting) { unMusic(); musicResting = true }
+      musicMeter.bass = m.heat; musicMeter.mid = m.eddy; musicMeter.high = m.kick; musicMeter.beat *= 0.85
+      if (settingsPanel.meter) settingsPanel.meter(musicMeter)
+      return
+    }
+    musicResting = false
     const clock = listener.clock
     // The song's sections: the activity, 0 in a breakdown to 1 in the fullest part, made a gain
     // about 1 by the Activity knob, so a breakdown calms the lamp and a chorus busies it.
@@ -604,6 +622,11 @@ export async function start () {
       // switch directions up to one time during their life time triggered by rareish music
       // events"); the two just asked for are born after this and keep their spin.
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip())
+    } else if (m.stab && calm && lidded) {
+      // A stab out of a calm part (music.js): the pot that has been charging all through it goes,
+      // and nothing else changes (Robert: "send a bolt of lightning did not release a pot! one
+      // was ready though"; "don't change anythign else").
+      open(musicDrop() * 1.5)
     } else if (m.boom && !calm && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP) {
       // A deep note (music.js, the boom): a burst of lava with it, the lidded pot blasted by Boom,
       // or with Drop 0 a pot lit as it is heard; at most every BOOM_POT_GAP, since dubstep's sub
