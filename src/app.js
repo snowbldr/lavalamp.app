@@ -481,7 +481,7 @@ export async function start () {
   const MID_HIT_BASS = 1 // the bass's rise under this: not a kick
   let dropCharged = false // a pot is lidded and heating (see driveMusic)
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
-  const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; train = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters() }
+  const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; train = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters(); params.ceilingCool = 1 }
   music.subscribe(on => { if (on) { musicLog.length = 0; musicLogStart = listener.time; listen() } else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
@@ -512,6 +512,7 @@ export async function start () {
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
   let bufferAt = -1e9
   let lavaLow = false
+  const CEILING_COOL = 5
   const VENT_TIME = 0.3 // seconds the lid is lifted for
   // Seconds between pots on deep notes: 3 skipped C-C's 0:57.1 (1.9 s after the one at the drop);
   // 1.5 keeps C-C's, 1.75 to 3.5 s apart, and half of Bangarang's, about 1.1 s apart.
@@ -583,6 +584,12 @@ export async function start () {
     params.liftCap = lift() * (1 + musicLift() * m.heat)
     params.turbulence = turbulence() * busy * (1 + musicTurb() * m.eddy)
     params.wobbleKick = wobbleKick() * (1 + musicKick() * m.kick)
+    // The ceiling bottles cool faster the more active the music, as the pace follows the tempo, up
+    // to CEILING_COOL times at the fullest (Robert: "a big drop got the lava too hot and sent it to
+    // the top. we should add cooling bottles at the top to help when they're filled with very hot
+    // lava to help move it back down and get ready for another drop. the rate of cooling should be
+    // relative to how active the lamp is, similar to how the speed is affected"). GPU lamp.
+    params.ceilingCool = 1 + (CEILING_COOL - 1) * act
     const chance = Math.min(2, busy)
     // The moves on the beat. Locked to the clock, each fires its lead ahead of the predicted
     // beat, so it lands on it: the latest beat within its lead, once. Not locked (the song's
