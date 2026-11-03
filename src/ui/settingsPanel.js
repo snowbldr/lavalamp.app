@@ -106,6 +106,12 @@ import {
   touchModes,
   touchStrength,
   defaultTouchStrength,
+  eddySpeed,
+  defaultEddySpeed,
+  eddyFalloff,
+  defaultEddyFalloff,
+  eddyCurve,
+  eddyCurves,
   stiffnessNear,
   stir,
   turbulence,
@@ -282,7 +288,15 @@ export function createSettingsPanel () {
         subgroup('Clock',
             knob('Pace', 'pace', pace, { min: 0.1, max: 1, step: 0.05 }, () => defaultPace, times)
           ),
+        subgroup('Travel',
+            knob('Speed', 'eddy-speed', eddySpeed, { min: 10, max: 400, step: 5 }, () => defaultEddySpeed, v => `${v} px/s`),
+            knob('Fall off', 'eddy-falloff', eddyFalloff, { min: 0, max: 4, step: 0.1 }, () => defaultEddyFalloff, fixed(1))
+          ),
+        row('Curve', segmented('eddy-curve', eddyCurve, eddyCurves)),
         helpList(help, [
+          ['Speed', 'How fast an eddy comes in from the edge at birth, in px/s; each is a little faster or slower than the knob.'],
+          ['Fall off', 'How quickly an eddy loses that speed with age; 0 keeps it. It never drops below 15% of its birth speed.'],
+          ['Curve', 'The shape of the slowing: log falls fast then hobbles on, linear runs down steadily, exp drops off and levels.'],
           ['Stir', 'Speed of the slow convection roll, up the middle and down the walls; negative runs it backwards.'],
           ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
           ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],

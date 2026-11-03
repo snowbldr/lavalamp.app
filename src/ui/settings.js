@@ -326,6 +326,15 @@ export const touchMode = fnstate('push')
 // cool (Robert: "we need a touch effect strength slider under the touch").
 export const defaultTouchStrength = 1
 export const touchStrength = fnstate(defaultTouchStrength)
+// How the eddies travel: born at Speed px/s (times a random 0.7 to 1.3), falling off with age by
+// the Curve at the Fall off rate (Robert: "Can I get knobs for the motion? initial speed, fall
+// off rate, linear/logarithmic/exponential fall off").
+export const defaultEddySpeed = 120
+export const eddySpeed = fnstate(defaultEddySpeed)
+export const defaultEddyFalloff = 1.5
+export const eddyFalloff = fnstate(defaultEddyFalloff)
+export const eddyCurves = ['log', 'linear', 'exp']
+export const eddyCurve = fnstate('log')
 
 // Themes: a name and every colour at once, the heat gradient, the back and the flow arrows
 // (Robert: "themes that set all of the colors"). Six contrast presets, gradients that jump hue
@@ -380,7 +389,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, seed }
+const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
 
@@ -435,6 +444,7 @@ const defaults = () => ({
 export const getSettings = () => {
   const result = { version: CURRENT }
   for (const [key, state] of Object.entries({ ...colorSettings, ...numberSettings })) result[key] = state()
+  result.eddyCurve = eddyCurve()
   return result
 }
 
@@ -451,6 +461,7 @@ export const applySettings = saved => {
   for (const [key, state] of Object.entries(colorSettings)) {
     if (saved[key]) state({ ...saved[key] })
   }
+  if (eddyCurves.includes(saved.eddyCurve)) eddyCurve(saved.eddyCurve)
   for (const [key, state] of Object.entries(numberSettings)) {
     const value = Number(saved[key])
     if (Number.isFinite(value) && (value > 0 || signedSettings.has(key))) state(value)

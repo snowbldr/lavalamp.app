@@ -251,17 +251,18 @@ const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated
 // speed (starts fast, slows down quickly, then sorta hobbles along)... the rotation force
 // should follow an inverse exponential curve (it should run fairly strongly, then drop off
 // quick)... The path of each eddy should be affected by the other eddies." So: a drifter is born
-// on a random edge heading inward, travels at DRIFT_SPEED_START over (1 + DRIFT_SLOWING ln(1 +
-// age)) px/s (240 at birth, 77 after a second, 37 after five, 24 after twenty), spins at full
+// on a random edge heading inward, travels at the Speed knob falling off by the Curve knob at the
+// Fall off rate (travelPace below; the log curve at 1.5 gives 120, 59, 33, 22 px/s), spins at full
 // for half a second then as exp(-age / (DRIFT_SPIN_TAU life)), and is carried by the other
 // eddies' flow at its position times DRIFT_ADVECT. Every eddy's push fades with depth: full
 // above EDDY_DEPTH_FADE[0] of the height, down to EDDY_DEPTH_FADE[1] of itself at the floor, so
 // the pool is skimmed from the top rather than squashed.
-// First try 150 to 300 and a slowing of 3 (240, 77, 37, 24 px/s at 0, 1, 5, 20 s); Robert: "it's
-// shooting in too fast and it slows down too much": now 80 to 160 over (1 + 1.5 ln(1 + age)),
-// 120, 59, 33, 22 px/s at 0, 1, 5 and 20 s from the middle of the range.
-const DRIFT_SPEED_START = [80, 160] // px/s at birth
-const DRIFT_SLOWING = 1.5
+// The travel is three knobs now (params.eddySpeed px/s at birth, times DRIFT_VARIETY;
+// eddyFalloff the rate; eddyCurve log, linear or exp): first 150 to 300 slowing as
+// 1 + 3 ln(1 + age), then 80 to 160 over 1 + 1.5 ln(1 + age), and Robert still: "they're
+// still slowing down too much I think, and starting too fast. Can I get knobs for the motion?"
+// The curves keep a floor of TRAVEL_FLOOR of the birth speed, so an eddy always hobbles.
+const TRAVEL_FLOOR = 0.15
 const DRIFT_SPIN_TAU = 0.3 // of the life
 const DRIFT_ADVECT = 1
 const EDDY_DEPTH_FADE = [0.6, 0.12]
@@ -322,6 +323,13 @@ export function createSimulation ({ width, height, params }) {
   const drifting = []
   let nextDrifter = randomRange(...DRIFT_GAP)
   const carried = [0, 0] // scratch: the other eddies' flow at an eddy
+  // An eddy's travel speed at its age: its birth speed times the chosen fall off.
+  const travelPace = (e, age) => {
+    const k = params.eddyFalloff ?? 1.5
+    const curve = params.eddyCurve || 'log'
+    const f = curve === 'linear' ? 1 - k * age / 10 : curve === 'exp' ? Math.exp(-k * age / 5) : 1 / (1 + k * Math.log(1 + age))
+    return e.speed * Math.max(TRAVEL_FLOOR, f)
+  }
   // A drifter's spin over its life: half a second to spin up, then dying away exponentially.
   const driftEnvelope = e => { const age = time - e.start; return Math.min(1, age / 0.5) * Math.exp(-age / (DRIFT_SPIN_TAU * e.life)) }
   // The eddies' push fades with depth, so they skim the pool rather than squash it.
@@ -402,7 +410,7 @@ export function createSimulation ({ width, height, params }) {
     if (drifting.length < drifters && time >= nextDrifter) {
       const core = randomRange(...DRIFT_CORE)
       const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
-      const speed = randomRange(...DRIFT_SPEED_START)
+      const speed = (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY)
       // Born on one of the four edges, heading inward within 60 degrees of straight in.
       const side = Math.floor(random() * 4)
       const along = random()
@@ -432,8 +440,7 @@ export function createSimulation ({ width, height, params }) {
         if (time + randomRange(...DRIFT_GAP) < nextDrifter || nextDrifter < time) nextDrifter = time + randomRange(...DRIFT_GAP)
         continue
       }
-      const age = time - e.start
-      const pace = e.speed / (1 + DRIFT_SLOWING * Math.log(1 + age))
+      const pace = travelPace(e, time - e.start)
       eddyVelocity(e.x, e.y, Math.abs(turbulence), carried, e)
       e.vx = pace * e.hx + DRIFT_ADVECT * carried[0]
       e.vy = pace * e.hy + DRIFT_ADVECT * carried[1]
@@ -455,7 +462,7 @@ export function createSimulation ({ width, height, params }) {
       eddies.push({
         x: side === 1 ? width : side === 3 ? 0 : along * width,
         y: side === 0 ? 0 : side === 2 ? height : along * height,
-        speed: randomRange(...DRIFT_SPEED_START),
+        speed: (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY),
         hx: Math.cos(heading),
         hy: Math.sin(heading),
         radius,
@@ -468,7 +475,7 @@ export function createSimulation ({ width, height, params }) {
     for (let k = eddies.length - 1; k >= 0; k--) {
       const e = eddies[k]
       if (time - e.start > e.life) { eddies.splice(k, 1); continue }
-      const pace = e.speed / (1 + DRIFT_SLOWING * Math.log(1 + time - e.start))
+      const pace = travelPace(e, time - e.start)
       e.x += pace * e.hx * dt
       e.y += pace * e.hy * dt
       if (e.x < 0) { e.x = 0; e.hx = Math.abs(e.hx) } else if (e.x > width) { e.x = width; e.hx = -Math.abs(e.hx) }

@@ -119,6 +119,9 @@ import {
   stir,
   touchMode,
   touchStrength,
+  eddySpeed,
+  eddyFalloff,
+  eddyCurve,
   turbulence,
   viscosity,
   seed
@@ -209,6 +212,9 @@ export async function start () {
   for (const key of ['wallNear', 'wallPull']) { const q = new URLSearchParams(window.location.search).get(key); if (q !== null && !Number.isNaN(Number(q))) params[key] = Number(q) }
   mirror(particleCount, params, 'particleCount', Math.trunc)
   mirror(touchStrength, params, 'touchStrength')
+  mirror(eddySpeed, params, 'eddySpeed')
+  mirror(eddyFalloff, params, 'eddyFalloff')
+  mirror(eddyCurve, params, 'eddyCurve')
   mirror(interactionRadius, params, 'interactionRadius')
   params.restDensity = REST_DENSITY // Pull is Stiff times Density; see computeDefaultPull
   mirror(pull, params, 'stiffness', v => v / REST_DENSITY)
