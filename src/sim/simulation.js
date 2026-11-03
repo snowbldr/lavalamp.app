@@ -411,8 +411,10 @@ export function createSimulation ({ width, height, params }) {
       const core = randomRange(...DRIFT_CORE)
       const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
       const speed = (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY)
-      // Born on one of the four edges, heading inward within 60 degrees of straight in.
-      const side = Math.floor(random() * 4)
+      // Born on the top or a side, never the floor where the lava sits (Robert: "eddies should
+      // not be allowed to spawn on the bottom edge where the lava is"), heading inward within 60
+      // degrees of straight in.
+      const side = [0, 1, 3][Math.floor(random() * 3)]
       const along = random()
       const inward = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][side] // down from the top, left from the right, up from the floor, right from the left
       const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
@@ -455,7 +457,7 @@ export function createSimulation ({ width, height, params }) {
       const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
       // These too are born on an edge and travel inward, slowing as the drifters do (Robert,
       // seeing one appear mid lamp: "all eddies spawn from anywhere on the edges").
-      const side = Math.floor(random() * 4)
+      const side = [0, 1, 3][Math.floor(random() * 3)] // never the floor
       const along = random()
       const inward = [Math.PI / 2, Math.PI, -Math.PI / 2, 0][side]
       const heading = inward + randomRange(-Math.PI / 3, Math.PI / 3)
