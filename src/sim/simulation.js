@@ -257,8 +257,11 @@ const EDDY_PEAK = 0.4289 // peak of r e^(-r^2), to scale the field to its stated
 // eddies' flow at its position times DRIFT_ADVECT. Every eddy's push fades with depth: full
 // above EDDY_DEPTH_FADE[0] of the height, down to EDDY_DEPTH_FADE[1] of itself at the floor, so
 // the pool is skimmed from the top rather than squashed.
-const DRIFT_SPEED_START = [150, 300] // px/s at birth
-const DRIFT_SLOWING = 3
+// First try 150 to 300 and a slowing of 3 (240, 77, 37, 24 px/s at 0, 1, 5, 20 s); Robert: "it's
+// shooting in too fast and it slows down too much": now 80 to 160 over (1 + 1.5 ln(1 + age)),
+// 120, 59, 33, 22 px/s at 0, 1, 5 and 20 s from the middle of the range.
+const DRIFT_SPEED_START = [80, 160] // px/s at birth
+const DRIFT_SLOWING = 1.5
 const DRIFT_SPIN_TAU = 0.3 // of the life
 const DRIFT_ADVECT = 1
 const EDDY_DEPTH_FADE = [0.6, 0.12]
