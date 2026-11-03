@@ -690,9 +690,13 @@ export const reloadWithSeed = value => {
   window.location.search = `?${query.toString()}`
 }
 
-// Forget the saved settings and start over with a fresh seed and a clean URL.
+// Forget the saved settings and the views, and start over with a fresh seed and a clean URL. The
+// views were kept, so Heater and Reservoirs stayed on through a reset (Robert: "reset settings is
+// apparently not working... I just reset and heater and reservoirs stayed on"); the button says
+// it resets ALL defaults.
 export const resetAndReload = () => {
   clearSavedSettings()
+  try { localStorage.removeItem(VIEW_KEY) } catch {}
   window.location.href = window.location.pathname
 }
 
