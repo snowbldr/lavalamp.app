@@ -324,6 +324,12 @@ export function createSimulation ({ width, height, params }) {
   // belongs to the pool from then on, so the lid coming back does not pull it in again.
   let ventUntil = -1
   let ventRequest = 0
+  let ventSmallOnly = false // the vent asked for is a train's: never the drop's big pot
+  // A train of globs (app.js) ends by retiring the closed pot: it goes back to being a pot and a
+  // fresh one closes, since a lidded pot takes nothing in; never the drop's big pot. The retired
+  // one is passed over for RESERVE_REST seconds.
+  let retireRequest = false
+  const RESERVE_REST = 5
   const DROP_BLAST = 3
   // The lidded pot heats to CHARGE_LIFT gravities and no further (the drift up is temperature
   // over gravity, capped at Lift gravities, so the cap is also never past full lift). Uncapped,
@@ -1028,14 +1034,14 @@ export function createSimulation ({ width, height, params }) {
       // The drop: charge the biggest cold pot, hold it, blast it.
       const biggestCold = () => {
         let best = null
-        for (const el of elements) if (el.heat <= 0 && (!best || el.areaRatio > best.areaRatio)) best = el
+        for (const el of elements) if (el.heat <= 0 && !(el.restUntil > heaterTime) && (!best || el.areaRatio > best.areaRatio)) best = el
         return best
       }
       const drawnCold = () => {
         let total = 0
-        for (const el of elements) if (el.heat <= 0) total += el.weight
+        for (const el of elements) if (el.heat <= 0 && !(el.restUntil > heaterTime)) total += el.weight
         let pick = random() * total
-        for (const el of elements) { if (el.heat > 0) continue; pick -= el.weight; if (pick <= 0) return el }
+        for (const el of elements) { if (el.heat > 0 || el.restUntil > heaterTime) continue; pick -= el.weight; if (pick <= 0) return el }
         return null
       }
       const unlid = () => { charged.mode = null; charged.big = false; charged.heat = 0; charged.next = 0; charged = null; lidPot = -1 }
@@ -1058,7 +1064,8 @@ export function createSimulation ({ width, height, params }) {
         if (chargeLevel > 0) charged.heat = elementHeatTop * chargeLevel
         else if (dropRequest <= 0) unlid() // called off
       }
-      if (ventRequest > 0) { if (charged && charged.mode === 'charge') ventUntil = heaterTime + ventRequest; ventRequest = 0 }
+      if (retireRequest) { if (charged && charged.mode === 'charge' && !charged.big) { charged.restUntil = heaterTime + RESERVE_REST; unlid() } retireRequest = false }
+      if (ventRequest > 0) { if (charged && charged.mode === 'charge' && !(ventSmallOnly && charged.big)) ventUntil = heaterTime + ventRequest; ventRequest = 0; ventSmallOnly = false }
       if (charged && charged.mode === 'charge') lidPot = heaterTime < ventUntil ? -1 : charged.pot
       if (dropRequest > 0) {
         const el = charged || biggestCold()
@@ -1727,7 +1734,8 @@ export function createSimulation ({ width, height, params }) {
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big },
     dropPot (strength) { dropRequest = Math.max(dropRequest, strength || 0) },
-    ventPot (seconds) { ventRequest = Math.max(ventRequest, seconds || 0) },
+    ventPot (seconds, smallOnly) { ventRequest = Math.max(ventRequest, seconds || 0); ventSmallOnly = !!smallOnly },
+    retirePot () { retireRequest = true },
     get lid () { return lidPot },
     transform,
     flowAt,

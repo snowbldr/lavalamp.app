@@ -1233,6 +1233,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     pulseWave: shell.pulseWave,
     flipEddies: shell.flipEddies,
     ventPot: shell.ventPot,
+    retirePot: shell.retirePot,
     chargePot: shell.chargePot,
     dropPot: shell.dropPot,
     ceilingAt: shell.ceilingAt,
