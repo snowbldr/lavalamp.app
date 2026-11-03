@@ -202,6 +202,11 @@ input[type="range"].slider::-webkit-slider-thumb { -webkit-appearance: none; wid
 input[type="range"].slider::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); }
 input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); border: 0; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6); }
 /* The music meter: three bars for bass, mids and highs, and a dot that flashes on the beat. */
+.music-note { font-size: 11px; line-height: 1.4; color: rgba(236, 236, 236, 0.7); padding: 4px 0 8px; }
+.music-note div + div { margin-top: 3px; }
+.music-input { grid-template-columns: 72px 1fr; align-items: center; gap: 8px; min-height: 34px; }
+.music-select { width: 100%; min-width: 0; height: 28px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.06); color: #ececec; font: inherit; font-size: 12px; padding: 0 6px; }
+.music-help-link { display: block; border: 0; background: none; padding: 2px 0 6px; color: rgba(236, 236, 236, 0.8); font: inherit; font-size: 11px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
 .meter { display: grid; grid-template-columns: 1fr 1fr 1fr 18px; gap: 6px; align-items: center; height: 14px; margin: 2px 0 8px; }
 .meter-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .meter-bar > div { height: 100%; width: 0; border-radius: 3px; background: var(--accent); }

@@ -1,5 +1,5 @@
 import { button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { group, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { TOUCH_UI, group, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -107,8 +107,17 @@ import {
   musicSources,
   musicSensitivity,
   defaultMusicSensitivity,
-  musicBeat,
-  defaultMusicBeat,
+  musicEvery,
+  defaultMusicEvery,
+  defaultMusicRanges,
+  musicBeatLo,
+  musicBeatHi,
+  musicHeatLo,
+  musicHeatHi,
+  musicEddyLo,
+  musicEddyHi,
+  musicKickLo,
+  musicKickHi,
   musicFloor,
   defaultMusicFloor,
   musicLift,
@@ -162,6 +171,9 @@ const isTwoTone = fnstate(false)
 const isLuminance = fnstate(false)
 gradientKind.subscribe(kind => { isPresets(kind === 'presets'); isTwoTone(kind === 'duotone'); isLuminance(kind === 'mono') })
 const times = v => `${Number(v).toFixed(2)}x`
+// The frequency range knobs, 20 Hz to 12 kHz.
+const HZ = { min: 20, max: 12000, step: 10 }
+const hz = v => v >= 1000 ? `${(v / 1000).toFixed(1)} kHz` : `${v} Hz`
 
 export function createSettingsPanel () {
   let panel
@@ -180,6 +192,21 @@ export function createSettingsPanel () {
     meterBeat.style.background = `rgba(232, 232, 234, ${0.12 + 0.88 * levels.beat})`
   }
   const help = fnstate(false) // the ? button: one sentence under every control
+  const loopbackHelp = fnstate(false)
+  // The audio inputs, filled from the browser (names only appear once the microphone has been
+  // allowed, so the list is asked for again when listening starts and when a device comes or goes).
+  const inputSelect = document.createElement('select')
+  inputSelect.className = 'music-select'
+  let inputs = null
+  const fillInputs = async () => {
+    if (!inputs) return
+    const list = await inputs.list()
+    const current = inputs.get()
+    inputSelect.replaceChildren(...[{ id: '', label: 'Default input' }, ...list.filter(d => d.id && d.id !== 'default')].map(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.label; o.selected = d.id === current; return o }))
+  }
+  inputSelect.addEventListener('change', () => inputs && inputs.set(inputSelect.value))
+  const setMusicInputs = x => { inputs = x; fillInputs(); if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', fillInputs) }
+  music.subscribe(on => { if (on) setTimeout(fillInputs, 800) })
 
   // Every version of the lamp is kept and can be opened (Robert: "the ability to load old
   // versions of the lava lamp"); a newer one than this, when there is one, is offered first as
@@ -441,26 +468,71 @@ export function createSettingsPanel () {
           // hearing, and the depths of what the music does.
           div({ class: 'sub-panel' },
             div({ class: 'sub-title' }, span('Music'), span({ class: 'sub-sub' }, 'the lamp listens and moves to it')),
-            pair('Listen', div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music)), 'Source', segmented('music-source', musicSource, musicSources)),
+            musicSources.length > 1
+              ? pair('Listen', div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music)), 'Source', segmented('music-source', musicSource, musicSources))
+              : pair('Listen', div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music))),
+            // System audio comes only with a screen share, so say plainly what is and is not used
+            // (Robert: "a note explaining that it's required in order to hear the audio playing on
+            // the system and that we do not record any visuals from the screen or connect to any
+            // devices like webcam and only use the audio stream from the screen share").
+            div({ class: 'music-note', style: { display: musicSource.bindStyle(() => musicSource() === 'system' ? 'block' : 'none') } },
+              'To hear what your computer is playing, the browser has to ask to share your screen, because that is the only way it hands a page the system\'s audio. Pick a screen and tick "Share system audio" (or a tab and "Share tab audio"). Only the sound is used: the picture is switched off the moment it arrives and is never shown, kept or sent, nothing is recorded, and no camera or other device is touched.'
+            ),
+            div({ class: 'music-note', style: { display: TOUCH_UI ? 'block' : 'none' } },
+              'On a phone the lamp listens through the microphone: play the song out loud and it follows along.'
+            ),
+            div({ class: 'music-input', style: { display: musicSource.bindStyle(() => musicSource() === 'mic' ? 'grid' : 'none') } },
+              span({ class: 'row-label' }, 'Input'), inputSelect
+            ),
+            // A loopback driver hears every app with no share dialog (Robert: "a little clickable
+            // help thing that suggests installing and setting up black hole. should be hidden on
+            // mobile").
+            ...(TOUCH_UI ? [] : [
+              button({ class: 'music-help-link', onclick: () => loopbackHelp(!loopbackHelp()) }, 'Hear every app, no share dialog (Mac)'),
+              div({ class: 'music-note', style: { display: loopbackHelp.bindStyle(() => loopbackHelp() ? 'block' : 'none') } },
+                div('1. Install BlackHole 2ch, a free audio loopback driver: existential.audio/blackhole, or "brew install blackhole-2ch" in a terminal.'),
+                div('2. Open Audio MIDI Setup, press +, Create Multi-Output Device, and tick your speakers and BlackHole 2ch.'),
+                div('3. In System Settings, Sound, choose that Multi-Output Device as the output, so you still hear the music.'),
+                div('4. Here, choose Mic as the source and BlackHole 2ch as the Input, then Listen.'),
+                div('On Windows, VB-Audio Virtual Cable does the same job.')
+              )
+            ]),
             meterRow,
             knobs(
               knob('Sense', 'music-sensitivity', musicSensitivity, { min: 0.2, max: 5, step: 0.1 }, () => defaultMusicSensitivity, times),
-              knob('Beat', 'music-beat', musicBeat, { min: 0, max: 1, step: 0.05 }, () => defaultMusicBeat, fixed(2)),
+              knob('Every', 'music-every', musicEvery, { min: 1, max: 32, step: 1 }, () => defaultMusicEvery, v => `${v} beats`),
               knob('Floor', 'music-floor', musicFloor, { min: 0, max: 4, step: 0.1 }, () => defaultMusicFloor, times),
               knob('Lift', 'music-lift', musicLift, { min: 0, max: 3, step: 0.1 }, () => defaultMusicLift, times)
             ),
             knobs(
-              knob('Turb', 'music-turb', musicTurb, { min: 0, max: 4, step: 0.1 }, () => defaultMusicTurb, times),
+              knob('Eddies', 'music-turb', musicTurb, { min: 0, max: 4, step: 0.1 }, () => defaultMusicTurb, times),
               knob('Kick', 'music-kick', musicKick, { min: 0, max: 3, step: 0.1 }, () => defaultMusicKick, times)
             ),
+            div({ class: 'subgroup-title' }, 'Frequency ranges'),
+            knobs(
+              knob('Beat Lo', 'music-beat-lo', musicBeatLo, HZ, () => defaultMusicRanges.beatLo, hz),
+              knob('Beat Hi', 'music-beat-hi', musicBeatHi, HZ, () => defaultMusicRanges.beatHi, hz),
+              knob('Heat Lo', 'music-heat-lo', musicHeatLo, HZ, () => defaultMusicRanges.heatLo, hz),
+              knob('Heat Hi', 'music-heat-hi', musicHeatHi, HZ, () => defaultMusicRanges.heatHi, hz)
+            ),
+            knobs(
+              knob('Eddy Lo', 'music-eddy-lo', musicEddyLo, HZ, () => defaultMusicRanges.eddyLo, hz),
+              knob('Eddy Hi', 'music-eddy-hi', musicEddyHi, HZ, () => defaultMusicRanges.eddyHi, hz),
+              knob('Kick Lo', 'music-kick-lo', musicKickLo, HZ, () => defaultMusicRanges.kickLo, hz),
+              knob('Kick Hi', 'music-kick-hi', musicKickHi, HZ, () => defaultMusicRanges.kickHi, hz)
+            ),
             hint(help, [
-              ['Listen', 'Start listening. Mic hears whatever is playing in the room (the browser asks once); Tab, on a desktop, hears one browser tab (tick "Share tab audio" in the dialog).'],
-              ['Sense', 'How loud the music counts as: turn up for a quiet speaker, down for a loud one. The meter shows bass, mids and highs, and flashes on the beat.'],
-              ['Beat', 'The chance that each beat lights a pot under the lava.'],
-              ['Floor', 'How much the bass turns up the floor heat, on top of the Floor knob: at 1x a full bass doubles it.'],
-              ['Lift', 'How much the bass raises Lift, so blobs rise harder on the drop.'],
-              ['Turb', 'How much the mids turn up the eddies.'],
-              ['Kick', 'How much the highs sharpen the Kick, the recoil of necks and skins.']
+              ['Listen', 'Start listening. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used.'],
+              ['Sense', 'How loud the music counts as: turn up for a quiet speaker, down for a loud one. The meter shows the heat, eddy and kick ranges, and flashes on the beat.'],
+              ['Every', 'Every this many beats a pot fires under the lava and, if there is room, an eddy comes in: 4 is every bar of most songs, 8 every two, 16 a phrase.'],
+              ['Floor', 'How much the heat range turns up the floor heat, on top of the Floor knob: at 1x a full signal doubles it.'],
+              ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
+              ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
+              ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
+              ['Beat Lo', 'The frequencies the beat is counted in, Lo to Hi: around 40 to 150 Hz is the kick drum.'],
+              ['Heat Lo', 'The frequencies that heat the lava, Lo to Hi.'],
+              ['Eddy Lo', 'The frequencies that swell the eddies, Lo to Hi.'],
+              ['Kick Lo', 'The frequencies that sharpen the Kick, Lo to Hi.']
             ])
           )
         )]
@@ -487,5 +559,5 @@ export function createSettingsPanel () {
   )
 
   tooltips(panel)
-  return { element: panel, open, close, meter }
+  return { element: panel, open, close, meter, setMusicInputs }
 }

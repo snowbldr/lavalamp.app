@@ -128,6 +128,7 @@ self.onmessage = ({ data: m }) => {
       sim.setTouches(m.touches || [])
       if (m.push) sim.push(m.push[0], m.push[1])
       for (let k = 0; k < (m.light || 0); k++) sim.lightElement()
+      for (let k = 0; k < (m.eddy || 0); k++) sim.spawnEddy()
       if (m.want) want = m.want
       setPace(m.pace)
       break

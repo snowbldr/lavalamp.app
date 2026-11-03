@@ -1220,6 +1220,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     heaterAt: shell.heaterAt,
     heaterElements: shell.heaterElements,
     lightElement: shell.lightElement,
+    spawnEddy: shell.spawnEddy,
     ceilingAt: shell.ceilingAt,
     floorAt: shell.floorAt,
     bottles: shell.bottles,

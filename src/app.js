@@ -116,7 +116,15 @@ import {
   musicPending,
   musicSource,
   musicSensitivity,
-  musicBeat,
+  musicEvery,
+  musicBeatLo,
+  musicBeatHi,
+  musicHeatLo,
+  musicHeatHi,
+  musicEddyLo,
+  musicEddyHi,
+  musicKickLo,
+  musicKickHi,
   musicFloor,
   musicLift,
   musicTurb,
@@ -368,6 +376,14 @@ export async function start () {
   // can be changed while listening. A failure (no permission, no audio in the tab) puts the
   // switch back off and says why.
   const listener = createMusic()
+  // The chosen audio input (a loopback such as BlackHole hears every app), remembered here.
+  const DEVICE_KEY = 'lavalamp.app-v2-music-device'
+  try { listener.device = localStorage.getItem(DEVICE_KEY) || '' } catch (e) {}
+  settingsPanel.setMusicInputs && settingsPanel.setMusicInputs({
+    list: () => listener.inputs(),
+    get: () => listener.device,
+    set: id => { listener.device = id; try { localStorage.setItem(DEVICE_KEY, id) } catch (e) {} if (music() && musicSource() === 'mic') listen() }
+  })
   const listen = async () => {
     musicPending(true)
     try { await listener.start(musicSource()) } catch (e) { music(false); notify('Music: ', listener.error || 'could not listen') }
@@ -379,15 +395,29 @@ export async function start () {
   // bands add to them, so a quiet room is the lamp as tuned (see settings.js, musicFloor and
   // the rest). A beat lights a pot through the simulation's own lighting.
   const musicMeter = { bass: 0, mid: 0, high: 0, beat: 0 }
+  const musicRanges = { beat: [0, 0], heat: [0, 0], eddy: [0, 0], kick: [0, 0] }
+  let beatsHeard = 0
   const driveMusic = dt => {
     if (!listener.enabled) return
-    const m = listener.update(dt, musicSensitivity())
+    musicRanges.beat[0] = musicBeatLo(); musicRanges.beat[1] = musicBeatHi()
+    musicRanges.heat[0] = musicHeatLo(); musicRanges.heat[1] = musicHeatHi()
+    musicRanges.eddy[0] = musicEddyLo(); musicRanges.eddy[1] = musicEddyHi()
+    musicRanges.kick[0] = musicKickLo(); musicRanges.kick[1] = musicKickHi()
+    const m = listener.update(dt, musicSensitivity(), musicRanges)
     params.floorHeat = floorHeat() * (1 + musicFloor() * m.bass)
     params.liftCap = lift() * (1 + musicLift() * m.bass)
-    params.turbulence = turbulence() * (1 + musicTurb() * m.mid)
-    params.wobbleKick = wobbleKick() * (1 + musicKick() * m.high)
-    if (m.beat && sim.lightElement && Math.random() < musicBeat()) sim.lightElement()
-    musicMeter.bass = m.bass; musicMeter.mid = m.mid; musicMeter.high = m.high
+    params.turbulence = turbulence() * (1 + musicTurb() * m.eddy)
+    params.wobbleKick = wobbleKick() * (1 + musicKick() * m.kick)
+    // Every Nth beat, a pot fires and an eddy is born if there is room: on the phrase, not at
+    // random. The eddies' strength rides the eddy band's envelope above, so each hit shoves.
+    if (m.beat) {
+      beatsHeard++
+      if (beatsHeard % Math.max(1, Math.round(musicEvery())) === 0) {
+        if (sim.lightElement) sim.lightElement()
+        if (sim.spawnEddy) sim.spawnEddy()
+      }
+    }
+    musicMeter.bass = m.heat; musicMeter.mid = m.eddy; musicMeter.high = m.kick
     if (m.beat) musicMeter.beat = 1; else musicMeter.beat *= 0.85
     if (settingsPanel.meter) settingsPanel.meter(musicMeter)
   }

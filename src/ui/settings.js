@@ -325,12 +325,28 @@ export const soundBed = fnstate('simmer')
 // that a beat lights a pot.
 export const music = fnstate(false)
 export const musicPending = fnstate(false)
-export const musicSources = ['mic', 'tab']
+// A phone can only hear the room, so it gets the microphone alone (Robert: "Phones using mic is
+// fine, makes more sense for mobile too").
+export const musicSources = (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) ? ['mic'] : ['mic', 'system']
 export const musicSource = fnstate('mic')
 export const defaultMusicSensitivity = 1
 export const musicSensitivity = fnstate(defaultMusicSensitivity)
-export const defaultMusicBeat = 0.2 // at 1 every beat lit a pot and all eleven were burning within seconds at 120 bpm
-export const musicBeat = fnstate(defaultMusicBeat)
+// Every this many beats a pot fires and, if there is room, an eddy is born, so the lamp moves on
+// the phrase (Robert: "have pots instant fire to every n beats like, every 8 bass hits or so, so
+// it's on tempo"; "make the n beats knob for sure"). It replaced a 20% chance a beat, which never
+// read as on tempo.
+export const defaultMusicEvery = 8
+export const musicEvery = fnstate(defaultMusicEvery)
+// Each sync's frequency range in Hz, its own Lo and Hi, to dial a song in.
+export const defaultMusicRanges = { beatLo: 40, beatHi: 150, heatLo: 40, heatHi: 150, eddyLo: 150, eddyHi: 2000, kickLo: 2000, kickHi: 8000 }
+export const musicBeatLo = fnstate(defaultMusicRanges.beatLo)
+export const musicBeatHi = fnstate(defaultMusicRanges.beatHi)
+export const musicHeatLo = fnstate(defaultMusicRanges.heatLo)
+export const musicHeatHi = fnstate(defaultMusicRanges.heatHi)
+export const musicEddyLo = fnstate(defaultMusicRanges.eddyLo)
+export const musicEddyHi = fnstate(defaultMusicRanges.eddyHi)
+export const musicKickLo = fnstate(defaultMusicRanges.kickLo)
+export const musicKickHi = fnstate(defaultMusicRanges.kickHi)
 export const defaultMusicFloor = 1.5
 export const musicFloor = fnstate(defaultMusicFloor)
 export const defaultMusicLift = 0.5
@@ -416,7 +432,7 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicBeat, musicFloor, musicLift, musicTurb, musicKick, seed }
+const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 // touchStrength and eddyFalloff: their knobs go to 0 (found by the round trip check, 2026-11-03).
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
@@ -463,6 +479,25 @@ const defaults = () => ({
   floorGlow: defaultFloorGlow,
   reserve: defaultReserve(),
   lift: defaultLift(),
+  // These were missing, so Reset left them where they were (found 2026-11-03).
+  touchStrength: defaultTouchStrength,
+  eddySpeed: defaultEddySpeed,
+  eddyFalloff: defaultEddyFalloff,
+  eddyCurve: defaultEddyCurve,
+  musicSensitivity: defaultMusicSensitivity,
+  musicEvery: defaultMusicEvery,
+  musicFloor: defaultMusicFloor,
+  musicLift: defaultMusicLift,
+  musicTurb: defaultMusicTurb,
+  musicKick: defaultMusicKick,
+  musicBeatLo: defaultMusicRanges.beatLo,
+  musicBeatHi: defaultMusicRanges.beatHi,
+  musicHeatLo: defaultMusicRanges.heatLo,
+  musicHeatHi: defaultMusicRanges.heatHi,
+  musicEddyLo: defaultMusicRanges.eddyLo,
+  musicEddyHi: defaultMusicRanges.eddyHi,
+  musicKickLo: defaultMusicRanges.kickLo,
+  musicKickHi: defaultMusicRanges.kickHi,
   seed: randomSeed()
 })
 

@@ -304,6 +304,7 @@ export function createSimulation ({ width, height, params }) {
   let nextId = 0 // birth index of the next particle spawned: never reused, so an id names one particle for the lamp's life
   let heaterTime = 0
   let lightRequests = 0 // pots asked to light on demand (the music's beat), taken at the next step
+  let eddyRequests = 0 // eddies asked for on demand (the music's beat), born at the next step if there is room
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -526,6 +527,12 @@ export function createSimulation ({ width, height, params }) {
     // to 5"; the in-place ones had their own clock and no cap). Each birth is one kind or the
     // other at random.
     const alive = drifting.length + eddies.length
+    // The music asks for an eddy on its beat count: one is born now if the Eddies knob has room
+    // (at least one, so a lamp at Eddies 0 still dances to music), whatever the birth clock says.
+    while (eddyRequests > 0) {
+      eddyRequests--
+      if (drifting.length + eddies.length < Math.max(1, drifters)) bornDrifter()
+    }
     if (alive < drifters && time >= nextDrifter) {
       const missing = drifters - alive
       const burst = random() < DRIFT_BURST_ALL ? missing : 1 + Math.floor(random() * random() * missing)
@@ -1574,6 +1581,7 @@ export function createSimulation ({ width, height, params }) {
     setTouches,
     // Light a pot at the next step, as its clock would have (the music's beat).
     lightElement () { lightRequests++ },
+    spawnEddy () { eddyRequests++ },
     transform,
     flowAt,
     overrideAt,

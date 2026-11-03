@@ -6,18 +6,22 @@
 // against its own running average, with a refractory time so a kick counts once.
 //
 // Sources: 'mic' (getUserMedia, audio only, one permission prompt from a gesture; the phone
-// over https works), 'tab' (getDisplayMedia with audio, Chrome on a desktop, a share dialog
-// each time; the video track is stopped at once), and 'test' (a synthetic 120 bpm kick with
-// a hi-hat, for checking the detector from a laptop with no music in the room). The test
-// source goes to the analyser through a muted gain, so nothing is heard.
+// over https works; any audio input can be chosen, so a loopback driver such as BlackHole
+// hears every app on the machine), 'system' (getDisplayMedia asking for system audio, a desktop
+// browser, a share dialog each time; the picture is stopped the moment it arrives and only the
+// audio is used: Robert, "we do not record any visuals from the screen or connect to any
+// devices like webcam and only use the audio stream from the screen share"), and 'test' (a
+// synthetic 120 bpm kick with a hi-hat, for checking the detector from a laptop with no music in
+// the room; it reaches the analyser through a muted gain, so nothing is heard).
+//
+// Each sync reads its own frequency range, set by knobs (Robert: "we'll need to have like
+// frequency range sliders for selecting a min and max for each type of sync we have so it can
+// be dialed in for certain songs"): the beat, the heat, the eddies and the kick.
 //
 // Cost: one getByteFrequencyData a frame over 512 bins and a few sums. Measured on the GPU lamp
 // at the defaults (see docs/decisions.md): well under a tenth of a millisecond a frame.
-export const SOURCES = ['mic', 'tab']
+export const SOURCES = ['mic', 'system']
 const FFT = 1024 // 512 bins; at 48 kHz a bin is 47 Hz
-const BASS_HZ = [40, 150]
-const MID_HZ = [150, 2000]
-const HIGH_HZ = [2000, 8000]
 const ATTACK = 0.08 // seconds to rise
 const RELEASE = 0.3 // seconds to fall
 const BEAT_AVERAGE = 1.5 // seconds of bass history the beat is judged against
@@ -35,7 +39,8 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { bass: 0, mid: 0, high: 0, level: 0, beat: false, bpm: 0, raw: { bass: 0, mid: 0, high: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, bpm: 0, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  let device = '' // the chosen audio input's deviceId, '' for the default
   let bassAverage = 0
   let lastBeat = -1
   let beatCount = 0
@@ -43,8 +48,9 @@ export function createMusic () {
   let clock = 0
 
   const band = ([lo, hi]) => {
-    const a = Math.max(1, Math.floor(lo / binHz))
-    const b = Math.min(bins.length - 1, Math.ceil(hi / binHz))
+    if (hi < lo) [lo, hi] = [hi, lo]
+    const a = Math.min(bins.length - 1, Math.max(1, Math.floor(lo / binHz)))
+    const b = Math.max(a, Math.min(bins.length - 1, Math.ceil(hi / binHz)))
     let sum = 0
     for (let k = a; k <= b; k++) sum += bins[k]
     return sum / ((b - a + 1) * 255)
@@ -120,13 +126,18 @@ export function createMusic () {
         closeSource()
         source = which
         if (which === 'test') startTest()
-        else if (which === 'tab') {
-          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-          for (const t of stream.getVideoTracks()) t.stop()
-          if (!stream.getAudioTracks().length) throw new Error('no audio in the shared tab (tick "Share tab audio")')
+        else if (which === 'system') {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) throw new Error('this browser cannot share its audio; use Mic')
+          // The browser only offers audio with a screen share, so a share is asked for; the
+          // picture is stopped at once and never drawn, kept or sent.
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, systemAudio: 'include', selfBrowserSurface: 'exclude', surfaceSwitching: 'include' })
+          for (const t of stream.getVideoTracks()) { t.stop(); stream.removeTrack(t) }
+          if (!stream.getAudioTracks().length) throw new Error('no audio was shared: tick "Share system audio" (or "Share tab audio") in the dialog')
           context.createMediaStreamSource(stream).connect(analyser)
         } else {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false })
+          const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+          if (device) audio.deviceId = { exact: device }
+          stream = await navigator.mediaDevices.getUserMedia({ audio, video: false })
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
@@ -141,25 +152,26 @@ export function createMusic () {
     stop () {
       enabled = false
       closeSource()
-      levels.bass = levels.mid = levels.high = levels.level = 0
+      levels.heat = levels.eddy = levels.kick = levels.level = 0
       levels.beat = false
     },
-    // Once a frame: read the analyser and update `levels`. `sensitivity` scales the bands.
-    update (dt, sensitivity = 1) {
+    // Once a frame: read the analyser and update `levels`. `ranges` gives each sync its band in
+    // Hz ({ beat, heat, eddy, kick }, each [lo, hi]); `sensitivity` scales them.
+    update (dt, sensitivity = 1, ranges) {
       levels.beat = false
       if (!enabled || !analyser) return levels
       clock += dt
       analyser.getByteFrequencyData(bins)
       const raw = levels.raw
-      raw.bass = band(BASS_HZ); raw.mid = band(MID_HZ); raw.high = band(HIGH_HZ)
-      levels.bass = ease(levels.bass, Math.min(1.5, raw.bass * sensitivity), dt)
-      levels.mid = ease(levels.mid, Math.min(1.5, raw.mid * sensitivity), dt)
-      levels.high = ease(levels.high, Math.min(1.5, raw.high * sensitivity), dt)
-      levels.level = ease(levels.level, Math.min(1.5, (raw.bass + raw.mid + raw.high) / 3 * sensitivity), dt)
-      // The beat: the instant bass against its running average, which follows slowly.
-      bassAverage += (raw.bass - bassAverage) * Math.min(1, dt / BEAT_AVERAGE)
+      raw.beat = band(ranges.beat); raw.heat = band(ranges.heat); raw.eddy = band(ranges.eddy); raw.kick = band(ranges.kick)
+      levels.heat = ease(levels.heat, Math.min(1.5, raw.heat * sensitivity), dt)
+      levels.eddy = ease(levels.eddy, Math.min(1.5, raw.eddy * sensitivity), dt)
+      levels.kick = ease(levels.kick, Math.min(1.5, raw.kick * sensitivity), dt)
+      levels.level = ease(levels.level, Math.min(1.5, (raw.heat + raw.eddy + raw.kick) / 3 * sensitivity), dt)
+      // The beat: the instant energy in the beat range against its running average.
+      bassAverage += (raw.beat - bassAverage) * Math.min(1, dt / BEAT_AVERAGE)
       const ratio = BEAT_RATIO / Math.max(0.3, Math.sqrt(sensitivity))
-      if (raw.bass > BEAT_FLOOR && raw.bass > bassAverage * ratio && clock - lastBeat > BEAT_REFRACTORY) {
+      if (raw.beat > BEAT_FLOOR && raw.beat > bassAverage * ratio && clock - lastBeat > BEAT_REFRACTORY) {
         levels.beat = true
         lastBeat = clock
         beatCount++
@@ -170,6 +182,13 @@ export function createMusic () {
       return levels
     },
     get beats () { return beatCount },
+    // The audio inputs this browser can choose between; their names are only given once a
+    // microphone permission has been granted, so the list is asked for again after listening.
+    async inputs () {
+      try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput').map(d => ({ id: d.deviceId, label: d.label || 'Input' })) } catch (e) { return [] }
+    },
+    get device () { return device },
+    set device (id) { device = id || '' },
     get bassAverage () { return bassAverage }
   }
 }
