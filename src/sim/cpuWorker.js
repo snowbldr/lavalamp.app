@@ -130,6 +130,8 @@ self.onmessage = ({ data: m }) => {
       for (let k = 0; k < (m.light || 0); k++) sim.lightElement()
       for (let k = 0; k < (m.eddy || 0); k++) sim.spawnEddy()
       for (let k = 0; k < (m.pulse || 0); k++) sim.pulseWave()
+      sim.chargePot(m.charge || 0, m.chargeBig)
+      if (m.drop) sim.dropPot(m.drop)
       if (m.want) want = m.want
       setPace(m.pace)
       break

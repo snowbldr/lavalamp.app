@@ -304,6 +304,32 @@ export function createSimulation ({ width, height, params }) {
   let nextId = 0 // birth index of the next particle spawned: never reused, so an id names one particle for the lamp's life
   let heaterTime = 0
   let lightRequests = 0 // pots asked to light on demand (the music's beat), taken at the next step
+  // The drop (Robert: "pick the biggest pot that's cold, get it preheated to the point just before
+  // it takes off, then blast the heat on the drop"; then "could we even like, close the pot and
+  // super heat it? then just delete the lid and have it take of instantly?"). While the music is
+  // in a breakdown or an intro, chargePot(level) puts a lid on the biggest cold pot and heats it
+  // at level times the top element heat, the whole cup, for as long as it lasts: nothing leaves
+  // and nothing comes in, so it can be as hot as it likes with no early takeoff. dropPot(strength)
+  // takes the lid off and blasts that pot (or the biggest cold one, if none was charged) at
+  // DROP_BLAST times the top heat times strength, full on for half of DROP_LIFE and tapering over
+  // the rest. lidPot is the lidded pot's index, -1 for none, which contain honours.
+  let chargeLevel = 0
+  let chargeBig = false // the drop's pot (the biggest cold, the whole cup), else a beat's pot (drawn as the clocks draw them, their usual core)
+  let charged = null
+  let lidPot = -1
+  let dropRequest = 0
+  const DROP_BLAST = 3
+  // The lidded pot heats to CHARGE_LIFT gravities and no further (the drift up is temperature
+  // over gravity, capped at Lift gravities, so the cap is also never past full lift). Uncapped,
+  // four lids in 32 s took their lava to Max Temp, which cools so slowly it parked white in the
+  // ceiling bottles and drained the pool and the pots; three quarters of Max Temp still did.
+  // Full lift alone was no cap at the default Lift (10 gravities, 7909 against Max Temp 7232).
+  // Each pot's cap is its capTemp, set every step, for the blast at the opening too: uncapped it took
+  // the opened pot's lava to 4433 and half the lamp's lava ended in the ceiling bottles by 28 s
+  // (Drop 0: 10 to 20%).
+  const CHARGE_LIFT = 3 // the drop's pot
+  const CHARGE_LIFT_BEAT = 2 // a beat's pot: at 3 its lava parked in the ceiling bottles at 1200 against 850 with no lids, and the ceiling held 59% of the lava by 40 s
+  const DROP_LIFE = 2 // seconds
   let eddyRequests = 0 // eddies asked for on demand (the music's beat), born at the next step if there is room
   // The music's bass, on the eddies ("bass notes should cause a wave"). The spring that went with
   // it, the lava about every eddy lurched forward along its spin and back, is gone (Robert: "the
@@ -332,6 +358,7 @@ export function createSimulation ({ width, height, params }) {
   let touchStrengthNow = 1 // params.touchStrength: a multiplier on every finger effect
   let touchRadiusNow = 0 // params.touchRadius as of the last step, px; 0 means the TOUCH_RADIUS fraction
   let wallPushNow = 0 // params.wallPush as of the last step, px
+  let interactionRadiusNow = 20 // params.interactionRadius as of the last step, for the drop's lid
   let spawnAreaNow = params.spawnArea || SPAWN_AREA // floor area per settled particle, px², for the spawn slab and the reservoirs
   let meanDensity = 0 // the lava's mean density as of the last step, for the kick's surface test
   const eddies = []
@@ -899,6 +926,7 @@ export function createSimulation ({ width, height, params }) {
     touchStrengthNow = touchStrength
     touchRadiusNow = touchRadius
     wallPushNow = wallPush
+    interactionRadiusNow = interactionRadius || 20
     spawnAreaNow = params.spawnArea || SPAWN_AREA
     if (cups.length === 0) layoutCups()
     if (floorCups.length === 0) layoutCups(floorCups, false, FLOOR_BULB)
@@ -950,7 +978,7 @@ export function createSimulation ({ width, height, params }) {
       }
       for (const el of elements) {
         if (el.heat > 0) {
-          if (heaterTime - el.start > el.life) el.heat = 0
+          if (el.mode !== 'charge' && heaterTime - el.start > el.life) { el.heat = 0; el.mode = null; el.big = false }
           continue
         }
         // Each element's share of ELEMENT_RATE lightings per heatSpots seconds is its weight over
@@ -979,11 +1007,62 @@ export function createSimulation ({ width, height, params }) {
           if (pick <= 0) { ignite(el); break }
         }
       }
+      // The drop: charge the biggest cold pot, hold it, blast it.
+      const biggestCold = () => {
+        let best = null
+        for (const el of elements) if (el.heat <= 0 && (!best || el.areaRatio > best.areaRatio)) best = el
+        return best
+      }
+      const drawnCold = () => {
+        let total = 0
+        for (const el of elements) if (el.heat <= 0) total += el.weight
+        let pick = random() * total
+        for (const el of elements) { if (el.heat > 0) continue; pick -= el.weight; if (pick <= 0) return el }
+        return null
+      }
+      const unlid = () => { charged.mode = null; charged.big = false; charged.heat = 0; charged.next = 0; charged = null; lidPot = -1 }
+      // The lid moves to the biggest pot when the kick goes (a breakdown): a beat's pot was
+      // charging, the drop's is wanted. A whole big pot every beat sent too much up: half the
+      // lamp's lava sat in the ceiling bottles by 28 s, against 10 to 20% with no lids.
+      if (charged && charged.mode === 'charge' && chargeBig && !charged.big) unlid()
+      if (chargeLevel > 0 && !charged) {
+        charged = chargeBig ? biggestCold() : drawnCold()
+        if (charged) {
+          charged.mode = 'charge'
+          charged.big = chargeBig
+          charged.start = heaterTime
+          const coreMin = Math.min(charged.cupHalf, elementCore * shorter / width)
+          charged.coreFraction = chargeBig ? charged.cupHalf : coreMin
+          lidPot = charged.pot
+        }
+      }
+      if (charged && charged.mode === 'charge') {
+        if (chargeLevel > 0) charged.heat = elementHeatTop * chargeLevel
+        else if (dropRequest <= 0) unlid() // called off
+      }
+      if (dropRequest > 0) {
+        const el = charged || biggestCold()
+        if (el) {
+          el.mode = 'blast'
+          el.heat = elementHeatTop * DROP_BLAST * dropRequest
+          el.start = heaterTime
+          el.life = DROP_LIFE
+          if (!el.big) el.life = DROP_LIFE / 2
+          el.next = 0
+        }
+        charged = null
+        lidPot = -1
+        dropRequest = 0
+      }
     } else {
       lightRequests = 0
+      dropRequest = 0
+      charged = null
+      lidPot = -1
       for (const el of elements) {
         el.heat = 0
         el.next = 0
+        el.mode = null
       }
     }
     // Each lit element's glow, 0 to 1, and its reach in px, for this step.
@@ -992,7 +1071,10 @@ export function createSimulation ({ width, height, params }) {
       el.x = el.fx * width
       el.radius = el.fr * shorter
       el.halfWidth = ELEMENTS_ARE_CUPS ? el.coreFraction * width : el.radius * ELEMENT_ASPECT
-      el.glow = el.heat > 0 ? Math.sin(Math.PI * (heaterTime - el.start) / el.life) : 0
+      el.capTemp = el.mode === 'charge' || el.mode === 'blast' ? Math.min(maxTemp, gravity * Math.min(el.big ? CHARGE_LIFT : CHARGE_LIFT_BEAT, 1 + liftCap)) : 0
+      if (el.mode === 'charge') el.glow = el.heat > 0 ? 1 : 0
+      else if (el.mode === 'blast') { const t = (heaterTime - el.start) / el.life; el.glow = el.heat > 0 ? (t < 0.5 ? 1 : Math.max(0, 2 * (1 - t))) : 0 }
+      else el.glow = el.heat > 0 ? Math.sin(Math.PI * (heaterTime - el.start) / el.life) : 0
       if (el.glow > 0 && el.radius * 2 > maxReach) maxReach = el.radius * 2
     }
     const powerAt = x => {
@@ -1001,7 +1083,9 @@ export function createSimulation ({ width, height, params }) {
         if (heatSpots <= 0) return 1
         let power = floorHeat
         for (const el of elements) {
-          if (el.glow <= 0) continue
+          // A lidded pot heats only its own lava: its glow on the floor above warmed the pool's
+          // lava over it into a white column before any drop.
+          if (el.glow <= 0 || el.mode === 'charge') continue
           const d = (x - el.x) / el.halfWidth
           power += floorGlow * el.glow * Math.exp(-d * d)
         }
@@ -1026,7 +1110,7 @@ export function createSimulation ({ width, height, params }) {
       let heat = 0
       const dy = height - py
       for (const el of elements) {
-        if (el.glow <= 0) continue
+        if (el.glow <= 0 || el.mode === 'charge') continue // a lidded pot heats only its own lava
         const dx = (px - el.x) * el.radius / el.halfWidth
         const d2 = (dx * dx + dy * dy) / (el.radius * el.radius)
         if (d2 < 4) heat += el.heat * el.glow * Math.exp(-d2)
@@ -1059,7 +1143,7 @@ export function createSimulation ({ width, height, params }) {
       temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, heater ? powerAt(x[i]) : 0, HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
       if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || ELEMENTS_ARE_CUPS || y[i] <= height)) {
         const heat = elementHeat(x[i], y[i], state.home[i])
-        if (heat > 0) temp[i] = Math.min(maxTemp, temp[i] + heat)
+        if (heat > 0) temp[i] = Math.max(temp[i], Math.min(state.home[i] >= 0 && y[i] > height && state.home[i] >= 0 && elements[state.home[i]] && elements[state.home[i]].capTemp > 0 ? elements[state.home[i]].capTemp : maxTemp, temp[i] + heat))
       }
       if (touching) {
         const heat = touchAt(x[i], y[i], dt, maxTemp, finger)
@@ -1300,6 +1384,9 @@ export function createSimulation ({ width, height, params }) {
       else if (x[i] > width - wallPushNow) vx[i] -= (x[i] - (width - wallPushNow)) * WALL_PUSH_RATE
     }
     if (cupDepthNow > 0) {
+      // The drop's lid: lava of the lidded pot that reaches the mouth's line is held under it.
+      // A home is an index into its own row, so only one just above the floor's line counts.
+      if (lidPot >= 0 && state.home[i] === lidPot && y[i] <= height && y[i] > height - 4 * interactionRadiusNow) { y[i] = height + 0.5 + (Math.imul(i, 2654435761) >>> 29) * 0.857; if (vy[i] < 0) vy[i] = 0 } // each a different depth under the line: at one depth they stacked in rows and left in stripes
       if (y[i] > height) containIn(floorBottleList(), i)
       else if (y[i] < CUP_LIP * Math.min(width, height)) containIn(ceilingBottleList(), i)
       else state.home[i] = -1
@@ -1511,6 +1598,8 @@ export function createSimulation ({ width, height, params }) {
       for (let j = 0; j < list.length; j++) if (insideBottle(list[j], x[i], y[i])) { k = j; break }
       if (k < 0) for (let j = 0; j < list.length; j++) if (Math.abs(x[i] - list[j].cx) <= neckHalf(list[j], lineY)) { k = j; break }
       if (k < 0) { y[i] = lineY; return }
+      // A lidded pot takes nothing in: held at the line, as under no mouth.
+      if (dir > 0 && k === lidPot) { y[i] = lineY; return }
       home[i] = k
     }
     const b = list[k]
@@ -1615,6 +1704,9 @@ export function createSimulation ({ width, height, params }) {
     lightElement () { lightRequests++ },
     spawnEddy () { eddyRequests++ },
     pulseWave () { pulseRequests++ },
+    chargePot (level, big) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big },
+    dropPot (strength) { dropRequest = Math.max(dropRequest, strength || 0) },
+    get lid () { return lidPot },
     transform,
     flowAt,
     overrideAt,

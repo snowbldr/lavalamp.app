@@ -107,6 +107,7 @@ struct Params {
   wallNear: f32,
   wallPull: f32,
   touchStrength: f32,
+  lid: f32, // the drop's lidded pot as a HOME value, -1 for none (simulation.js lidPot)
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -216,6 +217,7 @@ fn containIn(i: u32, p: vec2f, first: u32, count: u32) -> vec2f {
     for (var j = first; j < first + count; j++) { if (insideBottle(j, p)) { k = i32(j); break; } }
     if (k < 0) { for (var j = first; j < first + count; j++) { if (abs(p.x - bf(j, 0u)) <= neckHalf(j, lineY)) { k = i32(j); break; } } }
     if (k < 0) { return vec2f(p.x, lineY); }
+    if (k == i32(P.lid)) { return vec2f(p.x, lineY); } // a lidded pot takes nothing in
     F[HOME(i)] = f32(k);
   }
   let b = u32(k);
@@ -267,6 +269,10 @@ fn contain(i: u32, pIn: vec2f) -> vec2f {
   var p = pIn;
   p.x = clamp(p.x, 0.0, P.width);
   if (P.ceilingBottles + P.floorBottles > 0u) {
+    // The drop's lid: the lidded pot's lava that reaches the floor's line is held under it.
+    // Each held a different depth under the line (0.5 to 6.5 px, by the particle's number): held
+    // all at one depth they stacked in flat rows against the lid and left in stripes.
+    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height) { p.y = P.height + 0.5 + f32((i * 2654435761u) >> 29u) * 0.857; }
     if (p.y > P.height) {
       if (P.floorBottles > 0u) { p = containIn(i, p, P.ceilingBottles, P.floorBottles); } else { p.y = P.height; F[HOME(i)] = -1.0; }
     } else if (p.y < 0.0) {
@@ -316,9 +322,10 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     let pot = WLD[o + 4u]; // the floor bottle this element is, as a HOME value, or -1
     if (F[HOME(i)] >= 0.0) {
       // Lava in a pot: its own element's heat in full, wherever it sits (simulation.js elementHeat).
-      if (F[HOME(i)] == pot) { t = min(P.maxTemp, t + heat); }
+      if (F[HOME(i)] == pot) { t = max(t, min(select(P.maxTemp, WLD[o + 5u], WLD[o + 5u] > 0.0), t + heat)); }
       continue;
     }
+    if (WLD[o + 5u] > 0.0 && P.lid >= 0.0 && pot == P.lid) { continue; } // a lidded pot heats only its own lava
     let dx = (p.x - ex) * er / eh;
     let d2 = (dx * dx + fromFloor * fromFloor) / (er * er);
     if (d2 < 4.0) { t = min(P.maxTemp, t + heat * exp(-d2)); }
@@ -748,7 +755,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 56 // the Params struct, 53 fields, padded to 224 bytes (a uniform's size is a multiple of 16)
+const PARAM_FLOATS = 56 // the Params struct, 54 fields, padded to 224 bytes (a uniform's size is a multiple of 16)
 // The most a relaxation pass may move a particle, in radii, whatever Reach says. The Jacobi
 // solver resolves a packed cold pool only a few rows a pass, and moves of a whole radius let the
 // floor compress and burst (the GPU's Reach default has been 0.5 since that was measured, 979 to
@@ -805,7 +812,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
   let heaterTime = 0
   let frame = 0
   let touches = []
-  let world = null // set by createGpuLamp: { elementCount, gridCols, gridRows, gridCell }
+  let world = null // set by createGpuLamp: { elementCount, gridCols, gridRows, gridCell, lid }
   const impulse = [0, 0]
   const state = {
     x: new Float32Array(capacity),
@@ -1024,6 +1031,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[49] = params.damp ?? 0.25 // what is left of a relaxation move that reverses the last one; see relax
     pf[50] = params.wallNear ?? 0; pf[51] = params.wallPull ?? 0 // the glass as particles; see wallLattice
     pf[52] = params.touchStrength ?? 1
+    pf[53] = world && world.lid >= 0 ? ceiling.length + world.lid : -1
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
@@ -1185,6 +1193,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
       const o = ELEMENTS_AT + n * 8
       floats[o] = el.x; floats[o + 1] = el.radius; floats[o + 2] = el.halfWidth; floats[o + 3] = el.heat * el.glow
       floats[o + 4] = el.pot >= 0 ? bottles.length + el.pot : -1 // HOME counts the ceiling bottles first
+      floats[o + 5] = el.capTemp || 0 // a lidded or opened pot heats its lava to this temperature at most
       n++
     }
     let gridCols = Math.floor(w / FLOW_CELL) + 2
@@ -1198,7 +1207,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
         if (stirring) { const [vx, vy] = shell.flowAt(gx * gridCell, gy * gridCell); floats[o] = vx; floats[o + 1] = vy; floats[o + 2] = shell.overrideAt(gx * gridCell, gy * gridCell) } else { floats[o] = 0; floats[o + 1] = 0; floats[o + 2] = 0 }
       }
     }
-    gpu.setWorld(floats, { elementCount: n, gridCols, gridRows, gridCell })
+    gpu.setWorld(floats, { elementCount: n, gridCols, gridRows, gridCell, lid: shell.lid })
   }
   // The fingers act on the GPU side, so the shell steps and is sampled without them (they would
   // land twice through the flow grid); they are given back to it after, so the flow field drawn
@@ -1222,6 +1231,8 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     lightElement: shell.lightElement,
     spawnEddy: shell.spawnEddy,
     pulseWave: shell.pulseWave,
+    chargePot: shell.chargePot,
+    dropPot: shell.dropPot,
     ceilingAt: shell.ceilingAt,
     floorAt: shell.floorAt,
     bottles: shell.bottles,

@@ -70,7 +70,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, sinceBeat: 0, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -336,7 +336,7 @@ export function createMusic () {
         bassAverage = 0; riseAverage = 0; beatPeak = 0; beatHistory[0] = beatHistory[1] = 0; lastBeat = -1; beatCount = 0; beatTimes.length = 0
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
-        onsetTimes.length = 0; levels.activity = 0.5; startedAt = clock
+        onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
       } catch (e) {
         enabled = false
         error = e && e.message ? e.message : String(e)
@@ -395,6 +395,7 @@ export function createMusic () {
         onsetTimes.push(clock)
         hear(clock)
       }
+      levels.sinceBeat = levels.beat ? 0 : levels.sinceBeat + dt
       tickClock()
       activity(dt)
       return levels

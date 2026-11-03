@@ -124,6 +124,7 @@ import {
   musicSpin,
   musicLead,
   musicActivity,
+  musicDrop,
   showSpectrum,
   musicBeatLo,
   musicBeatHi,
@@ -397,8 +398,10 @@ export async function start () {
     try { await listener.start(musicSource()) } catch (e) { music(false); notify('Music: ', listener.error || 'could not listen') }
     musicPending(false)
   }
-  // Off puts every knob the music drives back to the knob's own value.
-  const unMusic = () => { tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick() }
+  let dropCharged = false // a pot is lidded and heating (see driveMusic)
+  let quietBefore = 0 // seconds without a kick before this frame, for the drop
+  // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
+  const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick() }
   music.subscribe(on => { if (on) listen(); else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
@@ -422,8 +425,10 @@ export async function start () {
   // For each move, the last beat number it was fired for, so it fires once a beat.
   const firedFor = { pot: -1, eddy: -1, pulse: -1 }
   let wasLocked = false
+  const DROP_WAIT = 2 // seconds without a kick before the drop's pot is charged
   const driveMusic = dt => {
     if (!listener.enabled) return
+    let dropped = false
     musicRanges.beat[0] = musicBeatLo(); musicRanges.beat[1] = musicBeatHi()
     musicRanges.heat[0] = musicHeatLo(); musicRanges.heat[1] = musicHeatHi()
     musicRanges.eddy[0] = musicEddyLo(); musicRanges.eddy[1] = musicEddyHi()
@@ -467,22 +472,37 @@ export async function start () {
     let fired = false
     const potNow = () => { fired = true; if (sim.lightElement) sim.lightElement() }
     // Every counts from the beat the section began on (the drop, or the lock), so the pots fall
-    // on the phrase. In a breakdown the clock coasts: the moves that ride the kick pause, and the
-    // pots keep the phrase (every other one, the activity being low), so a drop on the phrase
-    // finds its pot already lit.
+    // on the phrase. In a breakdown the clock coasts and everything that rides the kick pauses;
+    // the drop is met by the lidded pot instead (below), not by guessing the phrase.
     const onPhrase = beat => (beat - clock.sectionAt) % every() === 0
+    // The pots, lidded (Robert: "close the pot and super heat it? then just delete the lid and
+    // have it take of instantly?"; "Then we'd want to prepare another pot to match a coming
+    // beat"). With Drop on, one pot is always closed and superheating; on the beat it opens and
+    // is blasted, so the glob leaves on the beat as heard, with no lead to guess, and the next
+    // biggest cold pot closes. It opens on every Every-th beat on the phrase, and on the first
+    // kick after the kick has been gone DROP_WAIT seconds (a breakdown, or the start before any
+    // kick): that is the drop, and a breakdown has charged its pot all the while, so it goes up
+    // the hottest. Drop 0 is the pots as before: lit Lead seconds ahead of a predicted beat.
+    const lidded = musicDrop() > 0 && !!sim.chargePot
+    if (lidded) { sim.chargePot(2 * musicDrop(), m.sinceBeat > DROP_WAIT); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
+    const heardNumber = clock.locked ? (clock.until < clock.period / 2 ? clock.index + 1 : clock.index) : -1
+    const isDrop = m.beat && quietBefore > DROP_WAIT
+    if (m.beat) beatsHeard++
+    const onBeatPot = m.beat && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
+    const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
+    if (lidded && isDrop) { open(musicDrop() * 1.5); dropped = true } else if (lidded && onBeatPot) open(musicDrop())
+    quietBefore = m.sinceBeat
     if (clock.locked) {
       const w = due('pulse')
       if (w !== false && clock.hearing) pulse()
       const e = due('eddy')
       if (e !== false) { if (clock.hearing) spawn(); if (onPhrase(e) && sim.spawnEddy) sim.spawnEddy() }
-      const p = musicLead() > 0 ? due('pot') : false
-      if (p !== false && onPhrase(p)) potNow()
-      if (musicLead() <= 0 && m.beat) { beatsHeard++; if (beatsHeard % every() === 0) potNow() }
+      const p = !lidded && musicLead() > 0 ? due('pot') : false
+      if (p !== false && clock.hearing && onPhrase(p)) potNow()
+      if (!lidded && musicLead() <= 0 && onBeatPot) potNow()
     } else if (m.beat) {
       pulse(); spawn()
-      beatsHeard++
-      if (beatsHeard % every() === 0) { potNow(); if (sim.spawnEddy) sim.spawnEddy() }
+      if (beatsHeard % every() === 0) { if (!lidded) potNow(); if (sim.spawnEddy) sim.spawnEddy() }
     }
     // A hat brings a spinning eddy now and then, more often in a busy part.
     if (m.hat && sim.spawnEddy && Math.random() < musicSpin() * act * chance * 0.25) sim.spawnEddy()
@@ -492,7 +512,7 @@ export async function start () {
       const target = Math.max(0.75, Math.min(1.3, 1 + musicTempo() * (Math.max(0.6, Math.min(1.6, m.bpm / 120)) - 1)))
       tempoPace += (target - tempoPace) * Math.min(1, dt / 2)
     }
-    if (showSpectrum()) spectrumView.draw(listener.spectrum(), m, musicRanges, fired, clock.tick)
+    if (showSpectrum()) spectrumView.draw(listener.spectrum(), m, musicRanges, fired || dropped, clock.tick)
     musicMeter.bass = m.heat; musicMeter.mid = m.eddy; musicMeter.high = m.kick
     if (m.beat) musicMeter.beat = 1; else musicMeter.beat *= 0.85
     if (settingsPanel.meter) settingsPanel.meter(musicMeter)

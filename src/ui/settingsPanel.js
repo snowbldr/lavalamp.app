@@ -117,6 +117,8 @@ import {
   defaultMusicLead,
   musicActivity,
   defaultMusicActivity,
+  musicDrop,
+  defaultMusicDrop,
   defaultMusicMotion,
   showSpectrum,
   defaultMusicRanges,
@@ -526,7 +528,8 @@ export function createSettingsPanel () {
           ),
         subgroup('Timing',
             knob('Lead', 'music-lead', musicLead, { min: 0, max: 4, step: 0.1 }, () => defaultMusicLead, seconds),
-            knob('Activity', 'music-activity', musicActivity, { min: 0, max: 1, step: 0.05 }, () => defaultMusicActivity, fixed(2))
+            knob('Activity', 'music-activity', musicActivity, { min: 0, max: 1, step: 0.05 }, () => defaultMusicActivity, fixed(2)),
+            knob('Drop', 'music-drop', musicDrop, { min: 0, max: 3, step: 0.1 }, () => defaultMusicDrop, times)
           ),
         subgroup('Motion',
             knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
@@ -556,7 +559,8 @@ export function createSettingsPanel () {
           ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
           ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
           ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
-          ['Lead', 'How many seconds before a beat a pot is lit, so the blob lifts on the beat rather than after it. The lamp learns the beat from the music and predicts the next one; 0 lights the pot as the beat is heard.'],
+          ['Lead', 'With Drop at 0: how many seconds before a beat a pot is lit, so the blob lifts on the beat rather than after it. The lamp learns the beat from the music and predicts the next one; 0 lights the pot as the beat is heard.'],
+          ['Drop', 'One pot is kept closed and superheating; on the beat it opens and is blasted, so a hot glob leaves exactly on the beat, and the next pot closes. It opens every Every beats, and on the first kick after a breakdown, when it has charged longest and goes up hottest. 0 lights the pots ahead of the beat instead, by Lead.'],
           ['Activity', 'How much the song\'s sections change the lamp: calm in a breakdown, busy where everything is playing. 0 ignores them.'],
           ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
           ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
