@@ -397,7 +397,8 @@ gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
 const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
+// touchStrength and eddyFalloff: their knobs go to 0 (found by the round trip check, 2026-11-03).
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -503,7 +504,7 @@ const adoptLegacySave = () => {
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
 // reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
 const VIEW_KEY = `lavalamp.app-v${CURRENT}-views`
-const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed }
+const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps }
 const viewChoices = { touchMode: touchModes, soundBed: soundBeds }
 const saveViews = () => {
   try {
@@ -518,7 +519,7 @@ const loadViews = () => {
     for (const [key, state] of Object.entries(viewSettings)) {
       if (!(key in views)) continue
       const choices = viewChoices[key]
-      if (choices ? choices.includes(views[key]) : typeof views[key] === 'boolean') state(views[key])
+      if (choices ? choices.includes(views[key]) : typeof views[key] === 'boolean' || Number.isFinite(views[key])) state(views[key])
     }
   } catch {}
   for (const state of Object.values(viewSettings)) state.subscribe(saveViews)
