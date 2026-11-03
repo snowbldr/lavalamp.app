@@ -131,6 +131,7 @@ import {
   musicBoom,
   musicBusyEddies,
   musicFlip,
+  musicWobble,
   showSpectrum,
   musicBeatLo,
   musicBeatHi,
@@ -498,6 +499,7 @@ export async function start () {
   let lastDropAt = -1e9
   const BOOM_POT_GAP = 3 // seconds between pots on deep notes
   let lastBoomPotAt = -1e9
+  let wobbleNext = 3 // the wobble note of this run the next eddy comes on
   const musicLog = []
   let musicLogAt = 0
   let musicLogStart = 0
@@ -506,7 +508,7 @@ export async function start () {
   let musicLogPots = 0
   let musicLogDrops = 0
   let musicLogBooms = 0
-  const MUSIC_LOG_COLUMNS = ['t', 'activity', 'loud', 'full', 'onsets', 'surge', 'power', 'bassRise', 'midsRise', 'beats', 'hats', 'pots', 'drops', 'clock (0 free, 1 coasting, 2 hearing)', 'bpm', 'calm', 'booms', 'eddies floor']
+  const MUSIC_LOG_COLUMNS = ['t', 'activity', 'loud', 'full', 'onsets', 'surge', 'power', 'bassRise', 'midsRise', 'beats', 'hats', 'pots', 'drops', 'clock (0 free, 1 coasting, 2 hearing)', 'bpm', 'calm', 'booms', 'eddies floor', 'wobble']
   // Save the recorder as a file, from the Music card's button (an event, so the panel needs no
   // handle on the lamp); it starts again each time Listen is switched on.
   window.addEventListener('lavalamp-music-log', () => {
@@ -625,6 +627,18 @@ export async function start () {
       pulse(); spawn()
       if (beatsHeard % every() === 0) { if (!lidded) potNow(); if (sim.spawnEddy) sim.spawnEddy() }
     }
+    // A wobble brings eddies while it sweeps, up to Wobble a second at its fullest (Robert: "is
+    // there a way to detect that sort of wahwahwah sound that sounds kind of spinny and trigger
+    // eddies more frequently?").
+    // Counted in its notes (each sweep of the filter): an eddy on the 2nd to 4th note of a run,
+    // then one every 2 to 6 notes while it keeps on, fewer with the Wobble knob down ("maybe like
+    // on the second to fourth note of something that looks like a wobble trigger an eddie and
+    // keep spawning the eddies more frequently. not necessarily constantly").
+    if (m.wobbleRun === 0) wobbleNext = 2 + Math.floor(Math.random() * 3)
+    if (m.wobbleNote && m.wobbleRun >= wobbleNext && musicWobble() > 0) {
+      wobbleNext = m.wobbleRun + Math.ceil((2 + Math.random() * 4) / musicWobble())
+      if (!calm && sim.spawnEddy) sim.spawnEddy()
+    }
     // A hat brings a spinning eddy now and then, more often in a busy part.
     if (m.hat && sim.spawnEddy && Math.random() < musicSpin() * act * chance * 0.25) sim.spawnEddy()
     // Pace follows the tempo a little: against 120 bpm, by Tempo, held to 0.75 to 1.3 times,
@@ -643,7 +657,7 @@ export async function start () {
     if (m.boom) musicLogBooms++
     if (musicNow - musicLogAt >= 0.1) {
       musicLogAt = musicNow
-      musicLog.push([+(musicNow - musicLogStart).toFixed(2), +m.activity.toFixed(3), +m.parts.loud.toFixed(3), +m.parts.full.toFixed(3), +m.parts.onsets.toFixed(3), +m.surge.toFixed(2), +(m.raw.total || 0).toExponential(2), +(m.raw.rise || 0).toFixed(2), +(m.raw.midsRise || 0).toFixed(2), musicLogBeats, musicLogHats, musicLogPots, musicLogDrops, clock.locked ? (clock.hearing ? 2 : 1) : 0, m.bpm, calm ? 1 : 0, musicLogBooms, params.drifters])
+      musicLog.push([+(musicNow - musicLogStart).toFixed(2), +m.activity.toFixed(3), +m.parts.loud.toFixed(3), +m.parts.full.toFixed(3), +m.parts.onsets.toFixed(3), +m.surge.toFixed(2), +(m.raw.total || 0).toExponential(2), +(m.raw.rise || 0).toFixed(2), +(m.raw.midsRise || 0).toFixed(2), musicLogBeats, musicLogHats, musicLogPots, musicLogDrops, clock.locked ? (clock.hearing ? 2 : 1) : 0, m.bpm, calm ? 1 : 0, musicLogBooms, params.drifters, +m.wobble.toFixed(2)])
       musicLogBeats = musicLogHats = musicLogPots = musicLogDrops = musicLogBooms = 0
       if (musicLog.length > 6000) musicLog.shift() // ten minutes
     }

@@ -111,6 +111,23 @@ const BOOM_GAP = 0.1
 const BOOM_PEAK = 14
 const BOOM_PEAK_FALL = 0.6 // dB a second
 const BOOM_REFRACTORY = 1
+// The wobble: dubstep's wah, a mid bass whose filter sweeps open and shut a few times a second
+// (Robert, on Bangarang at 1:18: "is there a way to detect that sort of wahwahwah sound that
+// sounds kind of spinny and trigger eddies more frequently?"). It shows as the brightness of
+// 100 Hz to 3 kHz (the power-weighted mean frequency, in octaves) swinging: its spread over the
+// last WOBBLE_WINDOW seconds. Scanned: Bangarang's full parts 0.76 median, bursts of 0.95 to 1.19
+// about 2 s every 4.5 s (1:19.5 to 1:26 among them); C-C 0.50 median, over 0.95 once; Drugs I Like
+// 0.62, twice. The wobble is 0 at WOBBLE_LO octaves to 1 at WOBBLE_HI, and only while that band
+// is within WOBBLE_DB of the reference (a near silent band's brightness swings on nothing).
+const WOBBLE_BAND = [100, 3000]
+const WOBBLE_WINDOW = 1
+const WOBBLE_LO = 0.85 // 0.75 counted C-C and Drugs I Like (10 and 30 eddies a song, against 103 in Bangarang); 0.85: 1, 4, 74
+const WOBBLE_HI = 1.05
+const WOBBLE_DB = 24
+// Its notes: each sweep of the filter, the brightness rising through its mean plus a quarter of
+// its spread (after falling under the mean), while the wobble is up; a run of them is counted
+// from the first and ends WOBBLE_RUN_END seconds after the wobble goes.
+const WOBBLE_RUN_END = 0.5
 const SECTION_SMOOTH = 2 // seconds the section's power is eased over
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 // The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
@@ -151,7 +168,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, wobble: 0, wobbleNote: false, wobbleRun: 0, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -180,6 +197,9 @@ export function createMusic () {
   let lastBeat = -1
   let lastBoom = -1e9
   const scoreHistory = [] // [time, score] ten times a second over the last CUT_BEFORE seconds
+  let wobbleArmed = true // the brightness has fallen under its mean since the last note
+  let wobbleSeen = -1e9 // when the wobble was last up
+  const brightHistory = [] // [time, octaves] of the wobble band's brightness over WOBBLE_WINDOW
   const lowHistory = [] // [time, whether the bass was under the cut] over the last CUT_TIME and CUT_SKIP
   let boomPeak = -90
   const subHistory = [] // [time, dB] of the sub over the last BOOM_BEFORE seconds
@@ -461,7 +481,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -585,6 +605,34 @@ export function createMusic () {
       levels.reference = reference
       levels.score = score
       levels.drop = false
+      // The wobble (see WOBBLE_BAND).
+      {
+        const a = Math.max(1, Math.floor(WOBBLE_BAND[0] / binHz))
+        const b = Math.min(bins.length - 1, Math.ceil(WOBBLE_BAND[1] / binHz))
+        let weighted = 0
+        let sum = 0
+        for (let k = a; k <= b; k++) { const p = Math.pow(10, (bins[k] - 255) * 8 / 255); weighted += p * k; sum += p }
+        const sounding = sum > 0 && 10 * Math.log10(sum / (b - a + 1)) > reference - WOBBLE_DB
+        brightHistory.push([clock, sounding ? Math.log2(weighted / sum * binHz) : null])
+        while (brightHistory.length && clock - brightHistory[0][0] > WOBBLE_WINDOW) brightHistory.shift()
+        const v = brightHistory.map(h => h[1]).filter(x => x !== null)
+        let spread = 0
+        if (v.length > brightHistory.length * 0.8 && clock - brightHistory[0][0] > WOBBLE_WINDOW * 0.9) {
+          const mean = v.reduce((x, y) => x + y, 0) / v.length
+          spread = Math.sqrt(v.reduce((x, y) => x + (y - mean) * (y - mean), 0) / v.length)
+        }
+        raw.wobble = spread
+        levels.wobble = Math.max(0, Math.min(1, (spread - WOBBLE_LO) / (WOBBLE_HI - WOBBLE_LO)))
+        levels.wobbleNote = false
+        const now = brightHistory[brightHistory.length - 1][1]
+        if (levels.wobble > 0) wobbleSeen = clock
+        else if (clock - wobbleSeen > WOBBLE_RUN_END) levels.wobbleRun = 0
+        if (spread > 0 && now !== null) {
+          const mean = v.reduce((x, y) => x + y, 0) / v.length
+          if (now < mean) wobbleArmed = true
+          else if (wobbleArmed && now > mean + spread / 4 && levels.wobble > 0) { wobbleArmed = false; levels.wobbleNote = true; levels.wobbleRun++ }
+        }
+      }
       if (!scoreHistory.length || clock - scoreHistory[scoreHistory.length - 1][0] >= 0.1) scoreHistory.push([clock, score])
       while (scoreHistory.length && clock - scoreHistory[0][0] > CUT_BEFORE) scoreHistory.shift()
       const dippedBefore = () => scoreHistory.some(([t, v]) => clock - t > CUT_TIME + CUT_SKIP && v < CUT_BEFORE_SCORE)

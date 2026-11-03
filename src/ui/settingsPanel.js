@@ -127,6 +127,8 @@ import {
   defaultMusicBusyEddies,
   musicFlip,
   defaultMusicFlip,
+  musicWobble,
+  defaultMusicWobble,
   defaultMusicMotion,
   showSpectrum,
   defaultMusicRanges,
@@ -564,7 +566,8 @@ export function createSettingsPanel () {
             knob('Spawn', 'music-spawn', musicSpawn, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spawn, fixed(2)),
             knob('Spin', 'music-spin', musicSpin, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spin, fixed(2)),
             knob('Busy eddies', 'music-busy-eddies', musicBusyEddies, { min: 0, max: 8, step: 1 }, () => defaultMusicBusyEddies, fixed(0)),
-            knob('Flip', 'music-flip', musicFlip, { min: 0, max: 1, step: 0.05 }, () => defaultMusicFlip, fixed(2))
+            knob('Flip', 'music-flip', musicFlip, { min: 0, max: 1, step: 0.05 }, () => defaultMusicFlip, fixed(2)),
+            knob('Wobble', 'music-wobble', musicWobble, { min: 0, max: 3, step: 0.1 }, () => defaultMusicWobble, fixed(1))
           ),
         subgroup('Ranges',
             knob('Beat Lo', 'music-beat-lo', musicBeatLo, HZ, () => defaultMusicRanges.beatLo, hz),
@@ -593,6 +596,7 @@ export function createSettingsPanel () {
           ['Drop', 'One pot is kept closed and superheating; on the beat it opens and is blasted, so a hot glob leaves exactly on the beat, and the next pot closes. It opens every Every beats, and on the first kick after a breakdown, when it has charged longest and goes up hottest. 0 lights the pots ahead of the beat instead, by Lead.'],
           ['Boom', 'A deep bass note, one that comes in out of a quiet low end and holds, opens a pot while the song is busy, so a burst of lava goes up with it. Sets how hard it is blasted; 0 is off.'],
           ['Flip', 'The chance a drop turns an eddy\'s spin round on the spot, so the swirl suddenly runs the other way; a deep bass note does it at an eighth of the chance. Each eddy flips once in its life at most. 0 is off.'],
+          ['Wobble', 'While a wobble bass is sweeping (the wah wah of dubstep), an eddy comes in on its second to fourth wah, then another every few wahs while it keeps going: more often turned up, 0 is off. As many as Busy eddies allows, and two more.'],
           ['Busy eddies', 'While the song is busy, at least this many eddies; an Eddies setting above it is kept. 0 leaves Eddies as set.'],
           ['Activity', 'How much the song\'s sections change the lamp: calm in a breakdown, busy where everything is playing. 0 ignores them.'],
           ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
