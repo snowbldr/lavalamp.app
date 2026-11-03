@@ -427,10 +427,8 @@ export async function start () {
   const firedFor = { pot: -1, eddy: -1, pulse: -1 }
   let wasLocked = false
   const DROP_WAIT = 2 // seconds without a kick before the drop's pot is charged
-  const DROP_SURGE = 2 // the surge (see music.js) a kick has to come in on to be a drop: +3 dB
   const DROP_GAP = 8 // seconds: one drop at most this often
   const DROP_SETTLE = 3 // seconds after Listen before a drop can be: the surge's slow average starts from the silence before the music, and the test's first kick read as a drop
-  const CALM = 0.35 // activity under this is a calm part
   let lastDropAt = -1e9
   const musicLog = []
   let musicLogAt = 0
@@ -507,19 +505,19 @@ export async function start () {
     // kick after the kick has been gone DROP_WAIT seconds (a breakdown, or the start before any
     // kick): that is the drop, and a breakdown has charged its pot all the while, so it goes up
     // the hottest. Drop 0 is the pots as before: lit Lead seconds ahead of a predicted beat.
-    // A calm part (the activity under CALM, or the kick gone) is left to the lamp's own clocks:
-    // no pots on the beat, and the lid sits on the biggest pot, charging for the drop (Robert:
-    // "The whole lamp should be relatively calm, with maybe some eddies spawning and normal lamp
-    // firings"). A drop is the first kick after the kick was gone, or a kick in a surge (the
-    // whole spectrum's power over the last 0.4 s at DROP_SURGE times its last 6 s): the big pot
-    // opens and two eddies come in ("I would expect to see a big pot fire and probably an eddie
+    // A calm part (music.js's section, by level against the song's reference, or the kick gone)
+    // is left to the lamp's own clocks: no pots on the beat, and the lid sits on the biggest pot,
+    // charging for the drop (Robert: "The whole lamp should be relatively calm, with maybe some
+    // eddies spawning and normal lamp firings"). A drop is music.js's (a surge out of a calm
+    // part up to the reference), or the first kick after the kick was gone: the big pot opens
+    // and two eddies come in ("I would expect to see a big pot fire and probably an eddie
     // or two spawn at the same time because of all the activity"). Then the beat pots, while busy.
     const lidded = musicDrop() > 0 && !!sim.chargePot
-    const calm = m.sinceBeat > DROP_WAIT || (musicActivity() > 0 && act < CALM)
+    const calm = m.sinceBeat > DROP_WAIT || m.calm
     if (lidded) { sim.chargePot(2 * musicDrop(), calm); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
     const heardNumber = clock.locked ? (clock.until < clock.period / 2 ? clock.index + 1 : clock.index) : -1
     const musicNow = listener.time
-    const isDrop = m.beat && (quietBefore > DROP_WAIT || m.surge > DROP_SURGE) && musicNow - lastDropAt > DROP_GAP && musicNow - musicLogStart > DROP_SETTLE
+    const isDrop = (m.drop || (m.beat && quietBefore > DROP_WAIT)) && musicNow - lastDropAt > DROP_GAP && musicNow - musicLogStart > DROP_SETTLE
     if (m.beat) beatsHeard++
     const onBeatPot = m.beat && !calm && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
     const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
@@ -740,7 +738,7 @@ export async function start () {
   // kept on window.lavaProfile, for finding what a slow device is spending its time on.
   const profiling = new URLSearchParams(window.location.search).has('profile')
   look.profile = profiling
-  if (profiling) window.lavalamp = { sim, params, look, gloop, device, music: listener } // for timing the running lamp from the console
+  if (profiling) window.lavalamp = { sim, params, look, gloop, device, music: listener, musicLog } // for timing the running lamp from the console
   const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
   // The busiest 20 px cell, in particles: 40 or so is lava at rest, hundreds is a pile the
   // solver's neighbour loops pay for (the eddies packing the pots was 814, and single digit fps).

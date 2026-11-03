@@ -44,6 +44,28 @@ const BEAT_BASS_LEAD = 1
 // kick before it, still reads as one.
 const SURGE_FAST = 0.4
 const SURGE_SLOW = 6
+// The song's sections, by level (Robert's C-C, scanned offline with docs/methods/tools/song-scan.js:
+// the intro -52 rising to -40 dB, the drop at 0:55 -45 to -36, the busy part -33 to -38, after
+// 1:51 -37 to -40 with the spectrum half as broad). Measured against the song itself the intro
+// was the loudest thing heard yet and read as busy; against a reference it is plainly quiet. The
+// reference is the loudest the song has been (2 s power), held and falling REFERENCE_FALL dB a
+// second, never under REFERENCE_DB (lower by Sense, for a quiet microphone). Level alone left
+// 1:51 busy (2 to 4 dB under), so the score adds the spectrum's breadth (the mean byte) against
+// its own held peak, in dB, BREADTH_WEIGHT times, eased over SCORE_SMOOTH: busy above -BUSY_DB,
+// calm under -CALM_DB, and in between it stays as it was. On C-C: calm to 0:55, busy from the
+// drop, calm 1:52, busy 2:11 to 2:18 and from 2:23, calm 3:20 to 3:29. A drop: while calm, a
+// surge past DROP_SURGE that lands within DROP_DB of the reference; the section turns busy at once.
+const REFERENCE_DB = -36
+const REFERENCE_FALL = 1 / 15
+const BREADTH_FALL = 1 / 60 // of itself a second, the held peak of the breadth
+const BREADTH_WEIGHT = 1.5
+const SCORE_SMOOTH = 2
+const BUSY_DB = 3
+const CALM_DB = 6
+const DROP_SURGE = 2
+const DROP_DB = 4
+const DROP_HOLD = 8 // seconds a drop holds the section busy while the score catches up
+const SECTION_SMOOTH = 2 // seconds the section's power is eased over
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 // The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
 // lift a blob, an eddy half a second to spin up), and live audio cannot be heard early, so the
@@ -83,7 +105,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -98,6 +120,12 @@ export function createMusic () {
   let beatPeak = 0
   let surgeFast = 0
   let surgeSlow = 0
+  let sectionPower = 0
+  let peakDb = -90
+  let breadth = 0
+  let breadthPeak = 0.05
+  let score = null
+  let droppedAt = -1e9
   let bassPowerAverage = 0
   let midsPowerAverage = 0
   const bassHistory = new Array(BEAT_RISE_FRAMES).fill(0)
@@ -108,6 +136,7 @@ export function createMusic () {
   const beatTimes = []
   let clock = 0
   let startedAt = 0
+  let fileStartedAt = -1 // the audio clock when a file began, for its position
 
   const band = ([lo, hi]) => {
     if (hi < lo) [lo, hi] = [hi, lo]
@@ -329,7 +358,7 @@ export function createMusic () {
       sum += levels.parts[k]
     }
     const target = sum / 3
-    levels.activity += (target - levels.activity) * Math.min(1, dt / (target > levels.activity ? ACTIVITY_RISE : ACTIVITY_FALL))
+    levels.relative = target // the old activity, against the song so far: kept for the log, not used (the intro read as busy)
   }
 
   return {
@@ -337,15 +366,28 @@ export function createMusic () {
     get enabled () { return enabled },
     get source () { return source },
     get error () { return error },
-    // Start listening from `which` ('mic', 'tab' or 'test'). Call from a user gesture.
-    async start (which = source) {
+    // Start listening from `which` ('mic', 'system', 'test' or 'file'). Call from a user gesture.
+    // A file is { data: an ArrayBuffer of an audio file, audible: whether it is heard too }: the
+    // page plays it, so the lamp hears it exactly, from the top (Robert's test song, C-C).
+    async start (which = source, file) {
       error = ''
       try {
         await open()
         closeSource()
         source = which
         if (which === 'test') startTest()
-        else if (which === 'system') {
+        else if (which === 'file') {
+          const buffer = await context.decodeAudioData(file.data.slice(0))
+          const play = context.createBufferSource()
+          play.buffer = buffer
+          play.connect(analyser)
+          const out = context.createGain()
+          out.gain.value = file.audible ? 1 : 0
+          analyser.connect(out).connect(context.destination)
+          play.start()
+          fileStartedAt = context.currentTime
+          testNodes = [play, out]
+        } else if (which === 'system') {
           if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) throw new Error('this browser cannot share its audio; use Mic')
           // The browser only offers audio with a screen share, so a share is asked for; the
           // picture is stopped at once and never drawn, kept or sent.
@@ -360,7 +402,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = 0; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -379,12 +421,21 @@ export function createMusic () {
     },
     // Once a frame: read the analyser and update `levels`. `ranges` gives each sync its band in
     // Hz ({ beat, heat, eddy, kick }, each [lo, hi]); `sensitivity` scales them.
-    update (dt, sensitivity = 1, ranges) {
+    update (dt, sensitivity = 1, ranges, frame) {
       levels.beat = false
       levels.hat = false
-      if (!enabled || !analyser) return levels
+      if (frame) {
+        // A frame given rather than read (docs/methods/tools/song-scan.js runs a whole song
+        // through this offline, faster than it plays): its bytes and Hz a bin.
+        if (!bins || bins.length !== frame.bins.length) bins = new Uint8Array(frame.bins.length)
+        bins.set(frame.bins)
+        binHz = frame.binHz
+        if (!enabled) { enabled = true; startedAt = clock }
+      } else {
+        if (!enabled || !analyser) return levels
+        analyser.getByteFrequencyData(bins)
+      }
       clock += dt
-      analyser.getByteFrequencyData(bins)
       const raw = levels.raw
       raw.beat = band(ranges.beat); raw.heat = band(ranges.heat); raw.eddy = band(ranges.eddy); raw.kick = band(ranges.kick)
       // Each sync follows its range's punch, how far it is above its own average over the last
@@ -433,12 +484,36 @@ export function createMusic () {
       surgeSlow += (total - surgeSlow) * Math.min(1, dt / SURGE_SLOW)
       levels.surge = surgeFast / Math.max(1e-9, surgeSlow)
       raw.total = total
+      if (!sectionPower) sectionPower = total
+      sectionPower += (total - sectionPower) * Math.min(1, dt / SECTION_SMOOTH)
+      const db = 10 * Math.log10(Math.max(1e-12, sectionPower))
+      const fastDb = 10 * Math.log10(Math.max(1e-12, surgeFast))
+      peakDb = Math.max(db, peakDb - REFERENCE_FALL * dt)
+      const reference = Math.max(peakDb, REFERENCE_DB - 10 * Math.log10(Math.max(0.2, sensitivity)))
+      let byteSum = 0
+      for (let k = 1; k < bins.length; k++) byteSum += bins[k]
+      breadth += (byteSum / ((bins.length - 1) * 255) - breadth) * Math.min(1, dt)
+      breadthPeak = Math.max(breadth, breadthPeak * (1 - BREADTH_FALL * dt))
+      const now = db - reference + BREADTH_WEIGHT * 10 * Math.log10(Math.max(1e-3, breadth) / Math.max(0.05, breadthPeak))
+      score = score === null ? now : score + (now - score) * Math.min(1, dt / SCORE_SMOOTH)
+      levels.powerDb = db
+      levels.reference = reference
+      levels.score = score
+      levels.drop = false
+      if (clock - startedAt > 3) {
+        if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock }
+        else if (levels.calm && score > -BUSY_DB) levels.calm = false
+        else if (!levels.calm && score < -CALM_DB && clock - droppedAt > DROP_HOLD) levels.calm = true
+      }
+      // The activity, for the knobs it scales: 0 at 12 dB under the reference to 1 at it.
+      levels.activity = Math.max(0, Math.min(1, (db - reference + 12) / 12))
       tickClock()
       activity(dt)
       return levels
     },
     get beats () { return beatCount },
     get time () { return clock }, // seconds this module has been listening, all told
+    get filePosition () { return source === 'file' && context ? context.currentTime - fileStartedAt : -1 }, // seconds into a playing file
     // The beat clock: locked or not, whether the kick is being heard (not in a breakdown), the
     // period, seconds to the next predicted beat (number index + 1), the beat the current
     // section began on, and whether a predicted beat fell in this frame.
