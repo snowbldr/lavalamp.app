@@ -234,7 +234,7 @@ export function createGlRenderer (canvas, look) {
     const top = HEAT_STEPS - 1
     const perTemp = heat ? top / (2 * overlays.neutral) : 0
     const floorY = overlays.floorY ?? Infinity
-    const hiddenTemp = (overlays.neutral || 0) / 2
+    const hiddenTemp = overlays.neutral || 0 // half of it drew warm pot lava purple, a fuzz over every pot; neutral still keeps the superheated (1.5 to 3 times) from white
     let k = 0
     for (let i = 0; i < count; i++) {
       const cx = (state.x[i] * view.k + view.ox) * scale
@@ -244,7 +244,7 @@ export function createGlRenderer (canvas, look) {
       let cb = lava[2]
       if (heat) {
         // Lava below the floor's line, in a pot, is never on screen but its glow reaches over the
-        // line: drawn no hotter than half the neutral temperature, so a closed pot's superheated
+        // line: drawn no hotter than the neutral temperature, so a closed pot's superheated
         // lava does not show as a white streak along the bottom (Robert: "can we hid this hot
         // white streak on the bottom?"; held deeper instead, it left a black gap in the pool).
         const temp = state.y[i] > floorY ? Math.min(state.temp[i], hiddenTemp) : state.temp[i]

@@ -1638,6 +1638,13 @@ export function createSimulation ({ width, height, params }) {
   // out of its bottle into a neighbour whose rim was closer). A particle arriving at the line
   // under no mouth is held at the line; one in its bottle but out of place is moved the shortest
   // way back in, sideways into the neck or in to the bulb's rim.
+  // A particle past the line under no mouth goes back as far as it went past (a particle size at
+  // most), mirrored, not onto the line itself: put on the line, the eddies pressing on the pool
+  // stacked a row of them there (560 particles exactly on the floor's line, about 70 a pixel just
+  // above, 110 to 125 further up) with a starved band over it, and the renderer showed a row of
+  // holes 9 to 10 px up, a honeycomb along the bottom (Robert: "it happens when the eddies push
+  // really hard on the bottom... I suspect it's related to the boundary issue").
+  function backFromLine (py, lineY, dir) { return lineY - dir * Math.min(Math.abs(py - lineY), params.particleSize || 4) }
   function containIn (list, i) {
     const { x, y, home } = state
     if (!list.length) return
@@ -1654,9 +1661,9 @@ export function createSimulation ({ width, height, params }) {
       k = -1
       for (let j = 0; j < list.length; j++) if (insideBottle(list[j], x[i], y[i])) { k = j; break }
       if (k < 0) for (let j = 0; j < list.length; j++) if (Math.abs(x[i] - list[j].cx) <= neckHalf(list[j], lineY)) { k = j; break }
-      if (k < 0) { y[i] = lineY; return }
+      if (k < 0) { y[i] = backFromLine(y[i], lineY, dir); return }
       // A lidded pot takes nothing in: held at the line, as under no mouth.
-      if (dir > 0 && k === lidPot) { y[i] = lineY; return }
+      if (dir > 0 && k === lidPot) { y[i] = backFromLine(y[i], lineY, dir); return }
       home[i] = k
     }
     const b = list[k]

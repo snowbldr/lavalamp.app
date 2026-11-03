@@ -221,8 +221,10 @@ fn containIn(i: u32, p: vec2f, first: u32, count: u32) -> vec2f {
     k = -1;
     for (var j = first; j < first + count; j++) { if (insideBottle(j, p)) { k = i32(j); break; } }
     if (k < 0) { for (var j = first; j < first + count; j++) { if (abs(p.x - bf(j, 0u)) <= neckHalf(j, lineY)) { k = i32(j); break; } } }
-    if (k < 0) { return vec2f(p.x, lineY); }
-    if (k == i32(P.lid)) { return vec2f(p.x, lineY); } // a lidded pot takes nothing in
+    // Back as far as it went past, mirrored (a particle size at most), not onto the line: on the
+    // line the eddies stacked a row there and left a row of holes above it (simulation.js backFromLine).
+    if (k < 0) { return vec2f(p.x, lineY - dir * min(abs(p.y - lineY), P.size)); }
+    if (k == i32(P.lid)) { return vec2f(p.x, lineY - dir * min(abs(p.y - lineY), P.size)); } // a lidded pot takes nothing in
     F[HOME(i)] = f32(k);
   }
   let b = u32(k);
