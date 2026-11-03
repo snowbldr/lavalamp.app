@@ -21,16 +21,23 @@
 // Cost: one getByteFrequencyData a frame over 512 bins and a few sums. Measured on the GPU lamp
 // at the defaults (see docs/decisions.md): well under a tenth of a millisecond a frame.
 export const SOURCES = ['mic', 'system']
-const FFT = 1024 // 512 bins; at 48 kHz a bin is 47 Hz
+const FFT = 2048 // 1024 bins; at 48 kHz a bin is 23 Hz (at 47 the beat range, 40 to 150 Hz, was three bins)
 const ATTACK = 0.08 // seconds to rise
 const RELEASE = 0.3 // seconds to fall
 const BEAT_AVERAGE = 1.5 // seconds of bass history the beat is judged against
-const BEAT_RATIO = 1.4 // bass this many times its average is a beat, at Sensitivity 1
 const BEAT_FLOOR = 0.08 // bass under this (of full scale) is never a beat
 const BEAT_REFRACTORY = 0.22 // seconds: faster than 270 bpm is not a beat
-const BEAT_RISE_FLOOR = 0.04 // a rise under this (of full scale) over two frames is never a beat
-const BEAT_PEAK_SPAN = 0.15 // of full scale, 12 dB: a beat is within this of the recent loudest bass
-const BEAT_PEAK_MEMORY = 10 // seconds that loudest is held over
+const BEAT_PEAK_MEMORY = 10 // seconds the loudest recent bass is held over; a beat is within 12 dB of it
+// The beat is read in power, not decibels (Robert, on real music: "I think it's reacting to notes
+// that are too soft and too high frequency"): in decibels a soft note in a quiet bar rose as far
+// as a kick in a loud one. A beat is the beat range's power rising over BEAT_RISE_FRAMES frames by
+// BEAT_POWER_RISE times its own average, and by more, for its average, than the mids' rise
+// (BEAT_MIDS, 300 Hz to 4 kHz) for theirs: a snare, a piano or a voice lifts the bass bins too,
+// but lifts the mids more; a kick is the other way round.
+const BEAT_POWER_RISE = 1.5
+const BEAT_RISE_FRAMES = 4
+const BEAT_MIDS = [300, 4000]
+const BEAT_BASS_LEAD = 1
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 // The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
 // lift a blob, an eddy half a second to spin up), and live audio cannot be heard early, so the
@@ -82,9 +89,11 @@ export function createMusic () {
   let lastHat = -1
   let device = '' // the chosen audio input's deviceId, '' for the default
   let bassAverage = 0
-  let riseAverage = 0
   let beatPeak = 0
-  const beatHistory = [0, 0]
+  let bassPowerAverage = 0
+  let midsPowerAverage = 0
+  const bassHistory = new Array(BEAT_RISE_FRAMES).fill(0)
+  const midsHistory = new Array(BEAT_RISE_FRAMES).fill(0)
   const averages = { heat: 0, eddy: 0, kick: 0 }
   let lastBeat = -1
   let beatCount = 0
@@ -99,6 +108,16 @@ export function createMusic () {
     let sum = 0
     for (let k = a; k <= b; k++) sum += bins[k]
     return sum / ((b - a + 1) * 255)
+  }
+  // A range's mean power, from the analyser's bytes (decibels, -90 to -10 dB across 0 to 255),
+  // 1 at full scale.
+  const power = ([lo, hi]) => {
+    if (hi < lo) [lo, hi] = [hi, lo]
+    const a = Math.min(bins.length - 1, Math.max(1, Math.floor(lo / binHz)))
+    const b = Math.max(a, Math.min(bins.length - 1, Math.ceil(hi / binHz)))
+    let sum = 0
+    for (let k = a; k <= b; k++) sum += Math.pow(10, (bins[k] - 255) * 8 / 255)
+    return sum / (b - a + 1)
   }
   const ease = (from, to, dt) => from + (to - from) * Math.min(1, dt / (to > from ? ATTACK : RELEASE))
 
@@ -333,7 +352,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; riseAverage = 0; beatPeak = 0; beatHistory[0] = beatHistory[1] = 0; lastBeat = -1; beatCount = 0; beatTimes.length = 0
+        bassAverage = 0; beatPeak = 0; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -372,20 +391,24 @@ export function createMusic () {
       // A hat: the same test on the kick range, quicker (a hi-hat runs eighths and sixteenths).
       hatAverage += (raw.kick - hatAverage) * Math.min(1, dt / 0.6)
       if (raw.kick > 0.04 && raw.kick > hatAverage * (1.25 / Math.max(0.3, Math.sqrt(sensitivity))) && clock - lastHat > 0.11) { levels.hat = true; lastHat = clock; onsetTimes.push(clock) }
-      // The beat: the rise of the beat range's energy over the last two frames, an onset, against
-      // that rise's own running average. The energy against its average missed half the kicks
-      // once a bass line held the range up (19 heard of 36 on the test with its bass on), so a
-      // held note now counts for nothing and only a hit's attack does.
+      // The beat, in power (see BEAT_POWER_RISE): the rise over the last few frames against the
+      // range's own average, so a held note counts for nothing and only a hit's attack does (by
+      // energy against its average a bass line hid half the test's kicks), and against the mids'.
       bassAverage += (raw.beat - bassAverage) * Math.min(1, dt / BEAT_AVERAGE)
-      const rise = Math.max(0, raw.beat - Math.min(beatHistory[0], beatHistory[1]))
-      beatHistory[1] = beatHistory[0]; beatHistory[0] = raw.beat
-      raw.rise = rise
-      riseAverage += (rise - riseAverage) * Math.min(1, dt / BEAT_AVERAGE)
-      const ratio = BEAT_RATIO / Math.max(0.3, Math.sqrt(sensitivity))
-      // And near the recent kicks: within BEAT_PEAK_SPAN (12 dB) of their level, held a while, so in a
-      // breakdown the leak of hats and pads into the bass does not count as a kick.
-      beatPeak = Math.max(raw.beat, beatPeak - (beatPeak - raw.beat) * Math.min(1, dt / BEAT_PEAK_MEMORY))
-      if (raw.beat > BEAT_FLOOR && raw.beat > beatPeak - BEAT_PEAK_SPAN && rise > BEAT_RISE_FLOOR && rise > riseAverage * ratio * 2.5 && clock - lastBeat > BEAT_REFRACTORY) {
+      const bassPower = power(ranges.beat)
+      const midsPower = power(BEAT_MIDS)
+      const bassRise = Math.max(0, bassPower - Math.min(...bassHistory)) / Math.max(1e-9, bassPowerAverage)
+      const midsRise = Math.max(0, midsPower - Math.min(...midsHistory)) / Math.max(1e-9, midsPowerAverage)
+      bassHistory.shift(); bassHistory.push(bassPower)
+      midsHistory.shift(); midsHistory.push(midsPower)
+      bassPowerAverage += (bassPower - bassPowerAverage) * Math.min(1, dt / BEAT_AVERAGE)
+      midsPowerAverage += (midsPower - midsPowerAverage) * Math.min(1, dt / BEAT_AVERAGE)
+      raw.rise = bassRise
+      raw.midsRise = midsRise
+      // Near the recent kicks too, within 12 dB (a sixteenth of their power), so in a breakdown
+      // the leak of hats and pads into the bass does not count.
+      beatPeak = Math.max(bassPower, beatPeak - (beatPeak - bassPower) * Math.min(1, dt / BEAT_PEAK_MEMORY))
+      if (raw.beat > BEAT_FLOOR && bassPower > beatPeak / 16 && bassRise > BEAT_POWER_RISE / Math.max(0.3, Math.sqrt(sensitivity)) && bassRise > midsRise * BEAT_BASS_LEAD && clock - lastBeat > BEAT_REFRACTORY) {
         levels.beat = true
         lastBeat = clock
         beatCount++
