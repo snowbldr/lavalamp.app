@@ -209,6 +209,7 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .sub-title .chevron { margin-left: 8px; transition: transform 0.2s; font-size: 10px; }
 .sub-panel.folded .chevron { transform: rotate(-90deg); }
 .sub-panel.folded .sub-body { display: none; }
+.music-pick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; color: inherit; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
 .music-note { font-size: 11px; line-height: 1.4; color: rgba(236, 236, 236, 0.7); padding: 4px 0 8px; }
 .music-note div + div { margin-top: 3px; }
 .music-input { grid-template-columns: 72px 1fr; align-items: center; gap: 8px; min-height: 34px; }

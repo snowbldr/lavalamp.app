@@ -105,6 +105,8 @@ import {
   musicPending,
   musicSource,
   musicSources,
+  musicFileName,
+  musicRecording,
   musicSensitivity,
   defaultMusicSensitivity,
   musicEvery,
@@ -199,6 +201,17 @@ export function createSettingsPanel () {
   // DOM once a frame while listening, which is the cheapest thing a panel can do.
   const meterBars = [div(), div(), div()]
   const meterBeat = div({ class: 'meter-beat' })
+  // The song picker for the File source: the file is read and handed to the lamp (app.js) by an
+  // event, like the recorder's Save, so the panel needs no handle on it.
+  const songPicker = input({ type: 'file', accept: 'audio/*', style: { display: 'none' } })
+  songPicker.addEventListener('change', async () => {
+    const file = songPicker.files[0]
+    if (!file) return
+    const data = await file.arrayBuffer()
+    window.dispatchEvent(new CustomEvent('lavalamp-music-file', { detail: { name: file.name.replace(/\.[^.]+$/, ''), data } }))
+    songPicker.value = ''
+  })
+  document.body.append(songPicker)
   const meterRow = div({ class: 'meter', title: 'Bass, mids, highs; the dot flashes on the beat' }, ...meterBars.map(b => div({ class: 'meter-bar' }, b)), meterBeat)
   const meter = levels => {
     meterBars[0].style.width = `${Math.min(100, levels.bass * 100)}%`
@@ -355,6 +368,13 @@ export function createSettingsPanel () {
           ),
           div({ class: 'music-note', style: { display: TOUCH_UI ? 'block' : 'none' } },
             'On a phone the lamp listens through the microphone: play the song out loud and it follows along.'
+          ),
+          // A song file: the page plays it out loud and the lamp hears it exactly; Record plays it
+          // from the top and saves the lamp with its sound as a video when it ends or is stopped.
+          div({ class: 'music-file', style: { display: musicSource.bindStyle(() => musicSource() === 'file' ? 'block' : 'none') } },
+            row('Song', button({ class: 'music-pick', onclick: () => songPicker.click() }, musicFileName.bindAs(() => musicFileName() || 'Choose a song...'))),
+            row('Record', toggle('music-record', musicRecording)),
+            div({ class: 'music-note' }, 'Record plays the song from the start and records the lamp with it, then saves the video when the song ends or you switch it off. Only the lamp is recorded, not this panel. Keep this tab in front while it records.')
           ),
           div({ class: 'music-input', style: { display: musicSource.bindStyle(() => musicSource() === 'mic' ? 'grid' : 'none') } },
             span({ class: 'row-label' }, 'Input'), inputSelect

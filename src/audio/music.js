@@ -170,6 +170,8 @@ export function createMusic () {
   let clock = 0
   let startedAt = 0
   let fileStartedAt = -1 // the audio clock when a file began, for its position
+  let fileStream = null // the playing file's sound as a MediaStream, for recording
+  let onFileEnd = null // called when a playing file reaches its end
 
   const band = ([lo, hi]) => {
     if (hi < lo) [lo, hi] = [hi, lo]
@@ -417,9 +419,15 @@ export function createMusic () {
           const out = context.createGain()
           out.gain.value = file.audible ? 1 : 0
           analyser.connect(out).connect(context.destination)
+          // The song's own sound, for recording the lamp with it (app.js, Record): exact, with
+          // no screen share and no loopback.
+          const record = context.createMediaStreamDestination()
+          play.connect(record)
+          fileStream = record.stream
+          play.onended = () => { if (testNodes && testNodes[0] === play && onFileEnd) onFileEnd() }
           play.start()
           fileStartedAt = context.currentTime
-          testNodes = [play, out]
+          testNodes = [play, out, record]
         } else if (which === 'system') {
           if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) throw new Error('this browser cannot share its audio; use Mic')
           // The browser only offers audio with a screen share, so a share is asked for; the
@@ -568,6 +576,8 @@ export function createMusic () {
     },
     get beats () { return beatCount },
     get time () { return clock }, // seconds this module has been listening, all told
+    get fileStream () { return source === 'file' ? fileStream : null },
+    set onFileEnd (f) { onFileEnd = f },
     get filePosition () { return source === 'file' && context ? context.currentTime - fileStartedAt : -1 }, // seconds into a playing file
     // The beat clock: locked or not, whether the kick is being heard (not in a breakdown), the
     // period, seconds to the next predicted beat (number index + 1), the beat the current

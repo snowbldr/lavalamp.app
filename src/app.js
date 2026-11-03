@@ -117,6 +117,8 @@ import {
   music,
   musicPending,
   musicSource,
+  musicFileName,
+  musicRecording,
   musicSensitivity,
   musicEvery,
   musicTempo,
@@ -396,11 +398,52 @@ export async function start () {
     get: () => listener.device,
     set: id => { listener.device = id; try { localStorage.setItem(DEVICE_KEY, id) } catch (e) {} if (music() && musicSource() === 'mic') listen() }
   })
-  const listen = async () => {
+  // The File source's song, as read by the panel's picker (kept for this page only).
+  let musicFile = null
+  window.addEventListener('lavalamp-music-file', e => {
+    musicFile = e.detail.data
+    musicFileName(e.detail.name)
+    if (musicSource() !== 'file') musicSource('file')
+    else if (music()) listen()
+  })
+  let listening = Promise.resolve()
+  const listen = () => (listening = (async () => {
+    if (musicSource() === 'file' && !musicFile) { music(false); notify('Music: ', 'choose a song first'); return }
     musicPending(true)
-    try { await listener.start(musicSource()) } catch (e) { music(false); notify('Music: ', listener.error || 'could not listen') }
+    try { await listener.start(musicSource(), musicSource() === 'file' ? { data: musicFile, audible: true } : undefined) } catch (e) { music(false); notify('Music: ', listener.error || 'could not listen') }
     musicPending(false)
+  })())
+  // Record (the File source): the song from the top, and the lamp's canvas with the song's own
+  // sound into one video, saved when the song ends or Record is switched off. From inside the
+  // page, so it needs no screen recording permission and the sound is exactly in time.
+  let recorder = null
+  const startRecording = async () => {
+    if (musicSource() !== 'file' || !musicFile) { musicRecording(false); notify('Record: ', 'choose a song under Music, File'); return }
+    if (music()) await listen(); else { music(true); await listening }
+    const audio = listener.fileStream
+    if (!audio || !musicRecording()) { musicRecording(false); return }
+    const stream = new MediaStream([...lamp.captureStream(60).getVideoTracks(), ...audio.getAudioTracks()])
+    const type = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t))
+    const chunks = []
+    const take = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 16e6, audioBitsPerSecond: 256e3 })
+    take.ondataavailable = e => { if (e.data.size) chunks.push(e.data) }
+    take.onstop = () => {
+      for (const t of stream.getVideoTracks()) t.stop()
+      const blob = new Blob(chunks, { type: take.mimeType })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.download = `lavalamp-${(musicFileName() || 'song').replace(/[^\w.-]+/g, '-')}.${take.mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'}`
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(link.href), 10000)
+    }
+    take.start(1000)
+    recorder = take
   }
+  musicRecording.subscribe(on => {
+    if (on) startRecording()
+    else if (recorder) { const take = recorder; recorder = null; if (take.state !== 'inactive') take.stop() }
+  })
+  listener.onFileEnd = () => { if (musicRecording()) musicRecording(false) }
   let dropCharged = false // a pot is lidded and heating (see driveMusic)
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
   const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters() }

@@ -330,7 +330,11 @@ export const showSpectrum = fnstate(false)
 export const musicPending = fnstate(false)
 // A phone can only hear the room, so it gets the microphone alone (Robert: "Phones using mic is
 // fine, makes more sense for mobile too").
-export const musicSources = (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) ? ['mic'] : ['mic', 'system']
+// A computer can also play a song file itself, and record the lamp to it (Robert: "now we're
+// ready to record the video with music synced to the lava lamp").
+export const musicSources = (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) ? ['mic'] : ['mic', 'system', 'file']
+export const musicFileName = fnstate('') // the chosen song's name, '' for none (the file itself is not kept)
+export const musicRecording = fnstate(false)
 export const musicSource = fnstate('mic')
 export const defaultMusicSensitivity = 1
 export const musicSensitivity = fnstate(defaultMusicSensitivity)
