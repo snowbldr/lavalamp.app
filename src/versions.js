@@ -1,12 +1,14 @@
 // The lamp's versions. Every lamp that ever ran at lavalamp.app is kept under versions/ as the
 // static files it was (versions/versions.json lists them), and the root page decides which one
-// a visitor gets: index.html's loader sends every link that names an older version, or none at
-// all, to that version, so the links people have keep opening the lamp they bookmarked, and only
-// a link or a saved choice that says the current version gets this one (Robert: "The currently
-// live version at lavalamp.app should be considered v1 and any link that doesn't specify a
-// version should default to v1 so that any current link keeps working"). This module is the
-// current version's side of that: its number, the saved choice, the upgrade from an older
-// version's settings, and the way back.
+// a visitor gets: a bare visit the newest, a link naming a version that one, a share link with
+// no version v1, so the links people have keep opening the lamp they bookmarked (Robert, first:
+// "any link that doesn't specify a version should default to v1"; then: "the bare url, without
+// settings, should load v2 by default. we should only show v1 if they use a share link without
+// a version. If they have saved local storage settings, they should be saved and a banner that
+// says 'Your v1 settings were saved, you can see the old version here'"). This module is the
+// current version's side of that: its number, the upgrade from an older version's settings,
+// the way back, and that banner.
+import { a, button, div, span } from '@srfnstack/fntags'
 import { notify } from './ui/components.js'
 
 export const CURRENT = '2'
@@ -49,6 +51,26 @@ const mappings = { 1: v1ToV2 }
 // old settings>, as the banner in an old version sends. Returns the mapped settings to apply
 // over the defaults, or null when this is an ordinary load. The parameters are taken out of
 // the address so a reload does not upgrade again.
+// The v1 settings banner: v1 saved its settings under 'lavalamp.app-settings' with no version
+// in them (lavaColor and the rest), and v2 never touches that key, so a visitor who tuned the
+// old lamp still has it. Shown once per browser until dismissed or followed.
+const V1_KEY = 'lavalamp.app-settings'
+const V1_BANNER_SEEN = 'lavalamp.app-v1-banner'
+export const v1SettingsBanner = () => {
+  let old = null
+  try { old = JSON.parse(localStorage.getItem(V1_KEY) || 'null') } catch { old = null }
+  if (!old || typeof old !== 'object' || old.version) return null
+  try { if (localStorage.getItem(V1_BANNER_SEEN)) return null } catch {}
+  const seen = () => { try { localStorage.setItem(V1_BANNER_SEEN, 'seen') } catch {} }
+  const strip = div(
+    { class: 'version-banner' },
+    span('Your v1 settings are saved. '),
+    a({ href: 'versions/v1/index.html', onclick: seen }, 'Open the old lamp'),
+    button({ class: 'version-banner-close', title: 'Dismiss', 'aria-label': 'Dismiss', onclick: () => { seen(); strip.remove() } }, '×')
+  )
+  return strip
+}
+
 export const takeUpgrade = () => {
   const query = new URLSearchParams(window.location.search)
   if (!query.has('upgrade')) return null

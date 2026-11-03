@@ -9,7 +9,7 @@ import { createPointerInput } from './input/pointer.js'
 import { createGloop } from './audio/gloop.js'
 import { TURNS, lampSizeFor, lampToPage, pageToLamp, pageVectorToLamp } from './input/frame.js'
 import { notify } from './ui/components.js'
-import { takeUpgrade } from './versions.js'
+import { takeUpgrade, v1SettingsBanner } from './versions.js'
 import { createSettingsPanel } from './ui/settingsPanel.js'
 import {
   bgColor,
@@ -307,6 +307,9 @@ export async function start () {
       ? createWorkerLamp({ width, height, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
       : createSimulation({ width, height, params })
   backendLabel(device ? 'GPU (WebGPU)' : remote ? 'CPU, simulation on a worker thread' : 'CPU, simulation on the page thread')
+  // A visitor who tuned the old lamp is told their settings are kept and where it lives.
+  const v1Banner = v1SettingsBanner()
+  if (v1Banner) document.body.append(v1Banner)
   // ?still: the still test's lamp (docs/methods/measured-hunt.md). The lava as spawned, then
   // everything zeroed (temperature, velocity, the kick's memory), no heat, no stirring, the
   // reservoirs not drawn, so what moves afterwards is the solver and gravity and nothing else

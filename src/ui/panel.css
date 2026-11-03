@@ -201,6 +201,17 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .knob-sub { height: 12px; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); white-space: nowrap; align-self: flex-start; }
 .subgroup-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); margin: 6px 0 0; }
 
+/* The strip for a visitor whose v1 settings are kept: bottom centre, out of the lamp's way. */
+.version-banner {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 25;
+  display: flex; align-items: center; gap: 6px; padding: 8px 12px 8px 14px; border-radius: 12px;
+  background: rgba(20, 20, 22, 0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  color: #ececec; font: 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); white-space: nowrap;
+}
+.version-banner a { color: #e8e8ea; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.version-banner-close { margin-left: 6px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.1); color: inherit; font-size: 14px; line-height: 22px; cursor: pointer; padding: 0; }
+
 /* Segmented choice and toggles */
 .segmented { display: flex; width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.08); padding: 2px; }
 .segmented button {
