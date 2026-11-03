@@ -468,9 +468,14 @@ export async function start () {
     else if (recorder) { const take = recorder; recorder = null; if (take.state !== 'inactive') take.stop() }
   })
   listener.onFileEnd = () => { if (musicRecording()) musicRecording(false) }
+  const TRAIN_MIN = 2
+  const TRAIN_MAX = 6
+  const TRAIN_DEFAULT = 4 // a kind's first train, with no last hit to time it by
+  const trains = { boom: null, beat: null } // { left, next, period } while a train of globs runs
+  const trainLastAt = { boom: -1e9, beat: -1e9 }
   let dropCharged = false // a pot is lidded and heating (see driveMusic)
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
-  const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters() }
+  const unMusic = () => { if (dropCharged && sim.chargePots) sim.chargePots({}); dropCharged = false; trains.boom = trains.beat = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters() }
   music.subscribe(on => { if (on) { musicLog.length = 0; musicLogStart = listener.time; listen() } else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
@@ -501,18 +506,12 @@ export async function start () {
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
   let bufferAt = -1e9
   let lavaLow = false
-  const VENT_TIME = 0.3 // seconds the lid is lifted for
   // Seconds between pots on deep notes: 3 skipped C-C's 0:57.1 (1.9 s after the one at the drop);
   // 1.5 keeps C-C's, 1.75 to 3.5 s apart, and half of Bangarang's, about 1.1 s apart.
   const BOOM_POT_GAP = 1.5
   // A deep note within this of a drop is the drop's own: the drop at 0:55.2 opened the big pot,
   // and the boom at the note's peak opened a second one 0.02 s later.
   const BOOM_AFTER_DROP = 1
-  // A beat's pot waits BEAT_POT_WAIT, and is let go if a deep note's attack is heard meanwhile:
-  // the attack's kick can be heard a frame or two before the attack counts, and its pot spent the
-  // charge the boom wanted (C-C 1:15.62 and 1:15.64, 1:22.52 and 1:22.60).
-  const BEAT_POT_WAIT = 0.035
-  let beatPotAt = -1
   let lastBoomPotAt = -1e9
   const SILENT_DB = -65 // the analyser's floor is -80; a song's quietest bars sit around -55
   const SILENT_AFTER = 15 // seconds
@@ -616,9 +615,12 @@ export async function start () {
     // part up to the reference, or the first kick after the bass was cut): the big pot opens
     // and two eddies come in ("I would expect to see a big pot fire and probably an eddie
     // or two spawn at the same time because of all the activity"). Then the beat pots, while busy.
-    const lidded = musicDrop() > 0 && !!sim.chargePot
+    // Three reserves, closed and charging (simulation.js): the drop's (the biggest pot), a deep
+    // note's and a beat's, so no kind of hit finds its pot spent by another (Robert: "maybe we need
+    // reserve pots for drops. oh yeah, or like 1 reserve for each type of hit").
+    const lidded = musicDrop() > 0 && !!sim.chargePots
     const calm = m.sinceBeat > DROP_WAIT || m.calm
-    if (lidded) { sim.chargePot(2 * musicDrop(), calm); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
+    if (lidded) { sim.chargePots({ drop: 2 * musicDrop(), boom: musicBoom() > 0 ? 2 * musicDrop() : 0, beat: 2 * musicDrop() }); dropCharged = true } else if (dropCharged && sim.chargePots) { sim.chargePots({}); dropCharged = false; trains.boom = trains.beat = null }
     const heardNumber = clock.locked ? (clock.until < clock.period / 2 ? clock.index + 1 : clock.index) : -1
     const musicNow = listener.time
     // The drop is music.js's alone: a surge out of a calm part, or the bass back after a cut. The
@@ -645,12 +647,30 @@ export async function start () {
     // 1:02.22 and 1:02.26, 1:15.61 and 1:15.64; Robert: "the bwongs on c-c are still not
     // triggering the pots... sometimes it does seem like it fires, but I'm not sure why the
     // inconsistency"). While a boom waits for its peak, the beat pots wait too.
-    const onBeatPot = m.beat && !calm && !lavaLow && !m.boomPending && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
-    const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
+    const onBeatPot = m.beat && !calm && (lidded || !lavaLow) && !m.boomPending && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
+    const open = (kind, strength) => { if (sim.releasePot) sim.releasePot(kind, strength); fired = true }
+    // A bass hit (a deep note, a beat's pot) is a train of globs, not a blast (Robert: "I really
+    // like the wave forms the pulsing releases are, we should make those what happens for any bass
+    // trigger, then have a frequency cap for that... a beat by beat pulse so it releases like four
+    // small globs with the wave pattern"): its reserve vents a glob on the hit and on each beat
+    // after, as many as the beats since that kind's last hit, from TRAIN_MIN to TRAIN_MAX ("can we
+    // tell based on timing whether we should do 2,3,4,8,16 pulses? 16 is probably too many,
+    // probably max is like 6 pulses per pot"), so a train lasts until its kind comes again. One
+    // train a kind at a time.
+    const startTrain = kind => {
+      if (trains[kind]) return
+      const period = clock.locked ? clock.period : m.bpm > 40 ? 60 / m.bpm : 0.5
+      const since = musicNow - trainLastAt[kind]
+      const count = since > 0 && since < 10 ? Math.max(TRAIN_MIN, Math.min(TRAIN_MAX, Math.round(since / period))) : TRAIN_DEFAULT
+      trainLastAt[kind] = musicNow
+      trains[kind] = { left: count - 1, last: musicNow, period }
+      if (sim.ventPot) sim.ventPot(kind, musicVent())
+      fired = true
+    }
     if (isDrop) {
       lastDropAt = musicNow
       dropped = true
-      if (lidded) open(musicDrop() * 1.5)
+      if (lidded) open('drop', musicDrop() * 1.5)
       if (sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
       // The eddies already turning swing round on the drop (Robert: "the eddies could abruptly
       // switch directions up to one time during their life time triggered by rareish music
@@ -660,26 +680,28 @@ export async function start () {
       // A stab out of a calm part (music.js): the pot that has been charging all through it goes,
       // and nothing else changes (Robert: "send a bolt of lightning did not release a pot! one
       // was ready though"; "don't change anythign else").
-      open(musicDrop() * 1.5)
-    } else if (m.boom && !calm && !lavaLow && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP && musicNow - lastDropAt >= BOOM_AFTER_DROP) {
+      open('drop', musicDrop() * 1.5)
+    } else if (m.boom && !calm && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP && musicNow - lastDropAt >= BOOM_AFTER_DROP) {
       // A deep note (music.js, the boom): a burst of lava with it, the lidded pot blasted by Boom,
       // or with Drop 0 a pot lit as it is heard; at most every BOOM_POT_GAP, since dubstep's sub
       // lands every bar (Bangarang: about one a second through its full parts, against C-C's
       // one every 3.45 s).
       lastBoomPotAt = musicNow
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
-      if (lidded) open(musicBoom()); else potNow()
-      beatPotAt = -1
-    } else if (lidded && onBeatPot) beatPotAt = musicNow
-    else if (lidded && m.beat && !lavaLow && Math.random() < musicVent()) {
-      // A vent (Robert: "what if we occasionally pulse the pre heated pots to release pulses of
-      // heat to match the music"): on a beat that opens nothing, now and then the charged pot's
-      // lid lifts for VENT_TIME and a puff of its lava goes up with the beat.
-      if (sim.ventPot) sim.ventPot(VENT_TIME)
-    }
-    if (beatPotAt >= 0) {
-      if (m.boomPending || m.boom || fired) beatPotAt = -1 // a drop, a stab or a boom has the pot
-      else if (musicNow - beatPotAt >= BEAT_POT_WAIT) { beatPotAt = -1; if (lidded) open(musicDrop()) }
+      if (lidded) startTrain('boom'); else potNow()
+    } else if (lidded && onBeatPot) startTrain('beat')
+    // The trains' globs, on the beats as heard (at a fixed period they drifted off C-C's 0.43 s
+    // beat at 0.5), or on time if no beat comes within one and a half periods; a calm part ends
+    // them. A reserve's lava is set aside behind its lid, so the trains do not wait on the lava
+    // buffer (waiting, they all stopped after C-C's drop put 49% of the lava in the ceiling); a
+    // reserve takes nothing in, so when its train ends it goes back to being a pot and a fresh one
+    // is closed in its place.
+    for (const kind of ['boom', 'beat']) {
+      const t = trains[kind]
+      if (!t) continue
+      if (calm || t.left <= 0) { trains[kind] = null; if (sim.retirePot) sim.retirePot(kind); continue }
+      const since = musicNow - t.last
+      if ((m.beat && since > 0.6 * t.period) || since >= 1.5 * t.period) { t.left--; t.last = musicNow; if (sim.ventPot) sim.ventPot(kind, musicVent()) }
     }
     // A busy part keeps at least Busy eddies alive, never fewer than the Eddies knob.
     params.drifters = calm ? drifters() : Math.max(drifters(), musicBusyEddies())

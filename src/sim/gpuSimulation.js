@@ -107,7 +107,7 @@ struct Params {
   wallNear: f32,
   wallPull: f32,
   touchStrength: f32,
-  lid: f32, // the drop's lidded pot as a HOME value, -1 for none (simulation.js lidPot)
+  lid: f32, // the reserves' lids, a bit per floor pot (simulation.js lidMask), 0 for none; exact as a float under 2^24
 }
 struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
@@ -217,7 +217,7 @@ fn containIn(i: u32, p: vec2f, first: u32, count: u32) -> vec2f {
     for (var j = first; j < first + count; j++) { if (insideBottle(j, p)) { k = i32(j); break; } }
     if (k < 0) { for (var j = first; j < first + count; j++) { if (abs(p.x - bf(j, 0u)) <= neckHalf(j, lineY)) { k = i32(j); break; } } }
     if (k < 0) { return vec2f(p.x, lineY); }
-    if (k == i32(P.lid)) { return vec2f(p.x, lineY); } // a lidded pot takes nothing in
+    if (lidded(k)) { return vec2f(p.x, lineY); } // a lidded pot takes nothing in
     F[HOME(i)] = f32(k);
   }
   let b = u32(k);
@@ -265,6 +265,12 @@ fn containIn(i: u32, p: vec2f, first: u32, count: u32) -> vec2f {
 // bottom edge and the ceiling's bottles above the lip (the lip is the top edge), or the flat
 // box when there are none. Returns the position; the caller decides what the glass does to the
 // velocity.
+// Whether the pot with this HOME value (ceiling bottles first) has its lid on.
+fn lidded(k: i32) -> bool {
+  let f = k - i32(P.ceilingBottles);
+  if (P.lid <= 0.0 || f < 0 || f > 23) { return false; }
+  return ((u32(P.lid) >> u32(f)) & 1u) == 1u;
+}
 fn contain(i: u32, pIn: vec2f) -> vec2f {
   var p = pIn;
   p.x = clamp(p.x, 0.0, P.width);
@@ -272,7 +278,7 @@ fn contain(i: u32, pIn: vec2f) -> vec2f {
     // The drop's lid: the lidded pot's lava that reaches the floor's line is held under it.
     // Each held a different depth under the line (0.5 to 6.5 px, by the particle's number): held
     // all at one depth they stacked in flat rows against the lid and left in stripes.
-    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height) { p.y = P.height + 0.5 + f32((i * 2654435761u) >> 29u) * 0.857; }
+    if (lidded(i32(F[HOME(i)])) && p.y <= P.height) { p.y = P.height + 0.5 + f32((i * 2654435761u) >> 29u) * 0.857; }
     if (p.y > P.height) {
       if (P.floorBottles > 0u) { p = containIn(i, p, P.ceilingBottles, P.floorBottles); } else { p.y = P.height; F[HOME(i)] = -1.0; }
     } else if (p.y < 0.0) {
@@ -325,7 +331,7 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
       if (F[HOME(i)] == pot) { t = max(t, min(select(P.maxTemp, WLD[o + 5u], WLD[o + 5u] > 0.0), t + heat)); }
       continue;
     }
-    if (WLD[o + 5u] > 0.0 && P.lid >= 0.0 && pot == P.lid) { continue; } // a lidded pot heats only its own lava
+    if (WLD[o + 5u] > 0.0 && lidded(i32(pot))) { continue; } // a lidded pot heats only its own lava
     let dx = (p.x - ex) * er / eh;
     let d2 = (dx * dx + fromFloor * fromFloor) / (er * er);
     if (d2 < 4.0) { t = min(P.maxTemp, t + heat * exp(-d2)); }
@@ -1031,7 +1037,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     pf[49] = params.damp ?? 0.25 // what is left of a relaxation move that reverses the last one; see relax
     pf[50] = params.wallNear ?? 0; pf[51] = params.wallPull ?? 0 // the glass as particles; see wallLattice
     pf[52] = params.touchStrength ?? 1
-    pf[53] = world && world.lid >= 0 ? ceiling.length + world.lid : -1
+    pf[53] = world && world.lid > 0 ? world.lid : 0
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
     for (let k = 0; k < MAX_TOUCHES; k++) {
@@ -1233,8 +1239,9 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     pulseWave: shell.pulseWave,
     flipEddies: shell.flipEddies,
     ventPot: shell.ventPot,
-    chargePot: shell.chargePot,
-    dropPot: shell.dropPot,
+    chargePots: shell.chargePots,
+    releasePot: shell.releasePot,
+    retirePot: shell.retirePot,
     ceilingAt: shell.ceilingAt,
     floorAt: shell.floorAt,
     bottles: shell.bottles,

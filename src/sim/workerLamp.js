@@ -29,10 +29,10 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let eddy = 0 // eddies to bear at the next frame (the music's beat)
   let pulse = 0 // pulse waves to send
   const flip = [] // eddy flips to send, each a chance
-  let vent = 0 // seconds to lift the lid for
-  let charge = 0 // the lidded pot's heat, held
-  let chargeBig = false // the drop's pot rather than a beat's
-  let drop = 0 // a drop's blast strength, 0 for none
+  let vent = {} // per reserve, seconds to lift its lid for
+  let charge = { drop: 0, boom: 0, beat: 0 } // the reserves' heats, held
+  let release = {} // per reserve, a blast's strength
+  let retire = [] // reserves to hand back
   let sentParams = ''
   const empty = new Float32Array(0)
   const state = { x: empty, y: empty, vx: empty, vy: empty, temp: empty, id: new Int32Array(0) }
@@ -102,13 +102,14 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, charge, chargeBig, drop, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, charge, release, retire, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
       pulse = 0
-      vent = 0
-      drop = 0
+      vent = {}
+      release = {}
+      retire = []
       if (!wantNow.cups) { cups = null }
     },
     // Fill `shown` with the positions for this instant, between the last two states, and give
@@ -137,9 +138,10 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     spawnEddy () { eddy++ },
     pulseWave () { pulse++ },
     flipEddies (chance = 1) { flip.push(chance) },
-    ventPot (seconds) { vent = Math.max(vent, seconds || 0) },
-    chargePot (level, big) { charge = level; chargeBig = !!big },
-    dropPot (strength) { drop = Math.max(drop, strength) },
+    ventPot (kind, seconds) { vent[kind] = Math.max(vent[kind] || 0, seconds || 0) },
+    chargePots (levels) { charge = { drop: 0, boom: 0, beat: 0, ...levels } },
+    retirePot (kind) { retire.push(kind) },
+    releasePot (kind, strength) { release[kind] = Math.max(release[kind] || 0, strength || 0) },
     setTouches (list) { touches = list || [] },
     transform (fn) {
       const map = affine(fn)

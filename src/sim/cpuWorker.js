@@ -131,9 +131,10 @@ self.onmessage = ({ data: m }) => {
       for (let k = 0; k < (m.eddy || 0); k++) sim.spawnEddy()
       for (let k = 0; k < (m.pulse || 0); k++) sim.pulseWave()
       for (const c of m.flip || []) sim.flipEddies(c)
-      if (m.vent) sim.ventPot(m.vent)
-      sim.chargePot(m.charge || 0, m.chargeBig)
-      if (m.drop) sim.dropPot(m.drop)
+      for (const k in m.vent || {}) sim.ventPot(k, m.vent[k])
+      sim.chargePots(m.charge)
+      for (const k in m.release || {}) sim.releasePot(k, m.release[k])
+      for (const k of m.retire || []) sim.retirePot(k)
       if (m.want) want = m.want
       setPace(m.pace)
       break
