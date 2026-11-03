@@ -151,10 +151,10 @@ import {
 } from './settings.js'
 import { CURRENT, goTo, versions } from '../versions.js'
 
-// The Sound section is hidden for now, not removed: the gloops are not finished and this version
-// goes up without them (Robert: "let's temporarily hide all the sound stuff from the settings so
-// we can push up this version. I think next is sound"). Flip to true to show it again.
-const SOUND_SHOWN = true // sound is the milestone again (Robert: "get a sub agent working on the sound side quest")
+// The gloops (the lava's own sounds) are hidden for now, not removed: they are not finished
+// (Robert: "let's temporarily hide all the sound stuff from the settings so we can push up this
+// version"). Flip to true to show their switch in the Music card again.
+const GLOOPS_SHOWN = false // the music is shown; the gloops wait (Robert: "the lava sound stuff is supposed to be hidden")
 
 // The touch modes as pictures: arrows out, arrows in, a circling arrow, a flame, a snowflake.
 const ICON = body => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`
@@ -168,7 +168,7 @@ const TOUCH_OPTIONS = [
 
 // Two sections: the top one for anyone (colours, what a finger does, the flow field, fullscreen)
 // and Advanced, folded away, with its own folded groups: Flow, Heating, Particle physics,
-// Rendering, Sound, and the seed. The knob labels are short because four knobs share a row.
+// Rendering, Music, and the seed. The knob labels are short because four knobs share a row.
 const seconds = v => `${v} s`
 const whole = v => String(Math.round(v))
 const fixed = digits => v => Number(v).toFixed(digits)
@@ -186,7 +186,6 @@ export function createSettingsPanel () {
   let panel
   // Advanced and its groups, all folded by default.
   const advancedOpen = fnstate(false)
-  const soundOpen = fnstate(false)
   // The music meter: three bars (bass, mids, highs) and a beat dot, written straight to the
   // DOM once a frame while listening, which is the cheapest thing a panel can do.
   const meterBars = [div(), div(), div()]
@@ -363,7 +362,7 @@ export function createSettingsPanel () {
           ]),
         )
       ),
-      hint(help, 'Music: the switch makes the lamp listen and move to the music. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used. What the music does is under Advanced, Sound.'),
+      hint(help, 'Music: the switch makes the lamp listen and move to the music. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used. What the music does is under Advanced, Music.'),
       pair('Flow Field', toggle('flow', showFlow), 'Fullscreen', toggle('fullscreen', fullscreen)),
       hint(help, [
         ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.'],
@@ -507,73 +506,61 @@ export function createSettingsPanel () {
           ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
         ])
       ),
-      ...(SOUND_SHOWN
-        ? [section(
-          'Sound', soundOpen,
-          pair('Sound', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
-          row('Bed', segmented('bed', soundBed, soundBeds)),
-          hint(help, 'Gloops made up from the lava as it moves: a bloop where a neck snaps or a blob lands, pitched by how much lava moved, and a bed that follows how stirred up the lava is: Simmer is a scatter of tiny pops, Noise a low rumble, Hum a drone.'),
-          // The lamp listening to music (Robert: "one thing I would love is a music sync"): a
-          // card like the others, the switch and the source, a meter so people can see it
-          // hearing, and the depths of what the music does.
-          div({ class: 'sub-panel' },
-            div({ class: 'sub-title' }, span('Music'), span({ class: 'sub-sub' }, 'what the music does to the lamp')),
-            pair('Spectrum', toggle('spectrum', showSpectrum)),
-            meterRow,
-            knobs(
-              knob('Sense', 'music-sensitivity', musicSensitivity, { min: 0.2, max: 5, step: 0.1 }, () => defaultMusicSensitivity, times),
-              knob('Every', 'music-every', musicEvery, { min: 1, max: 32, step: 1 }, () => defaultMusicEvery, v => `${v} beats`),
-              knob('Floor', 'music-floor', musicFloor, { min: 0, max: 4, step: 0.1 }, () => defaultMusicFloor, times),
-              knob('Lift', 'music-lift', musicLift, { min: 0, max: 3, step: 0.1 }, () => defaultMusicLift, times)
-            ),
-            knobs(
-              knob('Eddies', 'music-turb', musicTurb, { min: 0, max: 4, step: 0.1 }, () => defaultMusicTurb, times),
-              knob('Kick', 'music-kick', musicKick, { min: 0, max: 3, step: 0.1 }, () => defaultMusicKick, times)
-            ),
-            div({ class: 'subgroup-title' }, 'Motion'),
-            knobs(
-              knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
-              knob('Spring', 'music-spring', musicSpring, { min: 0, max: 40, step: 1 }, () => defaultMusicMotion.spring, v => `${v} px`),
-              knob('Pulse', 'music-pulse', musicPulse, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.pulse, fixed(2)),
-              knob('Spawn', 'music-spawn', musicSpawn, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spawn, fixed(2))
-            ),
-            knobs(
-              knob('Spin', 'music-spin', musicSpin, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spin, fixed(2))
-            ),
-            div({ class: 'subgroup-title' }, 'Frequency ranges'),
-            knobs(
-              knob('Beat Lo', 'music-beat-lo', musicBeatLo, HZ, () => defaultMusicRanges.beatLo, hz),
-              knob('Beat Hi', 'music-beat-hi', musicBeatHi, HZ, () => defaultMusicRanges.beatHi, hz),
-              knob('Heat Lo', 'music-heat-lo', musicHeatLo, HZ, () => defaultMusicRanges.heatLo, hz),
-              knob('Heat Hi', 'music-heat-hi', musicHeatHi, HZ, () => defaultMusicRanges.heatHi, hz)
-            ),
-            knobs(
-              knob('Eddy Lo', 'music-eddy-lo', musicEddyLo, HZ, () => defaultMusicRanges.eddyLo, hz),
-              knob('Eddy Hi', 'music-eddy-hi', musicEddyHi, HZ, () => defaultMusicRanges.eddyHi, hz),
-              knob('Kick Lo', 'music-kick-lo', musicKickLo, HZ, () => defaultMusicRanges.kickLo, hz),
-              knob('Kick Hi', 'music-kick-hi', musicKickHi, HZ, () => defaultMusicRanges.kickHi, hz)
-            ),
-            hint(help, [
-              ['Spectrum', 'A strip along the bottom of the screen showing what the lamp hears: frequency up the side, low red to high violet, the four ranges as coloured lines, each sync\'s level along the top, a tick on every beat and a white bar where a pot and an eddy fire.'],
-              ['Sense', 'How loud the music counts as: turn up for a quiet speaker, down for a loud one. The meter shows the heat, eddy and kick ranges, and flashes on the beat.'],
-              ['Every', 'Every this many beats a pot fires under the lava and, if there is room, an eddy comes in: 4 is every bar of most songs, 8 every two, 16 a phrase.'],
-              ['Floor', 'How much the heat range turns up the floor heat, on top of the Floor knob: at 1x a full signal doubles it.'],
-              ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
-              ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
-              ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
-              ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
-              ['Spring', 'On every bass hit the eddies spring: the lava about them lurches this far along their spin and bounces back.'],
-              ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
-              ['Spawn', 'The chance a bass hit brings in a new eddy, more often the more energetic the music.'],
-              ['Spin', 'The chance a hi-hat brings in a spinning eddy, also more often as the music gets energetic.'],
-              ['Beat Lo', 'The frequencies the beat is counted in, Lo to Hi: around 40 to 150 Hz is the kick drum.'],
-              ['Heat Lo', 'The frequencies that heat the lava, Lo to Hi.'],
-              ['Eddy Lo', 'The frequencies that swell the eddies, Lo to Hi.'],
-              ['Kick Lo', 'The frequencies that sharpen the Kick, Lo to Hi.']
-            ])
-          )
-        )]
-        : []),
+      // The lamp listening to music, a card like the other groups (Robert: "why is sound a
+      // collapsed group by default when all the others are cards?"). The gloops stay hidden
+      // until they are finished (Robert: "the lava sound stuff is supposed to be hidden").
+      group('Music',
+        subgroup('Response',
+            knob('Sense', 'music-sensitivity', musicSensitivity, { min: 0.2, max: 5, step: 0.1 }, () => defaultMusicSensitivity, times),
+            knob('Every', 'music-every', musicEvery, { min: 1, max: 32, step: 1 }, () => defaultMusicEvery, v => `${v} beats`),
+            knob('Floor', 'music-floor', musicFloor, { min: 0, max: 4, step: 0.1 }, () => defaultMusicFloor, times),
+            knob('Lift', 'music-lift', musicLift, { min: 0, max: 3, step: 0.1 }, () => defaultMusicLift, times),
+            knob('Eddies', 'music-turb', musicTurb, { min: 0, max: 4, step: 0.1 }, () => defaultMusicTurb, times),
+            knob('Kick', 'music-kick', musicKick, { min: 0, max: 3, step: 0.1 }, () => defaultMusicKick, times)
+          ),
+        subgroup('Motion',
+            knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
+            knob('Spring', 'music-spring', musicSpring, { min: 0, max: 40, step: 1 }, () => defaultMusicMotion.spring, v => `${v} px`),
+            knob('Pulse', 'music-pulse', musicPulse, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.pulse, fixed(2)),
+            knob('Spawn', 'music-spawn', musicSpawn, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spawn, fixed(2)),
+            knob('Spin', 'music-spin', musicSpin, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.spin, fixed(2))
+          ),
+        subgroup('Ranges',
+            knob('Beat Lo', 'music-beat-lo', musicBeatLo, HZ, () => defaultMusicRanges.beatLo, hz),
+            knob('Beat Hi', 'music-beat-hi', musicBeatHi, HZ, () => defaultMusicRanges.beatHi, hz),
+            knob('Heat Lo', 'music-heat-lo', musicHeatLo, HZ, () => defaultMusicRanges.heatLo, hz),
+            knob('Heat Hi', 'music-heat-hi', musicHeatHi, HZ, () => defaultMusicRanges.heatHi, hz),
+            knob('Eddy Lo', 'music-eddy-lo', musicEddyLo, HZ, () => defaultMusicRanges.eddyLo, hz),
+            knob('Eddy Hi', 'music-eddy-hi', musicEddyHi, HZ, () => defaultMusicRanges.eddyHi, hz),
+            knob('Kick Lo', 'music-kick-lo', musicKickLo, HZ, () => defaultMusicRanges.kickLo, hz),
+            knob('Kick Hi', 'music-kick-hi', musicKickHi, HZ, () => defaultMusicRanges.kickHi, hz)
+          ),
+        pair('Spectrum', toggle('spectrum', showSpectrum)),
+        meterRow,
+        ...(GLOOPS_SHOWN
+          ? [pair('Gloops', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
+              row('Bed', segmented('bed', soundBed, soundBeds))]
+          : []),
+        helpList(help, [
+          ['Sense', 'How loud the music counts as: turn up for a quiet speaker, down for a loud one. The meter shows the heat, eddy and kick ranges, and flashes on the beat.'],
+          ['Every', 'Every this many beats a pot fires under the lava and, if there is room, an eddy comes in: 4 is every bar of most songs, 8 every two, 16 a phrase.'],
+          ['Floor', 'How much the heat range turns up the floor heat, on top of the Floor knob: at 1x a full signal doubles it.'],
+          ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
+          ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
+          ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
+          ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
+          ['Spring', 'On every bass hit the eddies spring: the lava about them lurches this far along their spin and bounces back.'],
+          ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
+          ['Spawn', 'The chance a bass hit brings in a new eddy, more often the more energetic the music.'],
+          ['Spin', 'The chance a hi-hat brings in a spinning eddy, also more often as the music gets energetic.'],
+          ['Beat Lo', 'The frequencies the beat is counted in, Lo to Hi: around 40 to 150 Hz is the kick drum.'],
+          ['Heat Lo', 'The frequencies that heat the lava, Lo to Hi.'],
+          ['Eddy Lo', 'The frequencies that swell the eddies, Lo to Hi.'],
+          ['Kick Lo', 'The frequencies that sharpen the Kick, Lo to Hi.'],
+          ['Spectrum', 'A strip along the bottom of the screen showing what the lamp hears: frequency up the side, low red to high violet, the four ranges as coloured lines, each sync\'s level along the top, a tick on every beat and a white bar where a pot and an eddy fire.'],
+          ...(GLOOPS_SHOWN ? [['Gloops', 'Sounds made up from the lava as it moves: a bloop where a neck snaps or a blob lands, and a bed that follows how stirred up the lava is.']] : [])
+        ])
+      ),
       row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
       hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.')
     ),
