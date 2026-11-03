@@ -321,7 +321,11 @@ export function createSimulation ({ width, height, params }) {
   let meanDensity = 0 // the lava's mean density as of the last step, for the kick's surface test
   const eddies = []
   const drifting = []
-  let nextDrifter = randomRange(...DRIFT_GAP)
+  // No eddy for the first EDDY_FIRST seconds: the lava is still settling and the pots have not
+  // fired, so the first eddy at Turb 600 drove straight into a flat cold pool (Robert: "the eddie
+  // blast into the bottom is still too severe on startup").
+  const EDDY_FIRST = 8
+  let nextDrifter = EDDY_FIRST + randomRange(...DRIFT_GAP)
   // A log normal gap: the sum of three uniforms is near enough normal, scaled so the gap is
   // DRIFT_GAP_MEAN at the middle, about 2 s a standard deviation below it and 15 s above.
   const driftGap = () => { const z = (random() + random() + random() - 1.5) * 2; return DRIFT_GAP_MEAN * Math.exp(0.7 * z) }
