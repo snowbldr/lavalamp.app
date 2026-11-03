@@ -28,7 +28,37 @@ const BEAT_AVERAGE = 1.5 // seconds of bass history the beat is judged against
 const BEAT_RATIO = 1.4 // bass this many times its average is a beat, at Sensitivity 1
 const BEAT_FLOOR = 0.08 // bass under this (of full scale) is never a beat
 const BEAT_REFRACTORY = 0.22 // seconds: faster than 270 bpm is not a beat
+const BEAT_RISE_FLOOR = 0.04 // a rise under this (of full scale) over two frames is never a beat
+const BEAT_PEAK_SPAN = 0.15 // of full scale, 12 dB: a beat is within this of the recent loudest bass
+const BEAT_PEAK_MEMORY = 10 // seconds that loudest is held over
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
+// The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
+// lift a blob, an eddy half a second to spin up), and live audio cannot be heard early, so the
+// next beat is predicted from the ones heard (Robert: "it would be better to like preheat for a
+// bass hit so that blobs and eddies and such would launch exactly at the base hit or drop").
+// The period is the median gap between heard beats folded into 60 to 180 bpm, the phase pulled
+// a third of the way toward each heard beat near a predicted one; locked once four in a row land
+// within a fifth of a period, and it coasts through a missing kick for eight beats.
+const CLOCK_PULL = 0.33 // share of a heard beat's error the phase takes
+const CLOCK_WINDOW = 0.2 // of a period: a heard beat this close counts as on the clock
+const CLOCK_LOCK = 4 // on-clock beats in a row to lock
+const CLOCK_COAST = 64 // predicted beats without a heard one before the lock is dropped: a breakdown
+// is coasted through on the clock (at 8 the lock went 4 s into the test's breakdown and the
+// drop's first two seconds were late), so the drop can be met on time
+const CLOCK_HEARING = 2 // missed beats after which the kick counts as gone (a breakdown)
+// The activity: how much is going on in the song now against the rest of it, 0 in a breakdown
+// to 1 in the fullest chorus (Robert: "parts that are in between drops should show less
+// activity and high energy sections with all the instruments and such should show more").
+// Three features, each smoothed over a few seconds and scaled between the lowest and highest
+// it has been over the last ACTIVITY_MEMORY seconds: loudness, fullness (the share of 24 bands
+// from 40 Hz to 12 kHz that are sounding) and the onsets a second (beats and hats).
+const ACTIVITY_SMOOTH = 1.5 // seconds each feature is eased over
+const ACTIVITY_MEMORY = 120 // seconds the lowest and highest are held over (45 crept so far through an 8 s breakdown that it read 0.8)
+const ACTIVITY_RISE = 1 // seconds the activity takes to rise
+const ACTIVITY_FALL = 3 // and to fall
+const ACTIVITY_BANDS = 24
+const ACTIVITY_SPREAD = 0.375
+const bandLevels = new Float32Array(ACTIVITY_BANDS)
 
 export function createMusic () {
   let context = null
@@ -40,16 +70,27 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, bpm: 0, activity: 0.5, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  // The clock, in this module's own seconds: the next predicted beat's time and number.
+  const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
+  const gaps = []
+  const fits = [] // [beat number, time] of the on-clock beats, for the period
+  // The activity's features: eased value, lowest and highest held, and the onsets heard.
+  const features = { loud: { v: 0, lo: 0, hi: 0, seen: false }, full: { v: 0, lo: 0, hi: 0, seen: false }, onsets: { v: 0, lo: 0, hi: 0, seen: false } }
+  const onsetTimes = []
   let hatAverage = 0
   let lastHat = -1
   let device = '' // the chosen audio input's deviceId, '' for the default
   let bassAverage = 0
+  let riseAverage = 0
+  let beatPeak = 0
+  const beatHistory = [0, 0]
   const averages = { heat: 0, eddy: 0, kick: 0 }
   let lastBeat = -1
   let beatCount = 0
   const beatTimes = []
   let clock = 0
+  let startedAt = 0
 
   const band = ([lo, hi]) => {
     if (hi < lo) [lo, hi] = [hi, lo]
@@ -69,6 +110,11 @@ export function createMusic () {
     analyser = analyser || context.createAnalyser()
     analyser.fftSize = FFT
     analyser.smoothingTimeConstant = 0.2
+    // Headroom: the browser maps -100 to -30 dB onto the bytes, and louder clips at 255. The
+    // test's bass sat at 0.98 to 1.0 of full scale every frame, so a kick had nothing to rise
+    // into; a loud song through a loopback input does the same. -90 to -10 dB leaves room.
+    analyser.minDecibels = -90
+    analyser.maxDecibels = -10
     bins = new Uint8Array(analyser.frequencyBinCount)
     binHz = context.sampleRate / FFT
   }
@@ -78,7 +124,9 @@ export function createMusic () {
     if (testNodes) { for (const n of testNodes) { try { if (n.stop) n.stop() } catch (e) {} try { n.disconnect() } catch (e) {} } testNodes = null }
   }
 
-  // A kick at 120 bpm (a 55 Hz sine with a fast decay) and a hat every half beat, for the lab.
+  // A kick at 120 bpm (a 55 Hz sine with a fast decay) and a hat every half beat, for the lab, in
+  // sections of 16 beats: full (kick, hats, a bass line and a wash of mids) then a breakdown
+  // (soft hats and the wash low, no kick), so the activity and the clock's coasting can be seen.
   function startTest () {
     const gain = context.createGain()
     gain.gain.value = 0 // heard by the analyser, not the room
@@ -98,23 +146,163 @@ export function createMusic () {
     hatFilter.frequency.value = 5000
     const hatEnv = context.createGain()
     hatEnv.gain.value = 0
+    const bass = context.createOscillator()
+    bass.type = 'sawtooth'
+    bass.frequency.value = 110
+    const bassFilter = context.createBiquadFilter()
+    bassFilter.type = 'lowpass'
+    bassFilter.frequency.value = 600
+    const bassEnv = context.createGain()
+    bassEnv.gain.value = 0
+    const wash = context.createBiquadFilter()
+    wash.type = 'bandpass'
+    wash.frequency.value = 1500
+    wash.Q.value = 0.4
+    const washEnv = context.createGain()
+    washEnv.gain.value = 0
     kickOsc.connect(kickEnv).connect(analyser)
     noise.connect(hatFilter).connect(hatEnv).connect(analyser)
+    bass.connect(bassFilter).connect(bassEnv).connect(analyser)
+    noise.connect(wash).connect(washEnv).connect(analyser)
     analyser.connect(gain).connect(context.destination)
     const t0 = context.currentTime + 0.05
     const beat = 0.5 // seconds at 120 bpm
     for (let k = 0; k < 600; k++) {
       const t = t0 + k * beat
-      kickEnv.gain.setValueAtTime(1, t)
-      kickEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.18)
-      hatEnv.gain.setValueAtTime(0.4, t)
+      const full = Math.floor(k / 16) % 2 === 0
+      if (k % 16 === 0) {
+        bassEnv.gain.setValueAtTime(full ? 0.5 : 0, t)
+        washEnv.gain.setValueAtTime(full ? 1.2 : 0.25, t)
+      }
+      const hat = full ? 1 : 0.4
+      if (full) {
+        kickEnv.gain.setValueAtTime(1, t)
+        kickEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.18)
+      }
+      hatEnv.gain.setValueAtTime(0.4 * hat, t)
       hatEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.05)
-      hatEnv.gain.setValueAtTime(0.25, t + beat / 2)
+      hatEnv.gain.setValueAtTime(0.25 * hat, t + beat / 2)
       hatEnv.gain.exponentialRampToValueAtTime(0.001, t + beat / 2 + 0.04)
     }
     kickOsc.start()
     noise.start()
-    testNodes = [kickOsc, noise, kickEnv, hatEnv, hatFilter, gain]
+    bass.start()
+    testNodes = [kickOsc, noise, bass, kickEnv, hatEnv, hatFilter, bassFilter, bassEnv, wash, washEnv, gain]
+  }
+
+  // A heard beat. Not locked: it starts the clock again from itself and its gap to the last
+  // goes into the period. Locked: one near a predicted beat pulls the phase and its gap feeds
+  // the period; one off the clock is ignored, since a breakdown's stray hits dragged a locked
+  // 0.5 s period to 0.57 and the phase 0.2 s late.
+  function hear (t) {
+    const c = beatClock
+    const previous = c.next - c.period
+    const error = Math.abs(t - previous) < Math.abs(t - c.next) ? t - previous : t - c.next
+    let onClock = c.heardAt >= 0 && Math.abs(error) < CLOCK_WINDOW * c.period
+    // Back from a breakdown the first kick puts the phase right outright: coasting 16 beats on a
+    // period 8 ms out left the drop 0.13 s off, outside the window, and a lock that ignores
+    // off-clock beats then never heard the song again.
+    const returning = c.locked && c.missed >= CLOCK_HEARING
+    if (returning && !onClock) {
+      const number = c.index + 1 + Math.round((t - c.next) / c.period)
+      c.next = t + (c.index + 1 - number) * c.period
+      c.sectionAt = number
+      c.hit = true
+      c.missed = 0
+      c.heardAt = t
+      fits.length = 0
+      fits.push([number, t])
+      return
+    }
+    if (c.locked && !onClock) return
+    if (c.heardAt >= 0) {
+      let gap = t - c.heardAt
+      while (gap > 1) gap /= 2
+      while (gap < 1 / 3) gap *= 2
+      gaps.push(gap)
+      if (gaps.length > 12) gaps.shift()
+      if (gaps.length >= 3 && fits.length < 8) {
+        const sorted = [...gaps].sort((a, b) => a - b)
+        c.period += (sorted[sorted.length >> 1] - c.period) * 0.5
+      }
+    }
+    c.heardAt = t
+    if (onClock) {
+      // The kick back after a breakdown, or the lock's first beat: the phrase counts from here.
+      const number = Math.abs(t - previous) < Math.abs(t - c.next) ? c.index : c.index + 1
+      if (c.missed >= CLOCK_HEARING) c.sectionAt = number
+      // The period from a straight line through the on-clock beats by number: the median gap
+      // was 8 ms out, which coasting through a breakdown turns into 0.13 s.
+      fits.push([number, t])
+      if (fits.length > 32) fits.shift()
+      if (fits.length >= 8) {
+        let sn = 0, st = 0, snn = 0, snt = 0
+        for (const [n, x] of fits) { sn += n; st += x; snn += n * n; snt += n * x }
+        const k = fits.length
+        const slope = (k * snt - sn * st) / (k * snn - sn * sn)
+        if (slope > 1 / 3 && slope < 1) c.period = slope
+      }
+      c.next += error * CLOCK_PULL
+      c.onClock++
+      c.hit = true
+      if (c.onClock >= CLOCK_LOCK) c.locked = true
+    } else {
+      // A new run of beats, numbered from here: the phrase counts from its first beat, not the
+      // fourth where the lock comes (counted from the lock, the test's drop missed its pot).
+      c.onClock = 0
+      c.next = t + c.period
+      c.sectionAt = c.index
+      fits.length = 0
+      fits.push([c.index, t])
+    }
+  }
+  // The predicted beats passing: a tick on the frame one falls in; a predicted beat with no
+  // on-clock beat heard since the last is a miss, and CLOCK_COAST misses drop the lock.
+  function tickClock () {
+    const c = beatClock
+    c.tick = false
+    if (c.heardAt < 0) return
+    while (clock >= c.next + c.period * CLOCK_WINDOW) {
+      c.next += c.period
+      c.index++
+      c.tick = c.locked
+      if (c.hit) c.missed = 0; else c.missed++
+      c.hit = false
+      if (c.missed > CLOCK_COAST) { c.locked = false; c.onClock = 0 }
+    }
+  }
+  // The activity, once a frame, from the bins already read.
+  function activity (dt) {
+    let loud = 0
+    for (let k = 1; k < bins.length; k++) loud += bins[k]
+    loud /= (bins.length - 1) * 255
+    // A band is sounding within ACTIVITY_SPREAD of the loudest (the bytes are decibels, 80 dB
+    // across, so 0.375 is 30 dB): a fixed floor read every band as sounding all song long.
+    let loudest = 0
+    for (let i = 0; i < ACTIVITY_BANDS; i++) {
+      bandLevels[i] = band([40 * Math.pow(300, i / ACTIVITY_BANDS), 40 * Math.pow(300, (i + 1) / ACTIVITY_BANDS)])
+      if (bandLevels[i] > loudest) loudest = bandLevels[i]
+    }
+    let sounding = 0
+    for (let i = 0; i < ACTIVITY_BANDS; i++) if (bandLevels[i] > 0.1 && bandLevels[i] > loudest - ACTIVITY_SPREAD) sounding++
+    while (onsetTimes.length && clock - onsetTimes[0] > 4) onsetTimes.shift()
+    const values = { loud, full: sounding / ACTIVITY_BANDS, onsets: onsetTimes.length / 4 }
+    let sum = 0
+    if (clock - startedAt < 1) return // the first second is the silence before the music
+    for (const [k, f] of Object.entries(features)) {
+      const x = values[k]
+      if (!f.seen) { f.v = x; f.lo = x; f.hi = x; f.seen = true }
+      f.v += (x - f.v) * Math.min(1, dt / ACTIVITY_SMOOTH)
+      // The held range creeps back toward now over the memory, so a song's quiet intro does
+      // not make every later bar read as full.
+      f.hi = Math.max(f.v, f.hi - (f.hi - f.v) * Math.min(1, dt / ACTIVITY_MEMORY))
+      f.lo = Math.min(f.v, f.lo + (f.v - f.lo) * Math.min(1, dt / ACTIVITY_MEMORY))
+      const span = f.hi - f.lo
+      levels.parts[k] = span > 0.02 * Math.max(0.05, f.hi) ? (f.v - f.lo) / span : 0.5
+      sum += levels.parts[k]
+    }
+    const target = sum / 3
+    levels.activity += (target - levels.activity) * Math.min(1, dt / (target > levels.activity ? ACTIVITY_RISE : ACTIVITY_FALL))
   }
 
   return {
@@ -145,7 +333,10 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; lastBeat = -1; beatCount = 0; beatTimes.length = 0
+        bassAverage = 0; riseAverage = 0; beatPeak = 0; beatHistory[0] = beatHistory[1] = 0; lastBeat = -1; beatCount = 0; beatTimes.length = 0
+        Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
+        for (const f of Object.values(features)) f.seen = false
+        onsetTimes.length = 0; levels.activity = 0.5; startedAt = clock
       } catch (e) {
         enabled = false
         error = e && e.message ? e.message : String(e)
@@ -180,21 +371,39 @@ export function createMusic () {
       levels.level = ease(levels.level, Math.min(1.5, (raw.heat + raw.eddy + raw.kick) / 3 * sensitivity), dt)
       // A hat: the same test on the kick range, quicker (a hi-hat runs eighths and sixteenths).
       hatAverage += (raw.kick - hatAverage) * Math.min(1, dt / 0.6)
-      if (raw.kick > 0.04 && raw.kick > hatAverage * (1.25 / Math.max(0.3, Math.sqrt(sensitivity))) && clock - lastHat > 0.11) { levels.hat = true; lastHat = clock }
-      // The beat: the instant energy in the beat range against its running average.
+      if (raw.kick > 0.04 && raw.kick > hatAverage * (1.25 / Math.max(0.3, Math.sqrt(sensitivity))) && clock - lastHat > 0.11) { levels.hat = true; lastHat = clock; onsetTimes.push(clock) }
+      // The beat: the rise of the beat range's energy over the last two frames, an onset, against
+      // that rise's own running average. The energy against its average missed half the kicks
+      // once a bass line held the range up (19 heard of 36 on the test with its bass on), so a
+      // held note now counts for nothing and only a hit's attack does.
       bassAverage += (raw.beat - bassAverage) * Math.min(1, dt / BEAT_AVERAGE)
+      const rise = Math.max(0, raw.beat - Math.min(beatHistory[0], beatHistory[1]))
+      beatHistory[1] = beatHistory[0]; beatHistory[0] = raw.beat
+      raw.rise = rise
+      riseAverage += (rise - riseAverage) * Math.min(1, dt / BEAT_AVERAGE)
       const ratio = BEAT_RATIO / Math.max(0.3, Math.sqrt(sensitivity))
-      if (raw.beat > BEAT_FLOOR && raw.beat > bassAverage * ratio && clock - lastBeat > BEAT_REFRACTORY) {
+      // And near the recent kicks: within BEAT_PEAK_SPAN (12 dB) of their level, held a while, so in a
+      // breakdown the leak of hats and pads into the bass does not count as a kick.
+      beatPeak = Math.max(raw.beat, beatPeak - (beatPeak - raw.beat) * Math.min(1, dt / BEAT_PEAK_MEMORY))
+      if (raw.beat > BEAT_FLOOR && raw.beat > beatPeak - BEAT_PEAK_SPAN && rise > BEAT_RISE_FLOOR && rise > riseAverage * ratio * 2.5 && clock - lastBeat > BEAT_REFRACTORY) {
         levels.beat = true
         lastBeat = clock
         beatCount++
         beatTimes.push(clock)
         if (beatTimes.length > 9) beatTimes.shift()
         if (beatTimes.length >= 4) levels.bpm = Math.round(60 * (beatTimes.length - 1) / (beatTimes[beatTimes.length - 1] - beatTimes[0]))
+        onsetTimes.push(clock)
+        hear(clock)
       }
+      tickClock()
+      activity(dt)
       return levels
     },
     get beats () { return beatCount },
+    // The beat clock: locked or not, whether the kick is being heard (not in a breakdown), the
+    // period, seconds to the next predicted beat (number index + 1), the beat the current
+    // section began on, and whether a predicted beat fell in this frame.
+    get clock () { return { locked: beatClock.locked, hearing: beatClock.locked && beatClock.missed < CLOCK_HEARING, period: beatClock.period, until: beatClock.next - clock, index: beatClock.index, sectionAt: beatClock.sectionAt, tick: beatClock.tick } },
     // The analyser's last frame of bins (0 to 255) and Hz a bin, for the spectrum view.
     spectrum () { return bins && enabled ? { bins, binHz } : null },
     // The audio inputs this browser can choose between; their names are only given once a

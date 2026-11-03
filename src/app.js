@@ -123,6 +123,8 @@ import {
   musicPulse,
   musicSpawn,
   musicSpin,
+  musicLead,
+  musicActivity,
   showSpectrum,
   musicBeatLo,
   musicBeatHi,
@@ -412,6 +414,17 @@ export async function start () {
   document.body.append(spectrumView.element)
   spectrumView.show(showSpectrum())
   showSpectrum.subscribe(on => spectrumView.show(on))
+  // The leads, in seconds of the lamp's own time: an eddy spins up over half a second
+  // (simulation.js, driftEnvelope) and the spring's lurch peaks a quarter of its 2.5 Hz period in.
+  // They are turned into real seconds by the pace. The analyser hears a beat about AUDIO_LAG
+  // late (its smoothing and the frame), and the clock is built from those late beats, so every
+  // lead carries it too.
+  const EDDY_LEAD = 0.5
+  const SPRING_LEAD = 0.1
+  const AUDIO_LAG = 0.04
+  // For each move, the last beat number it was fired for, so it fires once a beat.
+  const firedFor = { pot: -1, eddy: -1, spring: -1, pulse: -1 }
+  let wasLocked = false
   const driveMusic = dt => {
     if (!listener.enabled) return
     musicRanges.beat[0] = musicBeatLo(); musicRanges.beat[1] = musicBeatHi()
@@ -419,40 +432,73 @@ export async function start () {
     musicRanges.eddy[0] = musicEddyLo(); musicRanges.eddy[1] = musicEddyHi()
     musicRanges.kick[0] = musicKickLo(); musicRanges.kick[1] = musicKickHi()
     const m = listener.update(dt, musicSensitivity(), musicRanges)
+    const clock = listener.clock
+    // The song's sections: the activity, 0 in a breakdown to 1 in the fullest part, made a gain
+    // about 1 by the Activity knob, so a breakdown calms the lamp and a chorus busies it.
+    const act = Math.max(0, Math.min(1, m.activity))
+    const busy = Math.max(0.05, 1 + musicActivity() * (2 * act - 1))
     // m.heat, not m.bass: after the ranges came in this read a name that no longer existed, the
     // floor heat and Lift became NaN every frame, and the whole pool read hot with artifacts
     // (Robert: "The music mode is causing all of the lava to stay completely hot the whole time").
     params.floorHeat = floorHeat() * (1 + musicFloor() * m.heat)
     params.liftCap = lift() * (1 + musicLift() * m.heat)
-    params.turbulence = turbulence() * (1 + musicTurb() * m.eddy)
+    params.turbulence = turbulence() * busy * (1 + musicTurb() * m.eddy)
     params.wobbleKick = wobbleKick() * (1 + musicKick() * m.kick)
-    // Every Nth beat, a pot fires and an eddy is born if there is room: on the phrase, not at
-    // random. The eddies' strength rides the eddy band's envelope above, so each hit shoves.
-    let fired = false
-    // The bass on the eddies: a spring every hit, a wave some of the time, a new eddy now and
-    // then the more energetic the music is; a hi-hat brings a spinning eddy now and then.
-    const energy = Math.min(1, m.level * 1.5)
-    if (m.beat) {
-      if (sim.springHit && musicSpring() > 0) sim.springHit(musicSpring())
-      if (sim.pulseWave && Math.random() < musicPulse()) sim.pulseWave()
-      if (sim.spawnEddy && Math.random() < musicSpawn() * energy) sim.spawnEddy()
+    const chance = Math.min(2, busy)
+    // The moves on the beat. Locked to the clock, each fires its lead ahead of the predicted
+    // beat, so it lands on it: the latest beat within its lead, once. Not locked (the song's
+    // start, a breakdown with no kick), they fire on the beat as heard, late but never wrong.
+    const pace1 = Math.max(0.05, pace() * tempoPace)
+    // Each move's lead in real seconds.
+    const leadOf = name => Math.max(0, (name === 'pot' ? musicLead() : name === 'eddy' ? EDDY_LEAD / pace1 : name === 'spring' ? SPRING_LEAD / pace1 : 0) + AUDIO_LAG)
+    // The next beat is number clock.index + 1, clock.until seconds away, the ones after it a
+    // period apart: the latest within the lead, if it has not had this move yet.
+    const latestWithin = name => clock.index + 1 + Math.floor((leadOf(name) - clock.until) / clock.period)
+    const due = name => {
+      if (!clock.locked || leadOf(name) < clock.until) return false
+      const beat = latestWithin(name)
+      if (beat <= firedFor[name]) return false
+      firedFor[name] = beat
+      return beat
     }
-    if (m.hat && sim.spawnEddy && Math.random() < musicSpin() * energy * 0.25) sim.spawnEddy()
+    // Newly locked: start each move from the beat it is now inside the lead of, not a burst.
+    if (clock.locked && !wasLocked) for (const k in firedFor) firedFor[k] = latestWithin(k)
+    wasLocked = clock.locked
+    const spring = () => { if (sim.springHit && musicSpring() > 0) sim.springHit(musicSpring() * Math.min(1.5, busy)) }
+    const pulse = () => { if (sim.pulseWave && Math.random() < musicPulse() * chance) sim.pulseWave() }
+    const spawn = () => { if (sim.spawnEddy && Math.random() < musicSpawn() * act * chance) sim.spawnEddy() }
+    const every = () => Math.max(1, Math.round(musicEvery())) * (musicActivity() > 0 && act < 0.3 ? 2 : 1)
+    let fired = false
+    const potNow = () => { fired = true; if (sim.lightElement) sim.lightElement() }
+    // Every counts from the beat the section began on (the drop, or the lock), so the pots fall
+    // on the phrase. In a breakdown the clock coasts: the moves that ride the kick pause, and the
+    // pots keep the phrase (every other one, the activity being low), so a drop on the phrase
+    // finds its pot already lit.
+    const onPhrase = beat => (beat - clock.sectionAt) % every() === 0
+    if (clock.locked) {
+      const s = due('spring')
+      if (s !== false && clock.hearing) spring()
+      const w = due('pulse')
+      if (w !== false && clock.hearing) pulse()
+      const e = due('eddy')
+      if (e !== false) { if (clock.hearing) spawn(); if (onPhrase(e) && sim.spawnEddy) sim.spawnEddy() }
+      const p = musicLead() > 0 ? due('pot') : false
+      if (p !== false && onPhrase(p)) potNow()
+      if (musicLead() <= 0 && m.beat) { beatsHeard++; if (beatsHeard % every() === 0) potNow() }
+    } else if (m.beat) {
+      spring(); pulse(); spawn()
+      beatsHeard++
+      if (beatsHeard % every() === 0) { potNow(); if (sim.spawnEddy) sim.spawnEddy() }
+    }
+    // A hat brings a spinning eddy now and then, more often in a busy part.
+    if (m.hat && sim.spawnEddy && Math.random() < musicSpin() * act * chance * 0.25) sim.spawnEddy()
     // Pace follows the tempo a little: against 120 bpm, by Tempo, held to 0.75 to 1.3 times,
     // eased over two seconds so it breathes rather than jumps.
     if (m.bpm > 40) {
       const target = Math.max(0.75, Math.min(1.3, 1 + musicTempo() * (Math.max(0.6, Math.min(1.6, m.bpm / 120)) - 1)))
       tempoPace += (target - tempoPace) * Math.min(1, dt / 2)
     }
-    if (m.beat) {
-      beatsHeard++
-      if (beatsHeard % Math.max(1, Math.round(musicEvery())) === 0) {
-        fired = true
-        if (sim.lightElement) sim.lightElement()
-        if (sim.spawnEddy) sim.spawnEddy()
-      }
-    }
-    if (showSpectrum()) spectrumView.draw(listener.spectrum(), m, musicRanges, fired)
+    if (showSpectrum()) spectrumView.draw(listener.spectrum(), m, musicRanges, fired, clock.tick)
     musicMeter.bass = m.heat; musicMeter.mid = m.eddy; musicMeter.high = m.kick
     if (m.beat) musicMeter.beat = 1; else musicMeter.beat *= 0.85
     if (settingsPanel.meter) settingsPanel.meter(musicMeter)

@@ -1,4 +1,4 @@
-import { button, div, fnstate, input, span } from '@srfnstack/fntags'
+import { a, button, div, fnstate, input, span } from '@srfnstack/fntags'
 import { TOUCH_UI, group, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
@@ -114,6 +114,10 @@ import {
   musicPulse,
   musicSpawn,
   musicSpin,
+  musicLead,
+  defaultMusicLead,
+  musicActivity,
+  defaultMusicActivity,
   defaultMusicMotion,
   showSpectrum,
   defaultMusicRanges,
@@ -333,6 +337,9 @@ export function createSettingsPanel () {
           )
         ),
         div({ class: 'sub-body' },
+          // The meter up here with the switch, so the card shows it hearing (Robert: "we should move
+          // this sound indicator to the main audio controls... in the expanded form").
+          meterRow,
           ...(musicSources.length > 1 ? [row('Source', segmented('music-source', musicSource, musicSources))] : []),
           // System audio comes only with a screen share, so say plainly what is and is not used
           // (Robert: "a note explaining that it's required in order to hear the audio playing on
@@ -353,7 +360,7 @@ export function createSettingsPanel () {
           ...(TOUCH_UI ? [] : [
             button({ class: 'music-help-link', onclick: () => loopbackHelp(!loopbackHelp()) }, 'Hear every app, no share dialog (Mac)'),
             div({ class: 'music-note', style: { display: loopbackHelp.bindStyle(() => loopbackHelp() ? 'block' : 'none') } },
-              div('1. Install BlackHole 2ch, a free audio loopback driver: existential.audio/blackhole, or "brew install blackhole-2ch" in a terminal.'),
+              div('1. Install BlackHole 2ch, a free audio loopback driver: ', a({ href: 'https://existential.audio/blackhole/', target: '_blank', rel: 'noopener', class: 'music-link' }, 'existential.audio/blackhole'), ', or "brew install blackhole-2ch" in a terminal.'),
               div('2. Open Audio MIDI Setup, press +, Create Multi-Output Device, and tick your speakers and BlackHole 2ch.'),
               div('3. In System Settings, Sound, choose that Multi-Output Device as the output, so you still hear the music.'),
               div('4. Here, choose Mic as the source and BlackHole 2ch as the Input, then Listen.'),
@@ -518,6 +525,10 @@ export function createSettingsPanel () {
             knob('Eddies', 'music-turb', musicTurb, { min: 0, max: 4, step: 0.1 }, () => defaultMusicTurb, times),
             knob('Kick', 'music-kick', musicKick, { min: 0, max: 3, step: 0.1 }, () => defaultMusicKick, times)
           ),
+        subgroup('Timing',
+            knob('Lead', 'music-lead', musicLead, { min: 0, max: 4, step: 0.1 }, () => defaultMusicLead, seconds),
+            knob('Activity', 'music-activity', musicActivity, { min: 0, max: 1, step: 0.05 }, () => defaultMusicActivity, fixed(2))
+          ),
         subgroup('Motion',
             knob('Tempo', 'music-tempo', musicTempo, { min: 0, max: 1, step: 0.05 }, () => defaultMusicMotion.tempo, fixed(2)),
             knob('Spring', 'music-spring', musicSpring, { min: 0, max: 40, step: 1 }, () => defaultMusicMotion.spring, v => `${v} px`),
@@ -536,7 +547,6 @@ export function createSettingsPanel () {
             knob('Kick Hi', 'music-kick-hi', musicKickHi, HZ, () => defaultMusicRanges.kickHi, hz)
           ),
         pair('Spectrum', toggle('spectrum', showSpectrum)),
-        meterRow,
         ...(GLOOPS_SHOWN
           ? [pair('Gloops', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
               row('Bed', segmented('bed', soundBed, soundBeds))]
@@ -548,6 +558,8 @@ export function createSettingsPanel () {
           ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
           ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
           ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
+          ['Lead', 'How many seconds before a beat a pot is lit, so the blob lifts on the beat rather than after it. The lamp learns the beat from the music and predicts the next one; 0 lights the pot as the beat is heard.'],
+          ['Activity', 'How much the song\'s sections change the lamp: calm in a breakdown, busy where everything is playing. 0 ignores them.'],
           ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
           ['Spring', 'On every bass hit the eddies spring: the lava about them lurches this far along their spin and bounces back.'],
           ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
@@ -557,7 +569,7 @@ export function createSettingsPanel () {
           ['Heat Lo', 'The frequencies that heat the lava, Lo to Hi.'],
           ['Eddy Lo', 'The frequencies that swell the eddies, Lo to Hi.'],
           ['Kick Lo', 'The frequencies that sharpen the Kick, Lo to Hi.'],
-          ['Spectrum', 'A strip along the bottom of the screen showing what the lamp hears: frequency up the side, low red to high violet, the four ranges as coloured lines, each sync\'s level along the top, a tick on every beat and a white bar where a pot and an eddy fire.'],
+          ['Spectrum', 'A strip along the bottom of the screen showing what the lamp hears: frequency up the side, low red to high violet, the four ranges as coloured lines, each sync\'s level along the top with the song\'s activity in violet, a white tick on every beat heard, a grey one on every beat predicted, and a white bar where a pot fires.'],
           ...(GLOOPS_SHOWN ? [['Gloops', 'Sounds made up from the lava as it moves: a bloop where a neck snaps or a blob lands, and a bed that follows how stirred up the lava is.']] : [])
         ])
       ),
