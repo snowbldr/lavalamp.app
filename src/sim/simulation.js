@@ -267,7 +267,9 @@ const DRIFT_SPIN_TAU = 0.3 // of the life
 const DRIFT_ADVECT = 1
 const EDDY_DEPTH_FADE = [0.6, 0.12]
 const DRIFT_LIFE = [12, 30] // seconds
-const DRIFT_GAP = [2, 6] // seconds between one dying and the next being born
+const DRIFT_GAP = [2, 6] // seconds before the first birth
+const DRIFT_GAP_MEAN = 5 // seconds between birth bursts at the middle of the log normal; see driftGap
+const DRIFT_BURST_ALL = 0.15 // the chance a birth brings every missing eddy at once
 // A drifter is shaped like a little tornado rather than a soft eddy: solid rotation inside a
 // core of DRIFT_CORE px, then falling off as one over distance so the arrows wrap around it from
 // far away, cut off smoothly at DRIFT_REACH cores out (or DRIFT_REACH_MAX of the lamp's shorter
@@ -322,6 +324,9 @@ export function createSimulation ({ width, height, params }) {
   let nextEddy = randomRange(...EDDY_GAP)
   const drifting = []
   let nextDrifter = randomRange(...DRIFT_GAP)
+  // A log normal gap: the sum of three uniforms is near enough normal, scaled so the gap is
+  // DRIFT_GAP_MEAN at the middle, about 2 s a standard deviation below it and 15 s above.
+  const driftGap = () => { const z = (random() + random() + random() - 1.5) * 2; return DRIFT_GAP_MEAN * Math.exp(0.7 * z) }
   const carried = [0, 0] // scratch: the other eddies' flow at an eddy
   // Where an eddy may be born on a side wall: above the lava's rest level by EDDY_CLEARANCE of
   // the height (Robert: "we only want to spawn eddies like at least 5% of the screen above where
@@ -429,7 +434,7 @@ export function createSimulation ({ width, height, params }) {
     time += dt
     // Stronger turbulence is also more frequent: the gap scales from 1 at zero to 1/4 at the top.
     const pace = 1 - 0.75 * Math.min(1, Math.abs(turbulence) / EDDY_MAX)
-    if (drifting.length < drifters && time >= nextDrifter) {
+    const bornDrifter = () => {
       const core = randomRange(...DRIFT_CORE)
       const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
       const speed = (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY)
@@ -454,13 +459,23 @@ export function createSimulation ({ width, height, params }) {
         start: time,
         life: randomRange(...DRIFT_LIFE)
       })
-      nextDrifter = time + randomRange(...DRIFT_GAP)
+    }
+    // Births come in bursts at skewed gaps (Robert: "sometimes it should be quiet for 10 seconds
+    // before an eddie spawns, then maximum it spawns all of the eddies at the same time across a
+    // normal distribution with a lean toward less frequent"): the gap is log normal about
+    // DRIFT_GAP_MEAN s (most 2 to 10, a tail to 15 and more); at a birth, one in DRIFT_BURST_ALL
+    // times every missing eddy is born at once, otherwise a number leaning hard toward one.
+    if (drifting.length < drifters && time >= nextDrifter) {
+      const missing = drifters - drifting.length
+      const burst = random() < DRIFT_BURST_ALL ? missing : 1 + Math.floor(random() * random() * missing)
+      for (let b = 0; b < burst; b++) bornDrifter()
+      nextDrifter = time + driftGap()
     }
     for (let k = drifting.length - 1; k >= 0; k--) {
       const e = drifting[k]
       if (time - e.start > e.life) {
         drifting.splice(k, 1)
-        if (time + randomRange(...DRIFT_GAP) < nextDrifter || nextDrifter < time) nextDrifter = time + randomRange(...DRIFT_GAP)
+        if (nextDrifter < time) nextDrifter = time + driftGap()
         continue
       }
       const pace = travelPace(e, time - e.start)
