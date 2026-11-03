@@ -339,6 +339,10 @@ export function createSimulation ({ width, height, params }) {
   // pressure wave with no net move, fading over its life.
   const pulses = []
   let pulseRequests = 0
+  // The music's flips (Robert: "the eddies could abruptly switch directions up to one time during
+  // their life time triggered by rareish music events"): each request is a chance that every eddy
+  // not yet flipped turns its spin round, at once.
+  const flipRequests = []
   const PULSE_SPEED = 260 // px/s
   const PULSE_WIDTH = 40 // px
   const PULSE_LIFE = 1.6 // s
@@ -566,6 +570,12 @@ export function createSimulation ({ width, height, params }) {
     // to 5"; the in-place ones had their own clock and no cap). Each birth is one kind or the
     // other at random.
     const alive = drifting.length + eddies.length
+    // The flips first, so an eddy the music asks for in the same frame keeps its spin.
+    while (flipRequests.length) {
+      const chance = flipRequests.shift()
+      for (const e of drifting) if (!e.flipped && random() < chance) { e.spin = -e.spin; e.flipped = true }
+      for (const e of eddies) if (!e.flipped && random() < chance) { e.spin = -e.spin; e.flipped = true }
+    }
     // The music asks for an eddy on its beat count: one is born now if the Eddies knob has room
     // (at least one, so a lamp at Eddies 0 still dances to music), whatever the birth clock says.
     while (eddyRequests > 0) {
@@ -1704,6 +1714,7 @@ export function createSimulation ({ width, height, params }) {
     lightElement () { lightRequests++ },
     spawnEddy () { eddyRequests++ },
     pulseWave () { pulseRequests++ },
+    flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big },
     dropPot (strength) { dropRequest = Math.max(dropRequest, strength || 0) },
     get lid () { return lidPot },

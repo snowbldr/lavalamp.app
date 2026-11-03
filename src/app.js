@@ -130,6 +130,7 @@ import {
   musicDrop,
   musicBoom,
   musicBusyEddies,
+  musicFlip,
   showSpectrum,
   musicBeatLo,
   musicBeatHi,
@@ -574,7 +575,12 @@ export async function start () {
       dropped = true
       if (lidded) open(musicDrop() * 1.5)
       if (sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
+      // The eddies already turning swing round on the drop (Robert: "the eddies could abruptly
+      // switch directions up to one time during their life time triggered by rareish music
+      // events"); the two just asked for are born after this and keep their spin.
+      if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip())
     } else if (m.boom && !calm && musicBoom() > 0) {
+      if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
       // A deep note (music.js, the boom): a burst of lava with it, the lidded pot blasted by Boom,
       // or with Drop 0 a pot lit as it is heard.
       if (lidded) open(musicBoom()); else potNow()
