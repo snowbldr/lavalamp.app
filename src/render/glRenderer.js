@@ -1,4 +1,4 @@
-import { drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
+import { drawCooling, drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
 // WebGL exists: soft discs composited source-over into a texture, then one fullscreen pass
@@ -366,6 +366,7 @@ export function createGlRenderer (canvas, look) {
       const k = view.k * scale
       overlayContext.setTransform(k, 0, 0, k, view.ox * scale, view.oy * scale)
       if (look.showHeater && overlays.heaterAt && !overlays.view) drawHeater(overlayContext, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+      if (look.showHeater && overlays.bottles && !overlays.view) drawCooling(overlayContext, lampWidth, 1, overlays.bottles(), overlays.ceilingCool || 1)
       if (look.showFlow && overlays.flowAt) drawFlow(overlayContext, lampWidth, lampHeight, 1, look, overlays.flowAt)
       if (overlays.view) drawCups(overlayContext, lampWidth, lampHeight, overlays.view, 1 / k)
     } else if (overlayShown) {

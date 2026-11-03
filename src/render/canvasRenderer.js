@@ -1,4 +1,4 @@
-import { drawCups, drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
+import { drawCooling, drawCups, drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
 
 const ALPHA_THRESHOLD = 70
 // The threshold pass touches every pixel in JavaScript, so the canvas has at most
@@ -92,6 +92,7 @@ export function createCanvasRenderer (canvas, look) {
     const k = view.k * scale
     context.setTransform(k, 0, 0, k, view.ox * scale, view.oy * scale)
     if (look.showHeater && overlays.heaterAt && !overlays.view) drawHeater(context, lampWidth, lampHeight, 1, look, overlays.heaterAt, overlays.elements ? overlays.elements() : [])
+    if (look.showHeater && overlays.bottles && !overlays.view) drawCooling(context, lampWidth, 1, overlays.bottles(), overlays.ceilingCool || 1)
     if (look.showFlow && overlays.flowAt) drawFlow(context, lampWidth, lampHeight, 1, look, overlays.flowAt)
     if (overlays.view) drawCups(context, lampWidth, lampHeight, overlays.view, 1 / k)
     context.setTransform(1, 0, 0, 1, 0, 0)

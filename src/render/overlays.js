@@ -45,6 +45,27 @@ export function drawHeater (context, width, height, scale, look, heaterAt, eleme
   }
 }
 
+// The ceiling bottles' cooling, mirrored from the heater (Robert: "heater view should show
+// cooling on the bottles"): a strip along the top edge and a low dome hanging under each bottle's
+// mouth, icy blue as strong as the cooling is past the lamp's own (1 as tuned, CEILING_COOL in
+// app.js at the music's fullest), nothing at 1.
+const COOL_COLOR = [140, 205, 255]
+export function drawCooling (context, width, scale, bottles, cool, coolMax = 5) {
+  const f = Math.max(0, Math.min(1, (cool - 1) / Math.max(1e-6, coolMax - 1)))
+  if (f <= 0) return
+  const strip = Math.max(2, Math.round(HEAT_STRIP * scale))
+  const [r, g, b] = COOL_COLOR
+  context.fillStyle = `rgba(${r},${g},${b},${(0.25 + 0.6 * f).toFixed(3)})`
+  context.fillRect(0, 0, width, strip)
+  for (const bottle of bottles) {
+    const rx = Math.max(6, bottle.w * scale)
+    const ry = Math.max(3, Math.min(bottle.w * 0.5, 24) * scale)
+    context.beginPath()
+    context.ellipse(bottle.cx * scale, strip, rx, ry, 0, 0, Math.PI)
+    context.fill()
+  }
+}
+
 // Wind map arrows: one per grid cell, pointing with the flow, as long and as bright as the flow
 // is fast, from look.flowSlow to look.flowFast.
 const FLOW_HALF_SPEED = 60 // px/s: an arrow is half its full length and half way to the fast colour here
