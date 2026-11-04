@@ -92,7 +92,8 @@ import {
   sound,
   themes,
   applyPending,
-  gradientMid,
+  gradientPoints,
+  gradientAt,
   pendingColours,
   stagedTheme,
   gradientKinds,
@@ -302,13 +303,40 @@ export function createSettingsPanel () {
   const previewing = fnstate(false)
   const STOPS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
   const css = c => `rgb(${c.r}, ${c.g}, ${c.b})`
-  const midSlider = input({ class: 'gradient-mid', type: 'range', min: 0.05, max: 0.95, step: 0.01, value: String(gradientMid()), 'aria-label': 'Gradient midpoint', title: 'Where the middle of the gradient sits: left for more of the hot end, right for more of the cold', oninput: e => gradientMid(Number(e.target.value)) })
-  const bar = div({ class: 'gradient-bar' }, midSlider)
+  // Three handles over the bar, for Cool, Warm and Hot; each stays between its neighbours.
+  const GAP = 0.03
+  const bar = div({ class: 'gradient-bar' })
+  const handles = ['Cool', 'Warm', 'Hot'].map((name, k) => {
+    const h = div({ class: 'gradient-handle', role: 'slider', tabindex: 0, title: `${name}: drag along the gradient`, 'aria-label': `${name} position` })
+    const place = u => {
+      const p = gradientPoints().slice()
+      const lo = k === 0 ? GAP : p[k - 1] + GAP
+      const hi = k === 2 ? 1 - GAP : p[k + 1] - GAP
+      p[k] = Math.max(lo, Math.min(hi, u))
+      gradientPoints(p)
+    }
+    h.addEventListener('pointerdown', e => {
+      e.preventDefault()
+      h.setPointerCapture(e.pointerId)
+      const move = ev => { const r = bar.getBoundingClientRect(); place((ev.clientX - r.left) / r.width) }
+      const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up) }
+      h.addEventListener('pointermove', move)
+      h.addEventListener('pointerup', up)
+      h.addEventListener('pointercancel', up)
+    })
+    h.addEventListener('keydown', e => {
+      const step = e.shiftKey ? 0.05 : 0.01
+      if (e.key === 'ArrowLeft') { place(gradientPoints()[k] - step); e.preventDefault() } else if (e.key === 'ArrowRight') { place(gradientPoints()[k] + step); e.preventDefault() }
+    })
+    bar.append(h)
+    return h
+  })
   const eye = button({ class: 'icon-button', title: 'Preview on the lamp', 'aria-label': 'Preview on the lamp', 'aria-pressed': 'false', onclick: () => previewing(!previewing()) })
   eye.innerHTML = ICON('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')
   const tick = button({ class: 'icon-button primary', title: 'Apply these colours', 'aria-label': 'Apply these colours', onclick: () => { applyPending(); previewing(false); unstageTiles() } })
   tick.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
-  const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-actions' }, eye, tick))
+  const gradientActions = div({ class: 'gradient-actions' }, eye, tick)
+  const gradientPending = div({ class: 'gradient-pending' }, bar)
   // A theme's tile: a click stages it (the tick applies it); a saved one can be renamed with a
   // double click and deleted with its cross.
   const unstageTiles = () => { if (panel) for (const b of panel.querySelectorAll('.theme.staged')) b.classList.remove('staged') }
@@ -367,8 +395,13 @@ export function createSettingsPanel () {
     // with no theme picked it shows the colours as they are, and the eye and tick wait.
     const colours = pendingColours()
     const shown = colours || { heatCold: heatCold(), heatCool: heatCool(), heatWarm: heatWarm(), heatHot: heatHot(), heatPeak: heatPeak() }
-    midSlider.style.display = gradientKind() === 'presets' ? 'none' : ''
-    bar.style.background = `linear-gradient(90deg, ${STOPS.map(k => css(shown[k])).join(', ')})`
+    const points = gradientPoints()
+    handles.forEach((h, k) => { h.style.display = gradientKind() === 'presets' ? 'none' : ''; h.style.left = `${points[k] * 100}%`; h.setAttribute('aria-valuenow', points[k].toFixed(2)) })
+    // On Gradient the bar is the whole gradient, the handles marking where Cool, Warm and Hot take
+    // it; on Presets, the five stops of the theme picked or of the colours as they are.
+    bar.style.background = gradientKind() === 'presets'
+      ? `linear-gradient(90deg, ${STOPS.map(k => css(shown[k])).join(', ')})`
+      : `linear-gradient(90deg, ${Array.from({ length: 17 }, (_, i) => css(gradientAt(i / 16))).join(', ')})`
     eye.disabled = !colours
     tick.disabled = !colours
     if (!colours && previewing()) { previewing(false); return }
@@ -376,7 +409,7 @@ export function createSettingsPanel () {
     eye.setAttribute('aria-pressed', String(previewing()))
     window.dispatchEvent(new CustomEvent('lavalamp-preview-colours', { detail: previewing() && colours ? colours : null }))
   }
-  for (const state of [gradientKind, gradientFrom, gradientTo, gradientMid, stagedTheme, previewing, heatCold, heatCool, heatWarm, heatHot, heatPeak]) state.subscribe(showPending)
+  for (const state of [gradientKind, gradientFrom, gradientTo, gradientPoints, stagedTheme, previewing, heatCold, heatCool, heatWarm, heatHot, heatPeak]) state.subscribe(showPending)
   gradientKind.subscribe(unstageTiles)
   showPending()
 
@@ -412,19 +445,19 @@ export function createSettingsPanel () {
         swatch('Slow', 'flowSlow', flowSlow),
         swatch('Fast', 'flowFast', flowFast)
       ),
-      row('Gradient', segmented('gradient', gradientKind, gradientKinds)),
+      div({ class: 'gradient-top' }, segmented('gradient', gradientKind, gradientKinds), gradientActions),
+      gradientPending,
       swatchRow('From and to', isTwoTone, true,
         swatch('From', 'gradientFrom', gradientFrom),
         swatch('To', 'gradientTo', gradientTo)
       ),
-      gradientPending,
       div({ class: 'swatch-row', style: { display: isPresets.bindStyle(() => isPresets() ? 'block' : 'none') } },
         div({ class: 'swatch-caption' }, 'Themes'),
         div({ class: 'themes' }, ...themes.map(t => themeTile(t, false))),
         div({ class: 'swatch-caption', style: { 'margin-top': '10px' } }, 'My themes'),
         myThemesGrid
       ),
-      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Gradient runs from dark through one colour to another and on to light (the same colour twice for one colour dark to light). Neither changes your colours until you press the tick: the bar shows what you would get, the eye shows it on the lamp, and on Gradient the slider moves the middle hotter or colder. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
+      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Gradient runs from dark through one colour to another and on to light (the same colour twice for one colour dark to light). Neither changes your colours until you press the tick: the bar shows what you would get, the eye shows it on the lamp, and on Gradient the three handles on the bar slide the Cool, Warm and Hot colours along it. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
       ),
       // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
       // thirteen year old (Robert: "I want to make it look more like a sub panel").

@@ -295,13 +295,14 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .music-link { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 /* The pending gradient: a bar with the midpoint's slider over it, and the eye and tick */
-.gradient-pending { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; }
+.gradient-pending { display: flex; padding: 4px 0 10px; }
 .gradient-bar { position: relative; flex: 1; height: 22px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); }
-.gradient-mid { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; }
-.gradient-mid::-webkit-slider-runnable-track { background: transparent; height: 100%; }
-.gradient-mid::-moz-range-track { background: transparent; height: 100%; }
-.gradient-mid::-webkit-slider-thumb { -webkit-appearance: none; width: 8px; height: 26px; margin-top: -3px; border-radius: 4px; background: #ececec; border: 2px solid rgba(0, 0, 0, 0.7); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); }
-.gradient-mid::-moz-range-thumb { width: 6px; height: 24px; border-radius: 4px; background: #ececec; border: 2px solid rgba(0, 0, 0, 0.7); }
+.gradient-handle { position: absolute; top: -4px; width: 10px; height: 28px; margin-left: -5px; border-radius: 5px; background: #ececec; border: 2px solid rgba(0, 0, 0, 0.7); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); cursor: ew-resize; touch-action: none; box-sizing: border-box; }
+.gradient-handle::before { content: ''; position: absolute; inset: -8px -10px; } /* a fingertip's hit area */
+.gradient-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gradient-top { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; }
+.gradient-top .segmented { width: auto; flex: 0 1 180px; }
+.gradient-top .gradient-actions { margin-left: auto; }
 .gradient-actions { display: flex; gap: 6px; }
 .icon-button { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.06); color: #ececec; cursor: pointer; }
 .icon-button svg { width: 18px; height: 18px; }
