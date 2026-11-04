@@ -675,6 +675,14 @@ export const loadSavedSettings = () => {
       notify('Invalid Share URL')
     }
   }
+  const short = query.get('s')
+  if (short) {
+    try {
+      applyChanged(JSON.parse(fromBase64Url(short)))
+    } catch {
+      notify('Invalid Share URL')
+    }
+  }
   // ?seed= wins over everything: it is how a seed change reloads into effect.
   const asked = Number(query.get('seed'))
   if (Number.isFinite(asked) && query.has('seed')) seed(Math.floor(asked) >>> 0)
@@ -700,15 +708,16 @@ export const resetAndReload = () => {
   window.location.href = window.location.pathname
 }
 
-// Saving also takes ?shared and ?seed out of the address: a share link is applied on top of the
+// Saving also takes ?shared, ?s and ?seed out of the address: a share link is applied on top of the
 // saved settings at every load, so with the link still in the address bar a save looked lost on
 // reload (Robert: "saving settings does not survive a reload anymore"). ?cpu, ?profile and the
 // rest stay.
 export const saveSettings = () => {
   localStorage.setItem(storageKey(), JSON.stringify(getSettings()))
   const query = new URLSearchParams(window.location.search)
-  if (query.has('shared') || query.has('seed')) {
+  if (query.has('shared') || query.has('s') || query.has('seed')) {
     query.delete('shared')
+    query.delete('s')
     query.delete('seed')
     const rest = query.toString().replace(/=(?=&|$)/g, '') // ?cpu stays ?cpu, not ?cpu=
     window.history.replaceState(null, '', `${window.location.pathname}${rest ? '?' + rest : ''}${window.location.hash}`)
@@ -717,5 +726,36 @@ export const saveSettings = () => {
 
 export const clearSavedSettings = () => localStorage.removeItem(storageKey())
 
+// Short share links (Robert: "is there a way we could make the share url shorter? maybe we only send
+// values that changed in the settings and otherwise leave the defaults?"): ?s= carries only what
+// differs from the defaults, colours as six hex digits, and the seed always (it is the lamp's
+// motion); opening one starts from the defaults and puts those on top, so it is the sender's lamp
+// still, and the settings that follow the window (the particle count, the radius) are the opener's
+// own. A default lamp with new colours is a link of a few dozen characters, where the full one was
+// near two thousand. ?shared= (every setting) still loads, for the links already out there.
+const toHex = c => [c.r, c.g, c.b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')
+const fromHex = h => /^[0-9a-f]{6}$/i.test(h) ? { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) } : null
+const toBase64Url = text => btoa(unescape(encodeURIComponent(text))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+const fromBase64Url = code => decodeURIComponent(escape(atob(code.replace(/-/g, '+').replace(/_/g, '/'))))
+const changedSettings = () => {
+  const now = getSettings()
+  const base = defaults()
+  const out = {}
+  for (const key of Object.keys(colorSettings)) if (toHex(now[key]) !== toHex(base[key])) out[key] = toHex(now[key])
+  for (const key of Object.keys(numberSettings)) {
+    const a = Number(now[key]); const b = Number(base[key])
+    if (key === 'seed' || !(Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b)))) out[key] = a
+  }
+  if (now.eddyCurve !== base.eddyCurve) out.eddyCurve = now.eddyCurve
+  return out
+}
+const applyChanged = changed => {
+  const full = {}
+  for (const [key, value] of Object.entries(changed)) full[key] = colorSettings[key] ? fromHex(String(value)) : value
+  const base = defaults()
+  delete base.seed
+  applySettings(base)
+  applySettings(full)
+}
 export const shareLink = () =>
-  `${window.location.origin}${window.location.pathname}?v=${CURRENT}&shared=${btoa(JSON.stringify(getSettings()))}`
+  `${window.location.origin}${window.location.pathname}?v=${CURRENT}&s=${toBase64Url(JSON.stringify(changedSettings()))}`

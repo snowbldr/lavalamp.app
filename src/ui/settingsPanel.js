@@ -393,8 +393,10 @@ export function createSettingsPanel () {
   plane.innerHTML = ICON('<path d="M22 3L10 14"/><path d="M22 3l-7 18-5-7-7-5 19-6z"/>')
   const THEME_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak', 'bgColor', 'flowSlow', 'flowFast', 'heatCoolAt', 'heatWarmAt', 'heatHotAt']
   const themeLink = theme => {
+    // Short: colours as six hex digits, places to three decimals.
+    const hex = c => [c.r, c.g, c.b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('')
     const out = { name: theme.name }
-    for (const k of THEME_KEYS) if (theme[k] !== undefined) out[k] = theme[k]
+    for (const k of THEME_KEYS) if (theme[k] !== undefined) out[k] = k.endsWith('At') ? Math.round(theme[k] * 1000) / 1000 : hex(theme[k])
     const code = btoa(unescape(encodeURIComponent(JSON.stringify(out)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     return `${window.location.origin}${window.location.pathname}?theme=${code}`
   }
@@ -403,6 +405,8 @@ export function createSettingsPanel () {
     if (!code) return null
     try {
       const t = JSON.parse(decodeURIComponent(escape(atob(code.replace(/-/g, '+').replace(/_/g, '/')))))
+      // Colours as hex (the short form) or as { r, g, b } (the first links).
+      for (const k of THEME_KEYS) if (typeof t[k] === 'string' && /^[0-9a-f]{6}$/i.test(t[k])) t[k] = { r: parseInt(t[k].slice(0, 2), 16), g: parseInt(t[k].slice(2, 4), 16), b: parseInt(t[k].slice(4, 6), 16) }
       const colour = c => c && [c.r, c.g, c.b].every(v => Number.isFinite(v) && v >= 0 && v <= 255)
       if (!t || typeof t.name !== 'string' || !STOPS.every(k => colour(t[k]))) return null
       const theme = { name: t.name.slice(0, 24) || 'Shared' }
