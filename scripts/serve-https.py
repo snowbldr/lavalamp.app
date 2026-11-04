@@ -15,7 +15,15 @@ if not cert.exists():
     subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '3650',
                     '-subj', '/CN=lavalamp.local', '-keyout', str(key), '-out', str(cert)], check=True, capture_output=True)
 os.chdir(root)
-server = http.server.ThreadingHTTPServer(('0.0.0.0', port), http.server.SimpleHTTPRequestHandler)
+class NoCache(http.server.SimpleHTTPRequestHandler):
+    # Caching off, as scripts/serve.py (a phone kept old modules over reloads).
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-store, must-revalidate')
+        self.send_header('Expires', '0')
+        super().end_headers()
+
+
+server = http.server.ThreadingHTTPServer(('0.0.0.0', port), NoCache)
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(str(cert), str(key))
 server.socket = context.wrap_socket(server.socket, server_side=True)

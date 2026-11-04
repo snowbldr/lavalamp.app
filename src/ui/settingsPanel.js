@@ -421,8 +421,9 @@ export function createSettingsPanel () {
       title: theme.name,
       // The theme's background as a solid strip along the bottom of its gradient (Robert: "we should
       // include the background in the theme. we could draw it as a solid bar across the bottom"; then
-      // "it should fill the entire bottom like 15-20% of the gradient button").
-      style: { background: `${theme.bgColor ? `linear-gradient(${css(theme.bgColor)}, ${css(theme.bgColor)}) bottom / 100% 18% no-repeat, ` : ''}linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
+      // "it should fill the entire bottom like 15-20% of the gradient button"), with a thin light line
+      // over it: the backgrounds are all near black and without it the band read as a shadow.
+      style: { background: `${theme.bgColor ? `linear-gradient(rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.45)) 0 80% / 100% 1px no-repeat, linear-gradient(${css(theme.bgColor)}, ${css(theme.bgColor)}) bottom / 100% 20% no-repeat, ` : ''}linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
       onclick: () => {
         stopEditing(false)
         if (deleting && mine) {
