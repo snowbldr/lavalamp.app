@@ -393,25 +393,24 @@ export function createSettingsPanel () {
     loadedTheme = theme
     return true
   }
-  // Editing a saved theme shows on the bar itself (Robert: "while editing a theme, it was hard to
-  // really tell that changing the gradient would edit the theme"; "a pop in banner makes sense in
-  // this case since it's edit and we expect things to change"): a banner over the bar, "Editing",
-  // the name, Cancel and Save; the bar ringed; the theme's tile following the colours as they
-  // change. Save keeps them under the name; Cancel puts the theme back as it was saved, on the
-  // lamp too; anything else (another theme, the plus, closing the panel) leaves the edit with the
+  // Editing a saved theme (Robert: "while editing a theme, it was hard to really tell that changing
+  // the gradient would edit the theme"; then "we should do the accent outline too... When we click
+  // edit on one of our themes, we should have the edit bar cover the other theme on the same row and
+  // use the full width. then we can put an x cancel button next to the check"): the theme's place in
+  // the grid becomes a row across both columns, a small tile of the theme following the colours as
+  // they change, its name, a tick and a cross; the bar and that tile take the accent ring. The tick
+  // keeps the colours under the name; the cross puts the theme back as it was saved, on the lamp
+  // too; anything else (another theme, the plus, closing the panel) leaves the edit with the
   // colours as they are, unsaved, so loading another theme asks as it always does.
-  const editName = input({ class: 'edit-name', type: 'text', maxlength: 24, 'aria-label': 'Theme name',
+  const editName = input({ class: 'edit-name', type: 'text', maxlength: 24, autocomplete: 'off', spellcheck: false, 'aria-label': 'Theme name',
     onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') stopEditing('save'); else if (e.key === 'Escape' && !pickerWasOpen) stopEditing('cancel') } })
-  const editBanner = div({ class: 'edit-banner' },
-    span({ class: 'edit-label' }, 'Editing'),
-    editName,
-    button({ class: 'edit-cancel', onclick: () => stopEditing('cancel') }, 'Cancel'),
-    button({ class: 'edit-save', onclick: () => stopEditing('save') }, 'Save'))
-  gradientPending.prepend(editBanner)
+  const editSave = button({ class: 'icon-button primary edit-save', title: 'Save this theme', 'aria-label': 'Save this theme', onclick: () => stopEditing('save') })
+  editSave.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
+  const editCancel = button({ class: 'icon-button edit-cancel', title: 'Cancel: put the theme back as it was', 'aria-label': 'Cancel the edit', onclick: () => stopEditing('cancel') })
+  editCancel.innerHTML = ICON('<path d="M6 6l12 12M18 6L6 18"/>')
   const startEditing = theme => {
     editing = { theme, saved: JSON.parse(JSON.stringify(theme)) }
     editName.value = theme.name
-    editBanner.classList.add('on')
     bar.classList.add('editing')
     fillThemes()
     setTimeout(() => { editName.focus(); editName.select() })
@@ -430,12 +429,13 @@ export function createSettingsPanel () {
       loadedTheme = theme
     }
     editing = null
-    editBanner.classList.remove('on')
     bar.classList.remove('editing')
     fillThemes()
   }
   // The edited theme's tile follows the colours.
   for (const state of [...Object.values(allColours), ...livePlaces]) state.subscribe(() => { if (editing) fillThemes() })
+  const BAND_LIFT = 110
+  const liftBand = c => { const top = Math.max(c.r, c.g, c.b); if (top < 6 || top >= BAND_LIFT) return c; const k = BAND_LIFT / top; return { r: Math.round(c.r * k), g: Math.round(c.g * k), b: Math.round(c.b * k) } }
   const PENCIL = '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>'
   const themeTile = (theme, mine) => {
     const shownTheme = editing && editing.theme === theme ? { ...takeColours(), name: theme.name } : theme
@@ -461,8 +461,16 @@ export function createSettingsPanel () {
         loadTheme(theme).then(ok => { if (ok) fillThemes() })
       }
     }, span(theme.name))
-    if (shownTheme.bgColor) tile.style.setProperty('--theme-back', css(shownTheme.bgColor))
+    // Drawn brighter than it is, its brightest channel lifted to BAND_LIFT, so a near black
+    // background still reads as its colour on a small strip; black stays black (Robert: "it's ok if
+    // it's brighter than real, we just want it to be obvious it's a different color").
+    if (shownTheme.bgColor) tile.style.setProperty('--theme-back', css(liftBand(shownTheme.bgColor)))
     if (!mine) return tile
+    if (editing && editing.theme === theme) {
+      tile.onclick = null
+      tile.tabIndex = -1
+      return div({ class: 'theme-item edit-row' }, tile, editName, editSave, editCancel)
+    }
     const edit = button({ class: 'theme-edit', title: `Rename or save over ${theme.name}`, 'aria-label': `Edit ${theme.name}`, onclick: () => {
       stopEditing()
       deleting = false
@@ -505,6 +513,12 @@ export function createSettingsPanel () {
     }, span('+'))
     themesGrid.replaceChildren(...themes.map(t => themeTile(t, false)))
     myThemesGrid.replaceChildren(...myThemes.map(t => themeTile(t, true)), add)
+    // Every tile in its own cell, so the edit row can lie over its row without moving the rest.
+    ;[...myThemesGrid.children].forEach((item, k) => {
+      const across = item.classList.contains('edit-row')
+      item.style.gridRow = String(Math.floor(k / 2) + 1)
+      item.style.gridColumn = across ? '1 / -1' : String(k % 2 + 1)
+    })
     if (!myThemes.length) deleting = false
     myThemesGrid.classList.toggle('deleting', deleting)
     trash.classList.toggle('on', deleting)
