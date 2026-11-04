@@ -419,8 +419,9 @@ export function createSimulation ({ width, height, params }) {
   // height tall, so the lava rising through one is shaken against the still lava beside it and a
   // wave goes up with it. Shaking the whole floor moved the plume and its surroundings together.
   let floorShake = 0
-  const SHAKE_DEPTH = 0.3
-  const FIN_WIDTH = 0.5 // of a pot's mouth's half width
+  const SHAKE_ABOVE = 40 // px over the pool's estimated surface (poolSurface runs deep in warm lava)
+  const SHAKE_DEPTH = 0.08 // short: only the base swings and the lava above keeps its path, so a zig zag is laid down as it rises (at 0.3 the whole lower plume swayed as one)
+  const FIN_WIDTH = 1 // of a pot's mouth's half width (0.5 while several fins shook, so they would not overlap; one at a time, the whole plume)
   const finAt = px => {
     // One fin at a time, over the pot glowing hottest, as hard as it glows: the warm lava rising out
     // of it is what wobbles and the rest of the floor stays still (Robert: "shake just above certain
@@ -806,7 +807,9 @@ export function createSimulation ({ width, height, params }) {
     const fade = depthFade(py)
     out[0] = out[0] * fade + splatX
     out[1] = out[1] * fade + splatY
-    if (floorShake) out[0] += floorShake * finAt(px) * Math.exp(-Math.max(0, height - py) / (SHAKE_DEPTH * height))
+    // Round the pool's surface, where the lava leaves the pool and can be seen: measured from the
+    // floor, under a pool some 250 px deep, the shake was a tenth of itself by the surface.
+    if (floorShake) out[0] += floorShake * finAt(px) * Math.exp(-Math.abs(py - (poolSurface() - SHAKE_ABOVE)) / (SHAKE_DEPTH * height))
   }
 
   // How many particles the floor's reservoirs hold between them.

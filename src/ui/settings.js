@@ -400,7 +400,7 @@ export const musicWobble = fnstate(defaultMusicWobble)
 // possibly keep both with different triggers"). Shake: by a sub note (under 80 Hz) at its pitch
 // over ten, as hard as the note is loud. Shake beat: by the kick, twice a beat, locked to the
 // tempo like a synth's LFO. 0 is off.
-export const defaultMusicShake = 1
+export const defaultMusicShake = 0 // off: "the bass shaker still is not doing it for me... it just looks weird" (the knob stays, to try)
 export const musicShake = fnstate(defaultMusicShake)
 export const defaultMusicShakeBeat = 0 // off to start: one shake at a time while the fins are being judged
 export const musicShakeBeat = fnstate(defaultMusicShakeBeat)

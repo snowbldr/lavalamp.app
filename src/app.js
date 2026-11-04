@@ -566,9 +566,9 @@ export async function start () {
   const DROP_WAIT = 2 // seconds without a kick before the drop's pot is charged
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
-  const SHAKE_DIVIDE = 10 // a sub note shakes at its pitch over this
+  const SHAKE_DIVIDE = 25 // a sub note shakes at its pitch over this (10 was a jiggle: Robert: "shake it a little bit slower and further... flow back and forth a significant amount to really cause like good sized zig zags in the lava")
   const SHAKE_PER_BEAT = 2 // the beat's shake: eighth notes
-  const SHAKE_PX = 25 // px the floor swings each way at full strength, whatever the rate (as speed, 160 px/s at 4 Hz moved it 6 px and showed nothing)
+  const SHAKE_PX = 60 // px the floor swings each way at full strength (was 25), whatever the rate (as speed, 160 px/s at 4 Hz moved it 6 px and showed nothing)
   let shakePhase = 0
   let beatShakePhase = 0
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
