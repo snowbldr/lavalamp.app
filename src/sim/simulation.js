@@ -409,6 +409,28 @@ export function createSimulation ({ width, height, params }) {
   const SPLAT_SPEED = 320
   const SPLAT_LOBES = [5, 9]
   const splatRequests = [] // [x, y] where each is to start, or null for a point on the pool's surface
+  // The bass shaker: a sideways shake of the floor (px/s, set every frame by the page), strongest
+  // at the floor and gone SHAKE_DEPTH of the height above it, so the lava wobbles at its base as it
+  // rises and nothing higher up moves (Robert: "shake the bottom of the lava to cause it to wobble as
+  // it rises, not shake the whole thing back and forth"; it moved the whole lamp at first).
+  // Then only in fins (Robert: "extend some fins from the bottom plate into the bottom of the lava to
+  // increase the wobble effect. like imagine a row of tubes that we would shake back and forth while
+  // the lava travels through"): a column over each pot, as wide as its mouth and SHAKE_DEPTH of the
+  // height tall, so the lava rising through one is shaken against the still lava beside it and a
+  // wave goes up with it. Shaking the whole floor moved the plume and its surroundings together.
+  let floorShake = 0
+  const SHAKE_DEPTH = 0.3
+  const FIN_WIDTH = 0.5 // of a pot's mouth's half width
+  const finAt = px => {
+    let w = 0
+    for (const el of elements) {
+      if (!(el.cupHalf > 0)) continue
+      const half = FIN_WIDTH * el.cupHalf * width
+      const d = (px - el.fx * width) / half
+      if (d * d < 9) w = Math.max(w, Math.exp(-d * d)) // narrow, so there is still lava between fins (as wide as the mouths they overlapped, 60 to 70% shaking everywhere); soft sided, since sharp sides tore holes in the pool beside them
+    }
+    return w
+  }
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -778,6 +800,7 @@ export function createSimulation ({ width, height, params }) {
     const fade = depthFade(py)
     out[0] = out[0] * fade + splatX
     out[1] = out[1] * fade + splatY
+    if (floorShake) out[0] += floorShake * finAt(px) * Math.exp(-Math.max(0, height - py) / (SHAKE_DEPTH * height))
   }
 
   // How many particles the floor's reservoirs hold between them.
@@ -1865,6 +1888,7 @@ export function createSimulation ({ width, height, params }) {
     // immediately start reacting to the music").
     endWarmup () { heaterTime = Math.max(heaterTime, WARMUP); nextDrifter = Math.min(nextDrifter, time) },
     pulseWave () { pulseRequests++ },
+    shakeFloor (v) { floorShake = v || 0 },
     splat (x, y) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null) },
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big, fullness) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big; if (fullness) potFullness = fullness },

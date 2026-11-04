@@ -18,6 +18,15 @@
 //            matching those of the KEY_LONG before them shifted up 1 to 3 semitones much better
 //            than unshifted.
 //
+//   solo     a guitar solo, or any lead out front: the mids and presence (SOLO_BAND) SOLO_RISE dB
+//            over their own SOLO_SLOW mean for SOLO_HOLD, the bass not rising with them (a whole
+//            band getting louder is a section, not a solo). Measured on the solos Robert named,
+//            against the rest of each song's busy parts: Enter Sandman 2:58 to 3:30, mids up 2.9 dB
+//            and presence 2.5; Killing in the Name 3:50 to 4:15, 4.5 and 3.7; the bass level the same.
+//            `solo` is 0 to 1, `soloStart` its first frame, `leadNote` each attack in the lead's band.
+//   drums    a drum solo or a big fill: hits in the drums' body (DRUM_BAND, toms and snare) at
+//            DRUM_RATE a second or more for DRUM_HOLD with no lead out front. `drums` is 0 to 1,
+//            `drumHit` each hit while it lasts.
 //   sub      the bass shaker's input: the level of the sub bass (SUB_BAND, 0 to 1 against its own
 //            recent loudest, SUB_RANGE dB under it is 0) and its pitch, the band's centroid.
 //
@@ -60,6 +69,25 @@ const KEY_GAIN = 0.12 // the shifted match over the unshifted
 const KEY_MATCH = 0.82
 const KEY_WAIT = 8 // s
 
+const SOLO_BAND = [500, 5000]
+const SOLO_BASS = [40, 150]
+const SOLO_FAST = 1.5 // s
+const SOLO_SLOW = 20 // s
+const SOLO_RISE = 2 // dB
+const SOLO_HOLD = 2 // s
+const SOLO_BASS_RISE = 1.5 // dB the bass may rise with it
+const NOTE_RISE = 5 // dB over the lowest of the last NOTE_FRAMES frames
+const NOTE_FRAMES = 4
+const NOTE_DEBOUNCE = 0.08 // s
+
+const DRUM_BAND = [80, 400]
+const DRUM_RISE = 6 // dB over the lowest of the last DRUM_FRAMES frames
+const DRUM_FRAMES = 3
+const DRUM_DEBOUNCE = 0.06
+const DRUM_RATE = 5 // hits a second
+const DRUM_HOLD = 1.5
+const DRUM_FULL = 12
+
 const SUB_BAND = [20, 80]
 const SUB_RANGE = 18 // dB
 const SUB_FALL = 3 // dB a second the loudest falls
@@ -86,7 +114,11 @@ export function createSections () {
   let lastKeyLook = -1e9
   let lastKey = -1e9
   let subPeak = -120
-  const out = { sub: 0, subHz: 0, roll: 0, rolling: false, rollEnd: false, impact: false, riser: 0, rising: false, half: false, double: false, key: false, keyShift: 0 }
+  let leadFast = null, leadSlow = null, bassFast = null, bassSlow = null, soloSince = -1, soloWas = false, lastNote = -1e9
+  const lead = []
+  const drum = [], drumHits = []
+  let lastDrum = -1e9, drumSince = -1
+  const out = { drums: 0, drumHit: false, solo: 0, soloStart: false, leadNote: false, sub: 0, subHz: 0, roll: 0, rolling: false, rollEnd: false, impact: false, riser: 0, rising: false, half: false, double: false, key: false, keyShift: 0 }
 
   const meanOf = (list, from) => { let s = 0, n = 0; for (const [t, v] of list) if (t >= from) { s += Math.pow(10, v / 10); n++ } return n ? db(s / n) : -120 }
 
@@ -95,11 +127,46 @@ export function createSections () {
     reset () {
       body.length = rattle.length = hits.length = top.length = total.length = bright.length = beats.length = keyFrames.length = 0
       lastHit = lastImpact = lastBright = lastHalf = lastKeyLook = lastKey = -1e9
-      rollSince = -1; rollWas = false; tempoWas = 0; subPeak = -120
+      rollSince = -1; rollWas = false; tempoWas = 0; subPeak = -120; leadFast = leadSlow = bassFast = bassSlow = null; soloSince = -1; soloWas = false; lastNote = -1e9; lead.length = 0; drum.length = drumHits.length = 0; lastDrum = -1e9; drumSince = -1
     },
     // power: the analyser's band power helper (music.js), bins and binHz for the pitch classes.
     update (clock, power, bins, binHz, beat, totalPower) {
       out.rollEnd = false; out.impact = false; out.half = false; out.double = false; out.key = false
+
+      // The solo: the lead's band over its own long mean, the bass not with it.
+      {
+        const l = db(power(SOLO_BAND)), bb = db(power(SOLO_BASS))
+        const dt = 1 / 60
+        leadFast = leadFast === null ? l : leadFast + (l - leadFast) * Math.min(1, dt / SOLO_FAST)
+        leadSlow = leadSlow === null ? l : leadSlow + (l - leadSlow) * Math.min(1, dt / SOLO_SLOW)
+        bassFast = bassFast === null ? bb : bassFast + (bb - bassFast) * Math.min(1, dt / SOLO_FAST)
+        bassSlow = bassSlow === null ? bb : bassSlow + (bb - bassSlow) * Math.min(1, dt / SOLO_SLOW)
+        const over = leadFast - leadSlow
+        const on = clock > SOLO_SLOW / 2 && over > SOLO_RISE && bassFast - bassSlow < SOLO_BASS_RISE
+        if (on) { if (soloSince < 0) soloSince = clock } else soloSince = -1
+        const soloing = soloSince >= 0 && clock - soloSince >= SOLO_HOLD
+        out.solo = soloing ? Math.max(0.2, Math.min(1, (over - SOLO_RISE) / 3 + 0.2)) : 0
+        out.soloStart = soloing && !soloWas
+        soloWas = soloing
+        lead.push(l)
+        if (lead.length > NOTE_FRAMES + 1) lead.shift()
+        out.leadNote = false
+        if (soloing && lead.length > NOTE_FRAMES && l - Math.min(...lead.slice(0, -1)) > NOTE_RISE && clock - lastNote > NOTE_DEBOUNCE) { out.leadNote = true; lastNote = clock }
+      }
+
+      // The drums: fast hits in the body band, with no lead out front.
+      {
+        const d = db(power(DRUM_BAND))
+        drum.push(d)
+        if (drum.length > DRUM_FRAMES + 1) drum.shift()
+        let hit = false
+        if (drum.length > DRUM_FRAMES && d - Math.min(...drum.slice(0, -1)) > DRUM_RISE && clock - lastDrum > DRUM_DEBOUNCE) { hit = true; lastDrum = clock; drumHits.push(clock) }
+        while (drumHits.length && clock - drumHits[0] > 1) drumHits.shift()
+        if (drumHits.length >= DRUM_RATE && out.solo === 0) { if (drumSince < 0) drumSince = clock } else if (clock - lastDrum > 0.4 || out.solo > 0) drumSince = -1
+        const drumming = drumSince >= 0 && clock - drumSince >= DRUM_HOLD
+        out.drums = drumming ? Math.min(1, drumHits.length / DRUM_FULL) : 0
+        out.drumHit = drumming && hit
+      }
 
       // The sub bass, for the shaker.
       {

@@ -402,7 +402,7 @@ export const musicWobble = fnstate(defaultMusicWobble)
 // tempo like a synth's LFO. 0 is off.
 export const defaultMusicShake = 1
 export const musicShake = fnstate(defaultMusicShake)
-export const defaultMusicShakeBeat = 0.6
+export const defaultMusicShakeBeat = 0 // off to start: one shake at a time while the fins are being judged
 export const musicShakeBeat = fnstate(defaultMusicShakeBeat)
 // Sections: how hard the lamp answers the song's parts around a drop (sections.js): a snare roll
 // or a riser winds the drop's pot up, a roll's end and an impact fire it, half time turns the
