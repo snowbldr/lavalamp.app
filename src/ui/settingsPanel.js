@@ -302,7 +302,12 @@ export function createSettingsPanel () {
   // sits along the heat (settings.js heatCoolAt), each kept GAP_PX from its neighbours so two can
   // always be taken apart with a finger (Robert: "the sliding toggles on the gradient shouldn't be
   // allowed to overlap"), and pushing them along when it meets them. Everything goes straight onto the lamp.
-  const GAP_PX = 30
+  // Touching but never overlapping: a pin's width apart from the next, and an end circle's edge plus
+  // half a pin from each end (Robert: "the sliders get too close to the end color buttons and make it
+  // hard to select. I think it's probably ok if it goes all the way touching but not overlapping, and
+  // same with other sliders"; they were 30 px apart and could sit over the end circles).
+  const GAP_PX = 14 // panel.css .gradient-dot.pin width
+  const END_PX = 33 // the end circle's far edge (4 + 22) plus half a pin (7)
   const PUSH_PX = 12 // how far past a neighbour a drag goes before it pushes it
   const STOP_NAMES = ['Cold', 'Cool', 'Warm', 'Hot', 'Peak']
   const liveStops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
@@ -323,9 +328,10 @@ export function createSettingsPanel () {
       const p = livePlaces.map(s => s())
       const width = Math.max(1, bar.getBoundingClientRect().width)
       const gap = Math.min(0.24, GAP_PX / width)
+      const end = Math.min(0.3, END_PX / width)
       const force = PUSH_PX / width
       const i = k - 1
-      let x = Math.max(gap * (i + 1), Math.min(1 - gap * (3 - i), u))
+      let x = Math.max(end + gap * i, Math.min(1 - end - gap * (2 - i), u))
       const hi = i < 2 ? p[i + 1] - gap : Infinity
       const lo = i > 0 ? p[i - 1] + gap : -Infinity
       if (x > hi) {
