@@ -764,6 +764,7 @@ export function createSettingsPanel () {
       div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
       versionRow,
       buildRow,
+      div({ class: 'panel-note' }, a({ target: '_blank', rel: 'noopener', href: 'https://github.com/snowbldr/lavalamp.app' }, 'Copyright © 2020-2026 Robert Kempton')),
       // One long list under headings, no folding inside Advanced, each group split a layer
       // further (Robert: "The advanced panel should become one giant list. we may want to break
       // up the groups a bit further, perhaps another layer of subgroups").

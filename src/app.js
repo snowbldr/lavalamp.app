@@ -1,4 +1,4 @@
-import { a, canvas, div, sub } from '@srfnstack/fntags'
+import { canvas, div } from '@srfnstack/fntags'
 import { createSimulation } from './sim/simulation.js'
 import { createGpuLamp, getGpuDevice } from './sim/gpuSimulation.js'
 import { createWorkerLamp } from './sim/workerLamp.js'
@@ -999,20 +999,9 @@ export async function start () {
         },
         settingsButton
       )
-    ),
-    sub(
-      {
-        style: {
-          'font-size': '10px',
-          position: 'fixed',
-          bottom: '2px',
-          left: '2px',
-          'z-index': 200,
-          display: fullscreen.bindStyle(() => fullscreen() ? 'none' : 'block') // nothing but lava in fullscreen
-        }
-      },
-      a({ target: '_blank', href: 'https://github.com/snowbldr/lavalamp.app' }, 'Copyright © 2020-2026 Robert Kempton')
     )
+    // The copyright is in Advanced, under the build, and in NOTICE: none on the lamp (Robert:
+    // "Should we hide the copyright?... there's not really any text on the lava lamp ui").
   )
 
   // Pace is slow motion, not a smaller step: the sim always steps by FRAME, which every tuned
