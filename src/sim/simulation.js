@@ -37,8 +37,13 @@ const SPAWN_AREA = 400
 // a bunch of small pieces"). Now there is one heat model from the first frame: contact heating at
 // the floor, and conduction to carry it up into the blob. The front was 20 s; the heating
 // elements only start once it is done, and Robert: "there's a long delay before the donuts fire
-// ... needs to be like 1/10th the time".
-const WARMUP = 2
+// ... needs to be like 1/10th the time". Then 2 s to 0.5, and the first pot lit FIRST_BOOST hotter
+// (Robert: "the lamp takes just a little too long to get started. when demoing live people start
+// getting antsy before it fires"): measured on seed 760803244 from page start, the first pot lit at
+// 3.2 s and its glob was 40% of the way up at 11.3 s, the warm up about 3 s of that and the pot
+// heating its lava about 8.
+const WARMUP = 0.5
+const FIRST_BOOST = 1.5
 const IDLE_HEAT = 0.6
 // Conduction: each step a particle's temperature moves this fraction of the way toward the
 // weighted mean of its neighbours. Without it every particle heats and cools on its own noise,
@@ -996,7 +1001,8 @@ export function createSimulation ({ width, height, params }) {
     const shorter = Math.min(width, height)
     // Light an element now, as its clock would; also on demand (lightElement, the music's beat).
     const ignite = el => {
-      el.heat = randomRange(elementHeatTop * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeatTop)
+      el.heat = randomRange(elementHeatTop * ELEMENT_HEAT[0] / ELEMENT_HEAT[1], elementHeatTop) * (el.kickOff ? FIRST_BOOST : 1)
+      el.kickOff = false
       el.start = heaterTime
       let lifeScale = 1
       if (ELEMENTS_ARE_CUPS) {
@@ -1023,6 +1029,7 @@ export function createSimulation ({ width, height, params }) {
         for (const el of elements) if (el.weight > best.weight) best = el
         best.next = heaterTime
         best.fresh = false
+        best.kickOff = true // lit FIRST_BOOST hotter
       }
       for (const el of elements) {
         if (el.heat > 0) {
