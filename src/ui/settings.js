@@ -460,48 +460,48 @@ export const applyTheme = theme => {
   for (const [key, state] of Object.entries(colorSettings)) if (theme[key]) state({ ...theme[key] })
 }
 
-// The other two kinds of gradient (Robert: "maybe we should make like a two color gradient
-// version and luminance gradient"): Two tone runs the five stops from one colour to another,
-// Luminance runs one colour from near black through itself to white. Mixed in linear light so
-// the middle does not go muddy. The pickers below are not saved; the five stops they set are.
+// The gradient editor. Presets are the six themes; Gradient is five colours the person sets, Cold
+// and Peak at the ends and Cool, Warm and Hot on pins that slide between them, the five stops the
+// lamp uses taken from it at even steps of heat. It starts from the colours on the lamp and follows
+// them while Presets is shown, so switching to Gradient begins from what is there. Mixed in linear
+// light so the middle does not go muddy. History: Duotone and Mono (Robert: "maybe we should make
+// like a two color gradient version and luminance gradient"), merged into one From and To gradient
+// ("combine duo tone and mono into gradient"), a midpoint slider ("a slider over the gradient to
+// decide the midpoint"), three pins ("3x pins make sense"), then the five heat dots on the bar
+// itself ("we could combine the 5 dots with the gradient selector with the 3 pins. Clicking on one
+// of the bars, the cold or peak, would open a color selector").
 // Nothing is written to the stops until Apply: switching the kind, or a theme clicked, used to
 // replace the five at once and a set of chosen colours was lost to browsing (Robert: "my daughter
 // had a problem where she set all the colors, then she was browsing the colors and changing the
 // mode automatically erases all of the chosen colors"). What would be written is the pending
-// gradient, shown in the panel's bar, on the lamp while previewed (app.js), and applied with the
-// tick. Cold and Peak are the gradient's ends; Cool, Warm and Hot each take it where their handle
-// on the bar sits (Robert: "have a slider over the gradient to decide the midpoint of the
-// gradient", then "I wonder if the ui would be too busy if we added a slider for each point in the
-// gradient"): three handles on the one bar, not five lines.
-// Duotone and Mono are one Gradient (Robert: "I think we should also combine duo tone and mono into
-// gradient, and they can just select the same color for mono"): near black, half of From, the
-// two mixed, To half way to white, near white; with From and To the same that is Mono's five stops
-// exactly, and the midpoint slider moves its middle.
-export const gradientKinds = ['presets', 'gradient'] // six contrast presets; a gradient from two colours, the same twice for one colour dark to light
+// gradient, shown on the bar, on the lamp while previewed (app.js), and applied with the tick.
+export const gradientKinds = ['presets', 'gradient']
 export const gradientKind = fnstate('presets')
-export const gradientFrom = fnstate(rgb(0, 20, 117))
-export const gradientTo = fnstate(rgb(255, 255, 230))
-export const gradientPoints = fnstate([0.25, 0.5, 0.75]) // where Cool, Warm and Hot sample the gradient, 0 to 1
 export const stagedTheme = fnstate(null) // a theme clicked, waiting for Apply
 const toLinear = c => Math.pow(c / 255, 2.2)
 const fromLinear = v => Math.round(Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2) * 255)
 const mixLinear = (a, b, t) => ({ r: fromLinear(toLinear(a.r) * (1 - t) + toLinear(b.r) * t), g: fromLinear(toLinear(a.g) * (1 - t) + toLinear(b.g) * t), b: fromLinear(toLinear(a.b) * (1 - t) + toLinear(b.b) * t) })
 const STOP_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
-// The gradient at u, 0 to 1, its five points joined in linear light.
+const stops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
+export const gradientColours = stops.map(state => fnstate({ ...state() })) // the five dots' colours
+export const gradientPoints = fnstate([0.25, 0.5, 0.75]) // the pins of Cool, Warm and Hot, 0 to 1
+// Follow the lamp's colours while Presets is shown: the pins back to even.
+const followStops = () => { if (gradientKind() === 'presets') { stops.forEach((state, k) => gradientColours[k]({ ...state() })); gradientPoints([0.25, 0.5, 0.75]) } }
+for (const state of stops) state.subscribe(followStops)
+// The gradient at u, 0 to 1: the five dots at their places, joined in linear light.
 export const gradientAt = u => {
-  const a = gradientFrom(); const b = gradientTo(); const black = rgb(0, 0, 0); const white = rgb(255, 255, 255)
-  const points = [mixLinear(black, a, 0.12), mixLinear(black, a, 0.5), mixLinear(a, b, 0.5), mixLinear(b, white, 0.5), mixLinear(b, white, 0.92)]
-  const k = Math.min(3, Math.floor(u * 4))
-  return mixLinear(points[k], points[k + 1], u * 4 - k)
-}
-// The colours Apply would write: the five stops for Gradient, every colour of a staged
-// theme for Presets, or null with no theme staged.
-export const pendingColours = () => {
-  const kind = gradientKind()
-  if (kind === 'presets') { const t = stagedTheme(); if (!t) return null; const out = {}; for (const key of Object.keys(colorSettings)) if (t[key]) out[key] = { ...t[key] }; return out }
   const at = [0, ...gradientPoints(), 1]
+  let k = 0
+  while (k < 3 && u > at[k + 1]) k++
+  const span = at[k + 1] - at[k]
+  return mixLinear(gradientColours[k](), gradientColours[k + 1](), span > 0 ? Math.max(0, Math.min(1, (u - at[k]) / span)) : 0)
+}
+// The colours Apply would write: the five stops for Gradient, every colour of a staged theme for
+// Presets, or null with no theme staged.
+export const pendingColours = () => {
+  if (gradientKind() === 'presets') { const t = stagedTheme(); if (!t) return null; const out = {}; for (const key of Object.keys(colorSettings)) if (t[key]) out[key] = { ...t[key] }; return out }
   const out = {}
-  STOP_KEYS.forEach((key, k) => { out[key] = gradientAt(at[k]) })
+  STOP_KEYS.forEach((key, k) => { out[key] = gradientAt(k / 4) })
   return out
 }
 export const applyPending = () => {
@@ -510,7 +510,7 @@ export const applyPending = () => {
   for (const [key, value] of Object.entries(colours)) colorSettings[key](value)
   stagedTheme(null)
 }
-gradientKind.subscribe(() => stagedTheme(null))
+gradientKind.subscribe(() => { stagedTheme(null); followStops() })
 
 // These keys are the saved and shared JSON format, so they must not change.
 // lavaColor and lavaHighlight were here until 2026-10-31, when the heat map became the only

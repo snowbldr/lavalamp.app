@@ -1,5 +1,5 @@
 import { a, button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { TOUCH_UI, group, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { TOUCH_UI, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -98,8 +98,7 @@ import {
   stagedTheme,
   gradientKinds,
   gradientKind,
-  gradientFrom,
-  gradientTo,
+  gradientColours,
   soundPending,
   fullscreen,
   soundBed,
@@ -194,8 +193,7 @@ const whole = v => String(Math.round(v))
 const fixed = digits => v => Number(v).toFixed(digits)
 const always = fnstate(true)
 const isPresets = fnstate(true)
-const isTwoTone = fnstate(false)
-gradientKind.subscribe(kind => { isPresets(kind === 'presets'); isTwoTone(kind === 'gradient') })
+gradientKind.subscribe(kind => isPresets(kind === 'presets'))
 const times = v => `${Number(v).toFixed(2)}x`
 // The frequency range knobs, 20 Hz to 12 kHz.
 const HZ = { min: 20, max: 12000, step: 10 }
@@ -303,40 +301,66 @@ export function createSettingsPanel () {
   const previewing = fnstate(false)
   const STOPS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
   const css = c => `rgb(${c.r}, ${c.g}, ${c.b})`
-  // Three handles over the bar, for Cool, Warm and Hot; each stays between its neighbours.
+  // The bar is the heat colours (Robert: "we could combine the 5 dots with the gradient selector
+  // with the 3 pins. Clicking on one of the bars, the cold or peak, would open a color selector"):
+  // five dots, Cold and Peak at the ends and Cool, Warm and Hot between. A click on a dot opens the
+  // picker for it; on Gradient the three middle ones are pins that drag along the bar, each kept
+  // GAP from its neighbours. On Presets the dots are the lamp's own stops, set at once as the
+  // swatches were (a theme waiting for the tick is let go first); on Gradient they are the
+  // gradient's, written with the tick.
   const GAP = 0.03
+  const STOP_NAMES = ['Cold', 'Cool', 'Warm', 'Hot', 'Peak']
+  const liveStops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
   const bar = div({ class: 'gradient-bar' })
-  const handles = ['Cool', 'Warm', 'Hot'].map((name, k) => {
-    const h = div({ class: 'gradient-handle', role: 'slider', tabindex: 0, title: `${name}: drag along the gradient`, 'aria-label': `${name} position` })
+  const dots = STOP_NAMES.map((name, k) => {
+    const dot = div({ class: k === 0 || k === 4 ? 'swatch gradient-dot end' : 'swatch gradient-dot', role: 'button', tabindex: 0, 'aria-label': `${name} colour` })
+    dot.swatchTitle = name
+    const pin = k > 0 && k < 4
     const place = u => {
       const p = gradientPoints().slice()
-      const lo = k === 0 ? GAP : p[k - 1] + GAP
-      const hi = k === 2 ? 1 - GAP : p[k + 1] - GAP
-      p[k] = Math.max(lo, Math.min(hi, u))
+      const lo = k === 1 ? GAP : p[k - 2] + GAP
+      const hi = k === 3 ? 1 - GAP : p[k] - GAP
+      p[k - 1] = Math.max(lo, Math.min(hi, u))
       gradientPoints(p)
     }
-    h.addEventListener('pointerdown', e => {
+    const open = () => { if (gradientKind() === 'presets' && stagedTheme()) stagedTheme(null); picker(dot) }
+    dot.addEventListener('pointerdown', e => {
       e.preventDefault()
-      h.setPointerCapture(e.pointerId)
-      const move = ev => { const r = bar.getBoundingClientRect(); place((ev.clientX - r.left) / r.width) }
-      const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up) }
-      h.addEventListener('pointermove', move)
-      h.addEventListener('pointerup', up)
-      h.addEventListener('pointercancel', up)
+      const x0 = e.clientX
+      let moved = false
+      dot.setPointerCapture(e.pointerId)
+      const move = ev => {
+        if (!pin || gradientKind() === 'presets') return
+        if (!moved && Math.abs(ev.clientX - x0) < 4) return
+        moved = true
+        const r = bar.getBoundingClientRect()
+        place((ev.clientX - r.left) / r.width)
+      }
+      const up = () => {
+        dot.removeEventListener('pointermove', move); dot.removeEventListener('pointerup', up); dot.removeEventListener('pointercancel', up)
+        if (!moved) open()
+      }
+      dot.addEventListener('pointermove', move)
+      dot.addEventListener('pointerup', up)
+      dot.addEventListener('pointercancel', up)
     })
-    h.addEventListener('keydown', e => {
+    dot.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { open(); e.preventDefault(); return }
+      if (!pin || gradientKind() === 'presets') return
       const step = e.shiftKey ? 0.05 : 0.01
-      if (e.key === 'ArrowLeft') { place(gradientPoints()[k] - step); e.preventDefault() } else if (e.key === 'ArrowRight') { place(gradientPoints()[k] + step); e.preventDefault() }
+      if (e.key === 'ArrowLeft') { place(gradientPoints()[k - 1] - step); e.preventDefault() } else if (e.key === 'ArrowRight') { place(gradientPoints()[k - 1] + step); e.preventDefault() }
     })
-    bar.append(h)
-    return h
+    bar.append(dot)
+    return dot
   })
   const eye = button({ class: 'icon-button', title: 'Preview on the lamp', 'aria-label': 'Preview on the lamp', 'aria-pressed': 'false', onclick: () => previewing(!previewing()) })
   eye.innerHTML = ICON('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')
   const tick = button({ class: 'icon-button primary', title: 'Apply these colours', 'aria-label': 'Apply these colours', onclick: () => { applyPending(); previewing(false); unstageTiles() } })
   tick.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
   const gradientActions = div({ class: 'gradient-actions' }, eye, tick)
-  const gradientPending = div({ class: 'gradient-pending' }, bar)
+  // Two labels only, the ends (Robert: "we only really also need two labels there, cold and hot.
+  // Everything in between is just implicit from the gradient").
+  const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-labels' }, span('Cold'), span('Hot')))
   // A theme's tile: a click stages it (the tick applies it); a saved one can be renamed with a
   // double click and deleted with its cross.
   const unstageTiles = () => { if (panel) for (const b of panel.querySelectorAll('.theme.staged')) b.classList.remove('staged') }
@@ -395,13 +419,20 @@ export function createSettingsPanel () {
     // with no theme picked it shows the colours as they are, and the eye and tick wait.
     const colours = pendingColours()
     const shown = colours || { heatCold: heatCold(), heatCool: heatCool(), heatWarm: heatWarm(), heatHot: heatHot(), heatPeak: heatPeak() }
-    const points = gradientPoints()
-    handles.forEach((h, k) => { h.style.display = gradientKind() === 'presets' ? 'none' : ''; h.style.left = `${points[k] * 100}%`; h.setAttribute('aria-valuenow', points[k].toFixed(2)) })
-    // On Gradient the bar is the whole gradient, the handles marking where Cool, Warm and Hot take
-    // it; on Presets, the five stops of the theme picked or of the colours as they are.
-    bar.style.background = gradientKind() === 'presets'
-      ? `linear-gradient(90deg, ${STOPS.map(k => css(shown[k])).join(', ')})`
-      : `linear-gradient(90deg, ${Array.from({ length: 17 }, (_, i) => css(gradientAt(i / 16))).join(', ')})`
+    const gradient = gradientKind() === 'gradient'
+    const at = gradient ? [0, ...gradientPoints(), 1] : [0, 0.25, 0.5, 0.75, 1]
+    dots.forEach((dot, k) => {
+      dot.swatchState = gradient ? gradientColours[k] : liveStops[k]
+      dot.style.left = `${at[k] * 100}%`
+      dot.style.background = css(gradient ? gradientColours[k]() : shown[STOPS[k]])
+      dot.classList.toggle('pin', gradient && k > 0 && k < 4)
+      dot.title = gradient && k > 0 && k < 4 ? `${STOP_NAMES[k]}: click for its colour, drag to move it` : `${STOP_NAMES[k]}: click for its colour`
+    })
+    // On Gradient the bar is the whole gradient; on Presets, the five stops of the theme picked or
+    // of the colours as they are.
+    bar.style.background = gradient
+      ? `linear-gradient(90deg, ${Array.from({ length: 33 }, (_, i) => css(gradientAt(i / 32))).join(', ')})`
+      : `linear-gradient(90deg, ${STOPS.map(k => css(shown[k])).join(', ')})`
     eye.disabled = !colours
     tick.disabled = !colours
     if (!colours && previewing()) { previewing(false); return }
@@ -409,7 +440,7 @@ export function createSettingsPanel () {
     eye.setAttribute('aria-pressed', String(previewing()))
     window.dispatchEvent(new CustomEvent('lavalamp-preview-colours', { detail: previewing() && colours ? colours : null }))
   }
-  for (const state of [gradientKind, gradientFrom, gradientTo, gradientPoints, stagedTheme, previewing, heatCold, heatCool, heatWarm, heatHot, heatPeak]) state.subscribe(showPending)
+  for (const state of [gradientKind, ...gradientColours, gradientPoints, stagedTheme, previewing, heatCold, heatCool, heatWarm, heatHot, heatPeak]) state.subscribe(showPending)
   gradientKind.subscribe(unstageTiles)
   showPending()
 
@@ -433,23 +464,10 @@ export function createSettingsPanel () {
       // The colours as a boxed sub panel like Touch (Robert: "Let's do the colors in a sub panel
       // like that too").
       div({ class: 'sub-panel' },
-      swatchRow('Heat colours', always, true,
-        swatch('Cold', 'heatCold', heatCold),
-        swatch('Cool', 'heatCool', heatCool),
-        swatch('Warm', 'heatWarm', heatWarm),
-        swatch('Hot', 'heatHot', heatHot),
-        swatch('Peak', 'heatPeak', heatPeak),
-        swatch('Back', 'bgColor', bgColor)
-      ),
-      swatchRow('Flow colours', showFlow, true,
-        swatch('Slow', 'flowSlow', flowSlow),
-        swatch('Fast', 'flowFast', flowFast)
-      ),
-      div({ class: 'gradient-top' }, segmented('gradient', gradientKind, gradientKinds), gradientActions),
-      gradientPending,
-      swatchRow('From and to', isTwoTone, true,
-        swatch('From', 'gradientFrom', gradientFrom),
-        swatch('To', 'gradientTo', gradientTo)
+      div({ class: 'swatch-row' },
+        div({ class: 'swatch-caption' }, 'Heat colours'),
+        div({ class: 'gradient-top' }, segmented('gradient', gradientKind, gradientKinds), gradientActions),
+        gradientPending
       ),
       div({ class: 'swatch-row', style: { display: isPresets.bindStyle(() => isPresets() ? 'block' : 'none') } },
         div({ class: 'swatch-caption' }, 'Themes'),
@@ -457,7 +475,14 @@ export function createSettingsPanel () {
         div({ class: 'swatch-caption', style: { 'margin-top': '10px' } }, 'My themes'),
         myThemesGrid
       ),
-      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Gradient runs from dark through one colour to another and on to light (the same colour twice for one colour dark to light). Neither changes your colours until you press the tick: the bar shows what you would get, the eye shows it on the lamp, and on Gradient the three handles on the bar slide the Cool, Warm and Hot colours along it. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
+      swatchRow('Background', always, true,
+        swatch('Back', 'bgColor', bgColor)
+      ),
+      swatchRow('Flow colours', showFlow, true,
+        swatch('Slow', 'flowSlow', flowSlow),
+        swatch('Fast', 'flowFast', flowFast)
+      ),
+      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. The bar is the heat colours: click a dot to change it. Presets are six gradients that jump hue (or your own, saved with the plus); a theme picked waits for the tick. On Gradient the five dots are yours: click one for its colour, drag the middle three along the bar; the tick puts it on the lamp and the eye shows it there first. The flow colours are the slowest to fastest arrow.')
       ),
       // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
       // thirteen year old (Robert: "I want to make it look more like a sub panel").
