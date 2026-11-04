@@ -292,6 +292,16 @@ export async function start () {
   params.touchHeat = 48
 
   const look = {}
+  // The colours panel's preview: the pending gradient (a theme, Duotone or Mono) drawn on the lamp
+  // without being set, and the set colours back when it ends (settingsPanel.js).
+  const colourStates = { heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
+  window.addEventListener('lavalamp-preview-colours', e => {
+    const colours = e.detail
+    for (const [key, state] of Object.entries(colourStates)) look[key] = colours && colours[key] ? colours[key] : state()
+    const back = colours && colours.bgColor ? colours.bgColor : bgColor()
+    const el = document.getElementById('lamp-back')
+    if (el) el.style.background = `rgb(${back.r}, ${back.g}, ${back.b})`
+  })
   mirror(heatCold, look, 'heatCold')
   mirror(heatCool, look, 'heatCool')
   mirror(heatWarm, look, 'heatWarm')
@@ -965,7 +975,8 @@ export async function start () {
           bottom: 0,
           right: 0,
           background: bgColor.bindStyle(() => `rgb(${bgColor().r}, ${bgColor().g}, ${bgColor().b})`)
-        }
+        },
+        id: 'lamp-back'
       },
       lamp,
       div(

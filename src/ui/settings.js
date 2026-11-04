@@ -464,28 +464,52 @@ export const applyTheme = theme => {
 // version and luminance gradient"): Two tone runs the five stops from one colour to another,
 // Luminance runs one colour from near black through itself to white. Mixed in linear light so
 // the middle does not go muddy. The pickers below are not saved; the five stops they set are.
+// Nothing is written to the stops until Apply: switching the kind, or a theme clicked, used to
+// replace the five at once and a set of chosen colours was lost to browsing (Robert: "my daughter
+// had a problem where she set all the colors, then she was browsing the colors and changing the
+// mode automatically erases all of the chosen colors"). What would be written is the pending
+// gradient, shown in the panel's bar, on the lamp while previewed (app.js), and applied with the
+// tick. The midpoint is where the gradient's middle sits along the heat, 0.5 even (Robert: "have a
+// slider over the gradient to decide the midpoint of the gradient").
 export const gradientKinds = ['presets', 'duotone', 'mono'] // six contrast presets; two colours; one colour dark to light
 export const gradientKind = fnstate('presets')
 export const gradientFrom = fnstate(rgb(0, 20, 117))
 export const gradientTo = fnstate(rgb(255, 255, 230))
 export const gradientHue = fnstate(rgb(255, 126, 20))
+export const gradientMid = fnstate(0.5)
+export const stagedTheme = fnstate(null) // a theme clicked, waiting for Apply
 const toLinear = c => Math.pow(c / 255, 2.2)
 const fromLinear = v => Math.round(Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2) * 255)
 const mixLinear = (a, b, t) => ({ r: fromLinear(toLinear(a.r) * (1 - t) + toLinear(b.r) * t), g: fromLinear(toLinear(a.g) * (1 - t) + toLinear(b.g) * t), b: fromLinear(toLinear(a.b) * (1 - t) + toLinear(b.b) * t) })
-const stops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
-export const applyTwoTone = () => {
-  const a = gradientFrom(); const b = gradientTo()
-  stops.forEach((state, k) => state(mixLinear(a, b, k / 4)))
+const STOP_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
+// The kind's gradient at u, 0 to 1. Luminance is its five stops as they were (12% of the colour,
+// half, the colour, half way to white, 92% of the way), joined in linear light.
+const gradientAt = (kind, u) => {
+  if (kind === 'duotone') return mixLinear(gradientFrom(), gradientTo(), u)
+  const c = gradientHue(); const black = rgb(0, 0, 0); const white = rgb(255, 255, 255)
+  const points = [mixLinear(black, c, 0.12), mixLinear(black, c, 0.5), c, mixLinear(c, white, 0.5), mixLinear(c, white, 0.92)]
+  const k = Math.min(3, Math.floor(u * 4))
+  return mixLinear(points[k], points[k + 1], u * 4 - k)
 }
-export const applyLuminance = () => {
-  const c = gradientHue()
-  const black = rgb(0, 0, 0); const white = rgb(255, 255, 255)
-  stops[0](mixLinear(black, c, 0.12)); stops[1](mixLinear(black, c, 0.5)); stops[2]({ ...c }); stops[3](mixLinear(c, white, 0.5)); stops[4](mixLinear(c, white, 0.92))
+// The stop at heat p samples the gradient so that its middle falls at the midpoint m.
+const warp = (p, m) => p <= m ? 0.5 * p / m : 0.5 + 0.5 * (p - m) / (1 - m)
+// The colours Apply would write: the five stops for Duotone or Mono, every colour of a staged
+// theme for Presets, or null with no theme staged.
+export const pendingColours = () => {
+  const kind = gradientKind()
+  if (kind === 'presets') { const t = stagedTheme(); if (!t) return null; const out = {}; for (const key of Object.keys(colorSettings)) if (t[key]) out[key] = { ...t[key] }; return out }
+  const m = Math.max(0.05, Math.min(0.95, gradientMid()))
+  const out = {}
+  STOP_KEYS.forEach((key, k) => { out[key] = gradientAt(kind, warp(k / 4, m)) })
+  return out
 }
-gradientFrom.subscribe(() => { if (gradientKind() === 'duotone') applyTwoTone() })
-gradientTo.subscribe(() => { if (gradientKind() === 'duotone') applyTwoTone() })
-gradientHue.subscribe(() => { if (gradientKind() === 'mono') applyLuminance() })
-gradientKind.subscribe(kind => { if (kind === 'duotone') applyTwoTone(); else if (kind === 'mono') applyLuminance() })
+export const applyPending = () => {
+  const colours = pendingColours()
+  if (!colours) return
+  for (const [key, value] of Object.entries(colours)) colorSettings[key](value)
+  stagedTheme(null)
+}
+gradientKind.subscribe(() => stagedTheme(null))
 
 // These keys are the saved and shared JSON format, so they must not change.
 // lavaColor and lavaHighlight were here until 2026-10-31, when the heat map became the only

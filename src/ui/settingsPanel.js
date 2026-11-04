@@ -91,7 +91,10 @@ import {
   showCups,
   sound,
   themes,
-  applyTheme,
+  applyPending,
+  gradientMid,
+  pendingColours,
+  stagedTheme,
   gradientKinds,
   gradientKind,
   gradientFrom,
@@ -263,7 +266,7 @@ export function createSettingsPanel () {
     )
   })
   const open = () => document.body.append(panel)
-  const close = () => panel.remove()
+  const close = () => { previewing(false); panel.remove() }
 
   const copyShareLink = () =>
     navigator.clipboard.writeText(shareLink()).then(
@@ -294,6 +297,32 @@ export function createSettingsPanel () {
     onchange: applySeed,
     onkeydown: e => { if (e.key === 'Enter') e.target.blur() }
   })
+
+  // The pending gradient: what Apply would write (settings.js pendingColours), as a bar with the
+  // midpoint's slider over it on Duotone and Mono, an eye to see it on the lamp while held on, and
+  // a tick to apply it.
+  const previewing = fnstate(false)
+  const STOPS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
+  const css = c => `rgb(${c.r}, ${c.g}, ${c.b})`
+  const midSlider = input({ class: 'gradient-mid', type: 'range', min: 0.05, max: 0.95, step: 0.01, value: String(gradientMid()), 'aria-label': 'Gradient midpoint', title: 'Where the middle of the gradient sits: left for more of the hot end, right for more of the cold', oninput: e => gradientMid(Number(e.target.value)) })
+  const bar = div({ class: 'gradient-bar' }, midSlider)
+  const eye = button({ class: 'icon-button', title: 'Preview on the lamp', 'aria-label': 'Preview on the lamp', 'aria-pressed': 'false', onclick: () => previewing(!previewing()) })
+  eye.innerHTML = ICON('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')
+  const tick = button({ class: 'icon-button primary', title: 'Apply these colours', 'aria-label': 'Apply these colours', onclick: () => { applyPending(); previewing(false); for (const b of panel.querySelectorAll('.theme.staged')) b.classList.remove('staged') } })
+  tick.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
+  const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-actions' }, eye, tick))
+  const showPending = () => {
+    const colours = pendingColours()
+    gradientPending.style.display = colours ? 'flex' : 'none'
+    midSlider.style.display = gradientKind() === 'presets' ? 'none' : ''
+    if (colours) bar.style.background = `linear-gradient(90deg, ${STOPS.map(k => css(colours[k])).join(', ')})`
+    eye.classList.toggle('on', previewing())
+    eye.setAttribute('aria-pressed', String(previewing()))
+    window.dispatchEvent(new CustomEvent('lavalamp-preview-colours', { detail: previewing() && colours ? colours : null }))
+  }
+  for (const state of [gradientKind, gradientFrom, gradientTo, gradientHue, gradientMid, stagedTheme, previewing]) state.subscribe(showPending)
+  gradientKind.subscribe(() => { for (const b of (panel ? panel.querySelectorAll('.theme.staged') : [])) b.classList.remove('staged') })
+  showPending()
 
   panel = div(
     { class: knobStyle.bindAttr(() => knobStyle() === 'sliders' ? 'panel sliders' : 'panel'), onclick: e => e.stopPropagation() },
@@ -335,16 +364,17 @@ export function createSettingsPanel () {
       swatchRow('Mono', isLuminance, true,
         swatch('Colour', 'gradientHue', gradientHue)
       ),
+      gradientPending,
       div({ class: 'swatch-row', style: { display: isPresets.bindStyle(() => isPresets() ? 'block' : 'none') } },
         div({ class: 'swatch-caption' }, 'Themes'),
         div({ class: 'themes' }, ...themes.map(theme => button({
           class: 'theme',
           title: theme.name,
           style: { background: `linear-gradient(90deg, ${['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak'].map(k => `rgb(${theme[k].r},${theme[k].g},${theme[k].b})`).join(', ')})` },
-          onclick: () => applyTheme(theme)
+          onclick: e => { stagedTheme(theme); for (const b of e.currentTarget.parentElement.children) b.classList.toggle('staged', b === e.currentTarget) }
         }, span(theme.name))))
       ),
-      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Duotone runs from one colour to another; Mono runs one colour from dark to light. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
+      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Duotone runs from one colour to another; Mono runs one colour from dark to light. None of them changes your colours until you press the tick: the bar shows what you would get, the eye shows it on the lamp, and on Duotone and Mono the slider moves the middle of the gradient hotter or colder. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
       ),
       // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
       // thirteen year old (Robert: "I want to make it look more like a sub panel").

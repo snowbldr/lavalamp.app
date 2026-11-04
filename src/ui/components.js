@@ -397,40 +397,13 @@ document.addEventListener('pointerup', e => {
 })
 
 // A captioned row of swatches, shown while the boolean fnstate `view` is on (or off, if `when` is
-// false). Under the swatches, the hex of the one last hovered or pressed, in a text field that can
-// be copied from or pasted into (Robert: "color picker should default to hex so it's easier to
-// copy and paste"; the browser's own picker cannot be told which format to open in).
-export const swatchRow = (title, view, when, ...swatches) => {
-  let active = swatches[0]
-  const name = span({ class: 'swatch-hex-name' }, active ? active.swatchTitle : '')
-  const hex = input({
-    class: 'swatch-hex',
-    type: 'text',
-    spellcheck: false,
-    maxlength: 7,
-    'aria-label': `${title} hex`,
-    onfocus: e => e.target.select(),
-    oninput: e => {
-      const v = e.target.value.trim()
-      if (active && /^#?[0-9a-fA-F]{6}$/.test(v)) active.swatchState(hexToRgb(v.startsWith('#') ? v : '#' + v))
-    }
-  })
-  const refresh = () => { if (active && document.activeElement !== hex) hex.value = rgbToHex(active.swatchState()) }
-  const activate = s => { active = s; name.textContent = s.swatchTitle; refresh() }
-  for (const s of swatches) {
-    s.addEventListener('pointerenter', () => activate(s))
-    s.addEventListener('pointerdown', () => activate(s))
-    s.addEventListener('focusin', () => activate(s))
-    s.swatchState.subscribe(() => { if (s === active) refresh() })
-  }
-  refresh()
-  return div(
-    { class: 'swatch-row', style: { display: view.bindStyle(() => !!view() === when ? 'block' : 'none') } },
-    div({ class: 'swatch-caption' }, title),
-    div({ class: 'swatches' }, ...swatches),
-    div({ class: 'swatch-hexrow' }, name, hex)
-  )
-}
+// false). The hex field under them is gone (Robert: "I think we should get rid of the hex color
+// code actually. the color from is a way better ui than the hex codes"); the picker keeps its own.
+export const swatchRow = (title, view, when, ...swatches) => div(
+  { class: 'swatch-row', style: { display: view.bindStyle(() => !!view() === when ? 'block' : 'none') } },
+  div({ class: 'swatch-caption' }, title),
+  div({ class: 'swatches' }, ...swatches)
+)
 
 // A segmented control for a state that takes one of a few words.
 export const segmented = (idPrefix, state, options) => div(
