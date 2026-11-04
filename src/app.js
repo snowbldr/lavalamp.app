@@ -731,7 +731,10 @@ export async function start () {
     // triggering the pots... sometimes it does seem like it fires, but I'm not sure why the
     // inconsistency"). While a boom waits for its peak, the beat pots wait too.
     const onBeatPot = m.beat && !calm && !lavaLow && !m.boomPending && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
-    const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
+    // A drop or a stab blasts the pot holding the most lava, as a snap does (Robert: "does the drop
+    // check for biggest filled pots like the snap does? it should probably do that"): the lidded
+    // pot or the biggest cup could be the empty one; a full lidded pot is still the one it takes.
+    const open = strength => { if (sim.dropPot) sim.dropPot(strength, fullestPot()); fired = true }
     // A bass hit (a deep note, a beat on the phrase) is a wave: one vent of the closed pot, the
     // wave form Robert liked ("I really like the wave forms the pulsing releases are, we should make
     // those what happens for any bass trigger"; then "Let's keep waves as bass (looks really cool),
