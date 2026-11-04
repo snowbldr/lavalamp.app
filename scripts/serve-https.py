@@ -6,7 +6,27 @@
 #   python3 scripts/serve-https.py [port]      default 8443
 import http.server, os, pathlib, ssl, subprocess, sys
 
+
+def taken(port):
+    # Python's http.server sets SO_REUSEADDR, and on macOS an IPv4 and an IPv6 server can hold the
+    # same port side by side, localhost reaching one or the other (Robert: "python allows multiple
+    # listeners by default. stupid default"). Refuse when anything answers on either.
+    import socket
+    for family, host in ((socket.AF_INET, '127.0.0.1'), (socket.AF_INET6, '::1')):
+        try:
+            with socket.socket(family, socket.SOCK_STREAM) as probe:
+                probe.settimeout(0.3)
+                if probe.connect_ex((host, port)) == 0:
+                    return True
+        except OSError:
+            pass
+    return False
+
+
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8443
+if taken(port):
+    sys.exit(f'port {port} is already served; stop that server first (lsof -nP -iTCP:{port})')
+http.server.ThreadingHTTPServer.allow_reuse_port = False
 root = pathlib.Path(__file__).resolve().parent.parent
 certdir = pathlib.Path.home() / '.lavalamp-https'
 certdir.mkdir(exist_ok=True)
