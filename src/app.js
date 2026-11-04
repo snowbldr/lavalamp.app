@@ -492,7 +492,7 @@ export async function start () {
   let train = null // { left, last, period } while a train of globs runs
   const trainLastAt = { mid: -1e9 }
   let lastTrainAt = -1e9
-  const TRAIN_GAP = 2 // seconds from one train's start to the next's at least
+  const TRAIN_GAP = 0 // seconds from one train's start to the next's at least (was 2; no limits, see BOOM_POT_GAP)
   const TRAIN_STEP = 0.22 // seconds between a train's globs
   const TRAIN_GLOB = 0.05 // seconds of the lamp's time the lid lifts for each glob
   const MID_HIT_RISE = 2.5
@@ -550,10 +550,14 @@ export async function start () {
   const VENT_TIME = 0.3 // seconds the lid is lifted for
   // Seconds between pots on deep notes: 3 skipped C-C's 0:57.1 (1.9 s after the one at the drop);
   // 1.5 keeps C-C's, 1.75 to 3.5 s apart, and half of Bangarang's, about 1.1 s apart.
-  const BOOM_POT_GAP = 1.5
+  // No limits on how often an effect fires (Robert: "basically anything that limits how frequently
+  // something can happen, let's turn those off"; "maybe we're scared of nothing"). The boom's 1.5 s
+  // skipped 31 of Espresso's 78 deep notes and 50 of Bangarang's 89. Was 1.5, 1, 2 and 1 s for
+  // the boom, the boom after a drop, the train and the clap.
+  const BOOM_POT_GAP = 0
   // A deep note within this of a drop is the drop's own: the drop at 0:55.2 opened the big pot,
   // and the boom at the note's peak opened a second one 0.02 s later.
-  const BOOM_AFTER_DROP = 1
+  const BOOM_AFTER_DROP = 0
   // A beat's pot waits BEAT_POT_WAIT, and is let go if a deep note's attack is heard meanwhile:
   // the attack's kick can be heard a frame or two before the attack counts, and its pot spent the
   // charge the boom wanted (C-C 1:15.62 and 1:15.64, 1:22.52 and 1:22.60).
@@ -562,7 +566,7 @@ export async function start () {
   let lastBoomPotAt = -1e9
   const SILENT_DB = -65 // the analyser's floor is -80; a song's quietest bars sit around -55
   const SILENT_AFTER = 15 // seconds
-  const CLAP_POT_GAP = 1 // seconds between pots blasted by claps
+  const CLAP_POT_GAP = 0 // seconds between pots blasted by claps (was 1)
   let lastClapPotAt = -1e9
   let silentFor = 0
   let musicResting = false

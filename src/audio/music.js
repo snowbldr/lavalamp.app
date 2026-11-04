@@ -133,7 +133,7 @@ const BOOM_BEFORE = 0.6
 const BOOM_GAP = 0.1
 const BOOM_PEAK = 14
 const BOOM_PEAK_FALL = 0.6 // dB a second
-const BOOM_REFRACTORY = 1
+const BOOM_REFRACTORY = 0 // was 1 s: no limits on how often (app.js BOOM_POT_GAP)
 const BOOM_FALL = 2 // dB under the note's highest: past its peak (1 fired on frame jitter, 0:55.15 for a peak at 0:55.33)
 const BOOM_WAIT = 0.6 // seconds after the attack at most
 // The wobble: dubstep's wah, a mid bass whose filter sweeps open and shut a few times a second
