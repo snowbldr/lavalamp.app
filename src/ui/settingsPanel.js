@@ -399,7 +399,7 @@ export function createSettingsPanel () {
   const PENCIL = '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>'
   const themeTile = (theme, mine) => {
     if (editing && editing.theme === theme) {
-      const field = input({ class: 'theme-name', type: 'text', maxlength: 24, value: editing.field ? editing.field.value : (mine ? theme.name : `My ${theme.name}`), 'aria-label': 'Theme name',
+      const field = input({ class: 'theme-name', type: 'text', maxlength: 24, value: editing.field ? editing.field.value : theme.name, 'aria-label': 'Theme name',
         onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') stopEditing(true); else if (e.key === 'Escape' && !pickerWasOpen) stopEditing(false) } })
       editing.field = field
       const save = button({ class: 'icon-button primary theme-save', title: 'Save this theme', 'aria-label': 'Save this theme', onclick: () => stopEditing(true) })
@@ -407,6 +407,8 @@ export function createSettingsPanel () {
       setTimeout(() => { field.focus(); field.select() })
       return div({ class: 'theme-item editing' }, field, save)
     }
+    // The six built in themes are plain buttons, as they were (Robert: "I did not mean to make the
+    // default themes editable, those should remain the 6 gradient buttons we had before").
     const tile = button({
       class: 'theme',
       title: theme.name,
@@ -423,6 +425,7 @@ export function createSettingsPanel () {
       fillThemes()
     } })
     edit.innerHTML = ICON(PENCIL)
+    if (!mine) return tile
     const item = div({ class: 'theme-item' }, tile, edit)
     if (mine) item.append(span({ class: 'theme-delete', title: 'Delete this theme', 'aria-label': 'Delete this theme', onclick: e => { e.stopPropagation(); myThemes = myThemes.filter(t => t !== theme); saveMyThemes(); fillThemes() } }, '×'))
     return item
@@ -434,7 +437,7 @@ export function createSettingsPanel () {
   let myThemes = []
   try { myThemes = JSON.parse(localStorage.getItem(MY_THEMES_KEY) || '[]').filter(t => t && t.heatCold) } catch (e) { myThemes = [] }
   const saveMyThemes = () => { try { localStorage.setItem(MY_THEMES_KEY, JSON.stringify(myThemes)) } catch (e) { notify('Could not save the theme in this browser') } }
-  const themesGrid = div({ class: 'themes' })
+  const themesGrid = div({ class: 'themes builtin' })
   const myThemesGrid = div({ class: 'themes' })
   const fillThemes = () => {
     const add = button({
