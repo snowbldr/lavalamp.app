@@ -1,4 +1,5 @@
 import { drawCooling, drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
+import { drawnTemps, drawnY } from './potCap.js'
 const CULL_MARGIN = 48 // window px past the edge a drawn disc and its blur can still reach
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
@@ -235,7 +236,10 @@ export function createGlRenderer (canvas, look) {
     const top = HEAT_STEPS - 1
     const perTemp = heat ? top / (2 * overlays.neutral) : 0
     const floorY = overlays.floorY ?? Infinity
-    const hiddenTemp = overlays.neutral || 0 // half of it drew warm pot lava purple, a fuzz over every pot; neutral still keeps the superheated (1.5 to 3 times) from white
+    // Pot lava no hotter than neutral (half of it drew warm pot lava purple, a fuzz over every
+    // pot) nor than the lava just above it: see potCap.js.
+    const yOf = drawnY(state, floorY, look.particleSize || 4)
+    const tempOf = heat ? drawnTemps(state, count, floorY, overlays.neutral, look.particleSize || 4) : null
     // Only what can show is drawn: the pots' and bottles' reserves sit below the floor and above
     // the ceiling, off screen unless the Reservoirs view fits them in, and a frame built all of
     // them (Robert: "I also noticed that the lava gets pretty laggy": 53055 particles at 2560 by
@@ -248,18 +252,15 @@ export function createGlRenderer (canvas, look) {
     let drawn = 0
     for (let i = 0; i < count; i++) {
       const cx = (state.x[i] * view.k + view.ox) * scale
-      const cy = (state.y[i] * view.k + view.oy) * scale
+      const cy = (yOf(i) * view.k + view.oy) * scale
       if (cy < cullTop || cy > cullBottom || cx < cullTop || cx > cullRight) continue
       drawn++
       let cr = lava[0]
       let cg = lava[1]
       let cb = lava[2]
       if (heat) {
-        // Lava below the floor's line, in a pot, is never on screen but its glow reaches over the
-        // line: drawn no hotter than the neutral temperature, so a closed pot's superheated
-        // lava does not show as a white streak along the bottom (Robert: "can we hid this hot
-        // white streak on the bottom?"; held deeper instead, it left a black gap in the pool).
-        const temp = state.y[i] > floorY ? Math.min(state.temp[i], hiddenTemp) : state.temp[i]
+        // Held deeper instead of capped, a closed pot's lava left a black gap in the pool.
+        const temp = tempOf(i)
         const step = Math.max(0, Math.min(top, Math.round(temp * perTemp))) * 3
         cr = heatTable[step]
         cg = heatTable[step + 1]

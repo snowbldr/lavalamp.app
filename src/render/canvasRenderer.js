@@ -1,4 +1,5 @@
 import { drawCooling, drawCups, drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
+import { drawnTemps, drawnY } from './potCap.js'
 
 const ALPHA_THRESHOLD = 70
 // The threshold pass touches every pixel in JavaScript, so the canvas has at most
@@ -65,11 +66,12 @@ export function createCanvasRenderer (canvas, look) {
       const offset = span / 2
       const top = HEAT_STEPS - 1
       const perTemp = top / (2 * overlays.neutral)
-      const floorY = overlays.floorY ?? Infinity // lava in a pot drawn no hotter than neutral (see glRenderer.js)
+      const yOf = drawnY(state, overlays.floorY ?? Infinity, look.particleSize)
+      const tempOf = drawnTemps(state, count, overlays.floorY ?? Infinity, overlays.neutral, look.particleSize) // lava in a pot (see potCap.js)
       for (let i = 0; i < count; i++) {
-        const dy = (state.y[i] * view.k + view.oy) * scale - offset
+        const dy = (yOf(i) * view.k + view.oy) * scale - offset
         if (dy < -span || dy > height) continue // off screen: the reserves below the floor and above the ceiling (see glRenderer.js)
-        const temp = state.y[i] > floorY ? Math.min(state.temp[i], overlays.neutral) : state.temp[i]
+        const temp = tempOf(i)
         const step = Math.max(0, Math.min(top, Math.round(temp * perTemp)))
         context.drawImage(heatDiscs[step], (state.x[i] * view.k + view.ox) * scale - offset, dy, span, span)
       }
