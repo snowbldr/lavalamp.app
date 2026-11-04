@@ -1265,6 +1265,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     get count () { return gpu.count },
     get width () { return gpu.width },
     get height () { return gpu.height },
+    get reads () { return gpu.debug().reads }, // readbacks landed: the page smooths between them (app.js)
     gpu: true
   }
 }

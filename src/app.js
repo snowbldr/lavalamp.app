@@ -342,6 +342,37 @@ export async function start () {
     previous.tick++
     for (let k = 0; k < n; k++) { const b = id ? id[k] : k; previous.x[b] = x[k]; previous.y[b] = y[k]; previous.stamp[b] = previous.tick }
   }
+  // The GPU lamp's positions come back from the card whenever a readback lands, a frame or two
+  // after the step that made them and at the GPU's own pace, so smoothing between the state
+  // before a step and after it blended a frozen state with itself: 70 to 85 frames drawn a second
+  // and 22 to 27 with the lava moved, worse when the GPU was busy elsewhere (Robert: "it says 97
+  // fps but it's really maybe like 10fps on my screen"; "it comes and goes for no apparent
+  // reason"). Instead the page keeps the last two readbacks with the times they landed and draws
+  // between them, one readback behind, as the CPU lamp's worker does (workerLamp.js interpolate).
+  const readback = { reads: -1, prev: null, cur: null, tPrev: 0, tCur: 0 }
+  const smoothReadbacks = (x, y, count) => {
+    const now = performance.now()
+    if (sim.reads !== readback.reads) {
+      readback.reads = sim.reads
+      const keep = readback.prev && readback.prev.x.length >= count ? readback.prev : { x: new Float32Array(count), y: new Float32Array(count) }
+      readback.prev = readback.cur
+      keep.x.set(x.subarray(0, count))
+      keep.y.set(y.subarray(0, count))
+      keep.n = count
+      readback.cur = keep
+      readback.tPrev = readback.tCur
+      readback.tCur = now
+    }
+    const { prev, cur } = readback
+    if (!cur) { shown.x.set(x.subarray(0, count)); shown.y.set(y.subarray(0, count)); return }
+    const gap = Math.max(5, Math.min(250, readback.tCur - readback.tPrev))
+    const a = prev ? Math.max(0, Math.min(1, (now - gap - readback.tPrev) / gap)) : 1
+    for (let i = 0; i < count; i++) {
+      if (!prev || i >= prev.n || i >= cur.n) { shown.x[i] = x[i]; shown.y[i] = y[i]; continue }
+      shown.x[i] = prev.x[i] + (cur.x[i] - prev.x[i]) * a
+      shown.y[i] = prev.y[i] + (cur.y[i] - prev.y[i]) * a
+    }
+  }
   let edge = 'bottom' // the page edge the lamp's floor sits on
   let turns = TURNS[edge]
   let [pageWidth, pageHeight] = pageSize()
@@ -1036,7 +1067,7 @@ export async function start () {
   // kept on window.lavaProfile, for finding what a slow device is spending its time on.
   const profiling = new URLSearchParams(window.location.search).has('profile')
   look.profile = profiling
-  if (profiling) window.lavalamp = { sim, params, look, gloop, device, music: listener, musicLog } // for timing the running lamp from the console
+  if (profiling) window.lavalamp = { sim, params, look, gloop, device, music: listener, musicLog, shown } // for timing the running lamp from the console
   const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
   // The busiest 20 px cell, in particles: 40 or so is lava at rest, hundreds is a pile the
   // solver's neighbour loops pay for (the eddies packing the pots was 814, and single digit fps).
@@ -1150,7 +1181,10 @@ export async function start () {
       const { x, y, id } = sim.state
       count = sim.count
       if (shown.x.length < count) { shown.x = new Float32Array(count); shown.y = new Float32Array(count) }
-      for (let i = 0; i < count; i++) {
+      if (sim.gpu && sim.reads !== undefined) {
+        smoothReadbacks(x, y, count)
+        shown.temp = sim.state.temp
+      } else for (let i = 0; i < count; i++) {
         const b = id ? id[i] : i
         if (b >= previous.x.length || previous.stamp[b] !== previous.tick) { shown.x[i] = x[i]; shown.y[i] = y[i]; continue } // born since
         shown.x[i] = previous.x[b] + (x[i] - previous.x[b]) * due
