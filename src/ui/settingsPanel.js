@@ -260,14 +260,19 @@ export function createSettingsPanel () {
   const open = () => document.body.append(panel)
   const close = () => { stopEditing(); panel.remove() }
 
-  const copyShareLink = () =>
-    navigator.clipboard.writeText(shareLink()).then(
-      () => notify('Link copied to clipboard'),
-      err => {
-        notify('Failed to copy share link')
-        console.error(err)
-      }
-    )
+  // On a touch screen a link goes to the phone's own share sheet (Robert: "can we make the share
+  // button open the share dialog on mobile?"); elsewhere, or where there is none, it is copied.
+  // Closing the sheet without sharing does nothing.
+  const sendLink = (url, title, copied) => {
+    if (navigator.share && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
+      return navigator.share({ title, url }).catch(err => { if (err && err.name !== 'AbortError') copy() })
+    }
+    return copy()
+    function copy () {
+      return navigator.clipboard.writeText(url).then(() => notify(copied), err => { notify('Could not copy the link'); console.error(err) })
+    }
+  }
+  const copyShareLink = () => sendLink(shareLink(), 'My lava lamp', 'Link copied to clipboard')
 
   const resetDefaults = () => {
     ask('Reset everything to the defaults and remove the saved settings? Your saved themes stay.', { yes: 'Reset', danger: true }).then(yes => { if (yes) resetAndReload() })
@@ -506,7 +511,7 @@ export function createSettingsPanel () {
         if (sharing && mine) {
           sharing = false
           fillThemes()
-          navigator.clipboard.writeText(themeLink(theme)).then(() => notify(`Link to ${theme.name} copied`), () => notify('Could not copy the link'))
+          sendLink(themeLink(theme), `${theme.name}, a lava lamp theme`, `Link to ${theme.name} copied`)
           return
         }
         if (deleting && mine) {
