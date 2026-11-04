@@ -587,18 +587,17 @@ export function createMusic () {
       // BEAT_RISE_FRAMES frames and the lamp was tuned at 60 of them a second. At 120 a second
       // the rise was over half the time, and C-C's drop at 0:55 went (a false one at 0:27.7, and
       // none at all live in Chrome at 120 Hz). Between, only the one-frame events are cleared.
-      if (!frame) {
-        waited += dt
-        if (waited < 1 / ANALYSIS_RATE - 0.002) {
-          for (const k of FRAME_EVENTS) levels[k] = false
-          if (levels.sections) for (const k of SECTION_EVENTS) levels.sections[k] = false
-          beatClock.tick = false
-          beatClock.hit = false
-          return levels
-        }
-        dt = waited
-        waited = 0
+      // The time left over is kept, so at 97 a second (every other frame heard, 48 a second, with
+      // it thrown away) it still averages ANALYSIS_RATE.
+      waited += dt
+      if (waited < 1 / ANALYSIS_RATE - 0.001) {
+        for (const k of FRAME_EVENTS) levels[k] = false
+        if (levels.sections) for (const k of SECTION_EVENTS) levels.sections[k] = false
+        beatClock.tick = false
+        beatClock.hit = false
+        return levels
       }
+      if (waited < 2 / ANALYSIS_RATE) { dt = 1 / ANALYSIS_RATE; waited -= dt } else { dt = waited; waited = 0 } // a slow screen: every frame heard, as before
       if (frame) {
         // A frame given rather than read (docs/methods/tools/song-scan.js runs a whole song
         // through this offline, faster than it plays): its bytes and Hz a bin.
