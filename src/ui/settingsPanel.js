@@ -383,7 +383,35 @@ export function createSettingsPanel () {
   // click the theme you want to delete, then an r u sure"). The trash again, or any other press,
   // leaves it.
   let deleting = false
-  const trash = button({ class: 'theme-trash', title: 'Delete a theme: press this, then the theme', 'aria-label': 'Delete a theme', onclick: () => { stopEditing(); deleting = !deleting; fillThemes() } })
+  const trash = button({ class: 'theme-trash', title: 'Delete a theme: press this, then the theme', 'aria-label': 'Delete a theme', onclick: () => { stopEditing(); sharing = false; deleting = !deleting; fillThemes() } })
+  // Sharing, the same way (Robert: "a share button next to the trash would be good. I like the
+  // paper airplane icon for that one"): the plane, then a saved theme, and a link to it is copied.
+  // The link carries that theme alone (?theme=, its colours, places and name); opening it asks to
+  // add it to the opener's themes, and nothing else of theirs changes.
+  let sharing = false
+  const plane = button({ class: 'theme-trash theme-share', title: 'Share a theme: press this, then the theme', 'aria-label': 'Share a theme', onclick: () => { stopEditing(); deleting = false; sharing = !sharing; fillThemes() } })
+  plane.innerHTML = ICON('<path d="M22 3L10 14"/><path d="M22 3l-7 18-5-7-7-5 19-6z"/>')
+  const THEME_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak', 'bgColor', 'flowSlow', 'flowFast', 'heatCoolAt', 'heatWarmAt', 'heatHotAt']
+  const themeLink = theme => {
+    const out = { name: theme.name }
+    for (const k of THEME_KEYS) if (theme[k] !== undefined) out[k] = theme[k]
+    const code = btoa(unescape(encodeURIComponent(JSON.stringify(out)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    return `${window.location.origin}${window.location.pathname}?theme=${code}`
+  }
+  const readThemeLink = () => {
+    const code = new URLSearchParams(window.location.search).get('theme')
+    if (!code) return null
+    try {
+      const t = JSON.parse(decodeURIComponent(escape(atob(code.replace(/-/g, '+').replace(/_/g, '/')))))
+      const colour = c => c && [c.r, c.g, c.b].every(v => Number.isFinite(v) && v >= 0 && v <= 255)
+      if (!t || typeof t.name !== 'string' || !STOPS.every(k => colour(t[k]))) return null
+      const theme = { name: t.name.slice(0, 24) || 'Shared' }
+      for (const k of THEME_KEYS) {
+        if (k.endsWith('At')) { if (Number(t[k]) > 0 && Number(t[k]) < 1) theme[k] = Number(t[k]) } else if (colour(t[k])) theme[k] = { r: Math.round(t[k].r), g: Math.round(t[k].g), b: Math.round(t[k].b) }
+      }
+      return theme
+    } catch (e) { return null }
+  }
   trash.innerHTML = ICON('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')
   const loadTheme = async theme => {
     if (theme === loadedTheme && sameColours(takeColours(), loaded)) return true
@@ -450,6 +478,12 @@ export function createSettingsPanel () {
       style: { background: `linear-gradient(90deg, ${STOPS.map((k, i) => `${css(shownTheme[k])} ${([0, shownTheme.heatCoolAt || 0.25, shownTheme.heatWarmAt || 0.5, shownTheme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
       onclick: () => {
         stopEditing()
+        if (sharing && mine) {
+          sharing = false
+          fillThemes()
+          navigator.clipboard.writeText(themeLink(theme)).then(() => notify(`Link to ${theme.name} copied`), () => notify('Could not copy the link'))
+          return
+        }
         if (deleting && mine) {
           ask(`Delete ${theme.name}?`, { yes: 'Delete', danger: true }).then(yes => {
             if (yes) { myThemes = myThemes.filter(t => t !== theme); if (loadedTheme === theme) loadedTheme = null; saveMyThemes() }
@@ -474,6 +508,7 @@ export function createSettingsPanel () {
     const edit = button({ class: 'theme-edit', title: `Rename or save over ${theme.name}`, 'aria-label': `Edit ${theme.name}`, onclick: () => {
       stopEditing()
       deleting = false
+      sharing = false
       loadTheme(theme).then(ok => { if (ok) startEditing(theme) })
     } })
     edit.innerHTML = ICON(PENCIL)
@@ -501,6 +536,7 @@ export function createSettingsPanel () {
       onclick: () => {
         stopEditing()
         deleting = false
+        sharing = false
         let n = myThemes.length + 1
         while (myThemes.some(t => t.name === `Mine ${n}`)) n++
         const theme = { name: `Mine ${n}`, ...takeColours() }
@@ -519,12 +555,34 @@ export function createSettingsPanel () {
       item.style.gridRow = String(Math.floor(k / 2) + 1)
       item.style.gridColumn = across ? '1 / -1' : String(k % 2 + 1)
     })
-    if (!myThemes.length) deleting = false
+    if (!myThemes.length) { deleting = false; sharing = false }
     myThemesGrid.classList.toggle('deleting', deleting)
+    myThemesGrid.classList.toggle('sharing', sharing)
     trash.classList.toggle('on', deleting)
-    trash.style.visibility = myThemes.length ? 'visible' : 'hidden'
+    plane.classList.toggle('on', sharing)
+    trash.style.visibility = plane.style.visibility = myThemes.length ? 'visible' : 'hidden'
   }
   fillThemes()
+  // A theme link opened: offer it, then take the link out of the address so a reload does not ask again.
+  const shared = readThemeLink()
+  if (shared) {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('theme')
+    history.replaceState(null, '', url.pathname + url.search + url.hash)
+    setTimeout(() => ask(`Add ${shared.name} to your themes?`, { yes: 'Add it', no: 'No thanks' }).then(yes => {
+      if (!yes) return
+      let name = shared.name
+      for (let n = 2; myThemes.some(t => t.name === name); n++) name = `${shared.name} ${n}`
+      const theme = { ...shared, name }
+      myThemes.push(theme)
+      saveMyThemes()
+      putColours(theme)
+      loaded = takeColours()
+      loadedTheme = theme
+      fillThemes()
+      notify(`${name} added to your themes`)
+    }), 600)
+  }
 
   panel = div(
     { class: knobStyle.bindAttr(() => knobStyle() === 'sliders' ? 'panel sliders' : 'panel'), onclick: e => e.stopPropagation() },
@@ -552,7 +610,7 @@ export function createSettingsPanel () {
       div({ class: 'swatch-row' },
         div({ class: 'swatch-caption' }, 'Themes'),
         themesGrid,
-        div({ class: 'swatch-caption my-themes-caption' }, span('My themes'), trash),
+        div({ class: 'swatch-caption my-themes-caption' }, span('My themes'), span({ class: 'theme-tools' }, plane, trash)),
         myThemesGrid
       ),
       swatchRow('Flow colours', showFlow, true,
