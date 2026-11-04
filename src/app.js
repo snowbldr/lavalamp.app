@@ -528,6 +528,8 @@ export async function start () {
   let lastBoomPotAt = -1e9
   const SILENT_DB = -65 // the analyser's floor is -80; a song's quietest bars sit around -55
   const SILENT_AFTER = 15 // seconds
+  const CLAP_POT_GAP = 1 // seconds between pots blasted by claps
+  let lastClapPotAt = -1e9
   let silentFor = 0
   let musicResting = false
   let wobbleNext = 3 // the wobble note of this run the next eddy comes on
@@ -558,6 +560,7 @@ export async function start () {
     musicRanges.eddy[0] = musicEddyLo(); musicRanges.eddy[1] = musicEddyHi()
     musicRanges.kick[0] = musicKickLo(); musicRanges.kick[1] = musicKickHi()
     const m = listener.update(dt, musicSensitivity(), musicRanges)
+    const musicNow0 = listener.time
     // Silence: with Listen on and nothing playing, the closed pot charged on and the knobs stayed
     // where the music left them, so every pot sat hot (Robert: "when music is enabled but there is
     // silence, all the pots get stuck hot. we should turn off the effects of music mode after 15
@@ -568,8 +571,12 @@ export async function start () {
     // kids attempted to snap and clap at it to trigger it when in mic mode... only in microphone
     // mode makes sense"): a pot lit through the lamp's own lighting, an eddy and a ring. Before the
     // silence rest below, so a quiet room still answers a clap.
+    // A pot lit the usual way was too weak (Robert: "Detection works, but the effect is too weak.
+    // It should heat a whole pot instantly"): a clap blasts a whole pot as a drop does (the charged
+    // one if there is one, else the biggest cold pot, its whole cup) with the drop's pump, at most
+    // every CLAP_POT_GAP; the claps between bring the eddy and the ring.
     if (m.clap && musicSource() === 'mic') {
-      if (sim.lightElement) sim.lightElement()
+      if (musicNow0 - lastClapPotAt >= CLAP_POT_GAP && sim.dropPot) { lastClapPotAt = musicNow0; sim.dropPot(1.5) }
       if (sim.spawnEddy) sim.spawnEddy()
       if (sim.pulseWave) sim.pulseWave()
     }

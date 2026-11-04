@@ -1098,6 +1098,9 @@ export function createSimulation ({ width, height, params }) {
       if (dropRequest > 0) {
         const el = charged || biggestCold()
         if (el) {
+          // A pot not charged beforehand (a clap, or a drop with nothing closed) is blasted across
+          // its whole cup, as the drop's charged one is.
+          if (!charged) { el.big = true; el.coreFraction = el.cupHalf }
           el.mode = 'blast'
           el.heat = elementHeatTop * DROP_BLAST * dropRequest
           el.start = heaterTime
