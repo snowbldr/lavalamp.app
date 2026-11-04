@@ -230,13 +230,17 @@ export const group = (title, ...rows) => {
   flush()
   // Hints for anything in the group that is not a knob (the switches) come after the rest.
   const leftover = helpFor ? helpFor.entries.filter(e => !packed.some(c => c.dataset && c.dataset.knob === e[0])) : []
-  return div(
-    { class: 'sub-panel group' },
-    div({ class: 'sub-title' }, span(title)),
-    ...out,
-    ...rest,
-    ...(leftover.length ? [hint(helpFor.help, leftover)] : [])
+  // Folded by default, opened by its title, as the Music card (Robert: "let's make the advanced
+  // control cards collapsible and collapsed by default like the music card").
+  const card = div(
+    { class: 'sub-panel group folded' },
+    div({ class: 'sub-title foldable', onclick: () => card.classList.toggle('folded') }, span(title), chevron()),
+    div({ class: 'sub-body' },
+      ...out,
+      ...rest,
+      ...(leftover.length ? [hint(helpFor.help, leftover)] : []))
   )
+  return card
 }
 
 // One sentence about a control, shown while help is on (`help` is a boolean fnstate). Robert:

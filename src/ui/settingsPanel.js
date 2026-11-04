@@ -250,11 +250,13 @@ export function createSettingsPanel () {
   versions().then(list => {
     const newer = list.filter(v => Number(v.version) > Number(CURRENT))
     const older = list.filter(v => Number(v.version) < Number(CURRENT))
+    // As chips in the panel's look (Robert: "version selector looks bad"): this version, then the
+    // newer ones to upgrade to, then the older ones to open.
+    versionRow.className = 'version-row'
     versionRow.replaceChildren(
-      span(`Version ${CURRENT}${newer.length ? '' : ', the newest'}. `),
-      ...newer.map(v => button({ class: 'small primary', style: { 'margin-right': '6px' }, title: v.description, onclick: async () => { if (await ask(`Upgrade to ${v.label}? These settings are mapped onto it; this version's save is kept.`, { yes: 'Upgrade' })) window.location.href = `${v.path}&upgrade=${CURRENT}&from=${encodeURIComponent(btoa(JSON.stringify(getSettings())))}` } }, `Upgrade to ${v.label}`)),
-      span('Older: '),
-      ...older.map(v => button({ class: 'small', style: { 'margin-right': '6px' }, title: `${v.date}: ${v.description}`, onclick: () => goTo(v.version) }, v.label))
+      div({ class: 'version-now' }, `Version ${CURRENT}${newer.length ? '' : ', the newest'}`),
+      ...newer.map(v => button({ class: 'version-chip primary', title: v.description, onclick: async () => { if (await ask(`Upgrade to ${v.label}? These settings are mapped onto it; this version's save is kept.`, { yes: 'Upgrade' })) window.location.href = `${v.path}&upgrade=${CURRENT}&from=${encodeURIComponent(btoa(JSON.stringify(getSettings())))}` } }, `Upgrade to ${v.label}`)),
+      ...(older.length ? [div({ class: 'version-chips' }, span({ class: 'version-older' }, 'Older'), ...older.map(v => button({ class: 'version-chip', title: `${v.date}: ${v.description}`, onclick: () => goTo(v.version) }, v.label)))] : [])
     )
   })
   const open = () => document.body.append(panel)
@@ -758,13 +760,6 @@ export function createSettingsPanel () {
       button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the controls do', 'aria-label': 'What the controls do' }, '?'),
       'Advanced', advancedOpen,
       row('Controls', segmented('knob-style', knobStyle, knobStyles)),
-      div({ class: 'panel-note' }, backendLabel.bindAs(() => `Backend: ${backendLabel()}`)),
-      div({ class: 'panel-note' }, fpsLabel.bindAs(() => fpsLabel())),
-      div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),
-      div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
-      versionRow,
-      buildRow,
-      div({ class: 'panel-note' }, a({ target: '_blank', rel: 'noopener', href: 'https://github.com/snowbldr/lavalamp.app' }, 'Copyright © 2020-2026 Robert Kempton')),
       // One long list under headings, no folding inside Advanced, each group split a layer
       // further (Robert: "The advanced panel should become one giant list. we may want to break
       // up the groups a bit further, perhaps another layer of subgroups").
@@ -966,7 +961,19 @@ export function createSettingsPanel () {
         ])
       ),
       row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
-      hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.')
+      hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.'),
+      // The facts after the cards, and the versions last (Robert: "move all the text (backend,
+      // version, etc) to after the cards instead of before the cards. It should go controls type
+      // selector, cards, text info and version selector").
+      div({ class: 'panel-info' },
+        div({ class: 'panel-note' }, backendLabel.bindAs(() => `Backend: ${backendLabel()}`)),
+        div({ class: 'panel-note' }, fpsLabel.bindAs(() => fpsLabel())),
+        div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),
+        div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
+        buildRow,
+        div({ class: 'panel-note' }, a({ target: '_blank', rel: 'noopener', href: 'https://github.com/snowbldr/lavalamp.app' }, 'Copyright © 2020-2026 Robert Kempton'))
+      ),
+      versionRow
     ),
     hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),
     div(

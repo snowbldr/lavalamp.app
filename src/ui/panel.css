@@ -408,3 +408,13 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .gradient-bar.editing { outline: 2px solid var(--edit-accent); outline-offset: 3px; border-radius: 21px; }
 .theme.editing-tile { box-shadow: 0 0 0 2px var(--edit-accent); }
 @keyframes edit-pop { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+/* Advanced's facts and its versions, after the cards */
+.panel-info { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1); }
+.version-row { display: flex; flex-direction: column; gap: 6px; padding: 8px 0 4px; font-size: 11px; color: rgba(236, 236, 236, 0.75); }
+.version-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.version-older { font-size: 11px; color: rgba(236, 236, 236, 0.55); margin-right: 2px; }
+.version-chip { height: 24px; padding: 0 10px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; background: rgba(255, 255, 255, 0.07); color: #ececec; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.version-chip:hover { background: rgba(255, 255, 255, 0.16); }
+.version-chip.primary { background: #e8e8ea; color: #1c1c1e; border-color: transparent; align-self: flex-start; }
+.panel-info a { color: inherit; text-decoration: underline; text-decoration-color: rgba(236, 236, 236, 0.3); text-underline-offset: 2px; }
