@@ -469,12 +469,24 @@ export function createSettingsPanel () {
       loadedTheme = theme
     }
     editing = null
+    editRow = null
     editBanner.classList.remove('on')
     bar.classList.remove('editing')
     fillThemes()
   }
   // The edited theme's tile follows the colours.
-  for (const state of [...Object.values(allColours), ...livePlaces]) state.subscribe(() => { if (editing) fillThemes() })
+  // The edit row follows the colours in place: rebuilding the grid on every change replayed the
+  // row's pop in and it flashed while a pin was dragged (Robert: "the theme edit flashes as I drag
+  // the gradient").
+  const themeBackground = t => `linear-gradient(90deg, ${STOPS.map((k, i) => `${css(t[k])} ${([0, t.heatCoolAt || 0.25, t.heatWarmAt || 0.5, t.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})`
+  let editRow = null
+  const paintEditRow = () => {
+    if (!editing || !editRow) return
+    const now = takeColours()
+    editRow.style.background = themeBackground(now)
+    if (now.bgColor) editRow.style.setProperty('--theme-back', css(liftBand(now.bgColor)))
+  }
+  for (const state of [...Object.values(allColours), ...livePlaces]) state.subscribe(paintEditRow)
   const BAND_LIFT = 110
   const liftBand = c => { const top = Math.max(c.r, c.g, c.b); if (top < 6 || top >= BAND_LIFT) return c; const k = BAND_LIFT / top; return { r: Math.round(c.r * k), g: Math.round(c.g * k), b: Math.round(c.b * k) } }
   const PENCIL = '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>'
@@ -518,8 +530,9 @@ export function createSettingsPanel () {
     // the button closes the edit? weird. let's make the edit bar's background the gradient
     // instead").
     if (editing && editing.theme === theme) {
-      const row = div({ class: 'theme-item edit-row', style: { background: tile.style.background } }, editName, editSave, editCancel)
-      if (shownTheme.bgColor) row.style.setProperty('--theme-back', css(liftBand(shownTheme.bgColor)))
+      const row = div({ class: 'theme-item edit-row' }, editName, editSave, editCancel)
+      editRow = row
+      paintEditRow()
       return row
     }
     const edit = button({ class: 'theme-edit', title: `Rename or save over ${theme.name}`, 'aria-label': `Edit ${theme.name}`, onclick: () => {
