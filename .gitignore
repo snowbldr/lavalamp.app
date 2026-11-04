@@ -6,3 +6,4 @@ docs/
 
 # Claude worktrees (side quests live on branches, not here)
 .claude/worktrees/
+*.env
