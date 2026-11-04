@@ -445,12 +445,32 @@ export function createSimulation ({ width, height, params }) {
   // lava; the angle is in page terms, y down.
   const eddyHeading = (side, low) => {
     if (side === 0) return Math.PI / 2 + randomRange(-Math.PI / 3, Math.PI / 3)
-    const tilt = randomRange(-20, 20 + 50 * low) * Math.PI / 180 // up is positive
+    const tilt = randomRange(0, 20 + 50 * low) * Math.PI / 180 // up is positive; a side's eddy goes level or up (see eddyLaunch)
     return side === 3 ? -tilt : Math.PI + tilt // from the left wall heading right, from the right wall heading left
   }
   const eddyCeilingY = () => {
     const restDepth = spawnAreaNow * Math.max(0, (params.particleCount || 0)) / width
-    return Math.max(0, height - restDepth - EDDY_CLEARANCE * height)
+    return Math.max(0, height - restDepth - EDDY_FADE_SPAN * height) // above the band where an eddy's push fades into the pool (see eddyLaunch); it was EDDY_CLEARANCE
+  }
+  // The eddies may not smash the lava on the bottom, and keep to it by how they are born rather
+  // than by a wall (Robert: "the eddies still smoosh the lava blob on the bottom a lot, suddenly,
+  // and sort of inexplicably... ensuring eddies spawn high enough to not significantly smoosh the
+  // bottom lava and horizontal or pointed up, then the downward ones need to be launched slow
+  // enough that they slow down and don't completely smash the bottom lava"). A side's eddy is born
+  // above the fade band over the pool (eddyCeilingY) and heads level or up (eddyHeading); one
+  // heading down at all is launched no faster than lets it travel, over its whole life on the
+  // chosen fall off, LAUNCH_ROOM of the way down to that band.
+  const LAUNCH_ROOM = 0.9
+  const travelShare = life => { // the distance a speed of 1 at birth travels over a life, in seconds
+    let d = 0
+    const step = 0.05
+    for (let t = 0; t < life; t += step) d += travelPace({ speed: 1 }, t) * step
+    return d
+  }
+  const eddyLaunch = (y, hy, speed, life) => {
+    if (hy <= 0) return speed
+    const room = Math.max(0, eddyFloorY() - y) / hy // along the heading
+    return Math.min(speed, LAUNCH_ROOM * room / Math.max(1e-6, travelShare(life)))
   }
   // An eddy's travel speed at its age: its birth speed times the chosen fall off.
   const travelPace = (e, age) => {
@@ -575,31 +595,36 @@ export function createSimulation ({ width, height, params }) {
       const side = [0, 1, 3][Math.floor(random() * 3)] // never the floor
       const along = random()
       const heading = eddyHeading(side, side === 0 ? 0 : along)
+      const y = side === 0 ? 0 : along * eddyCeilingY()
+      const life = randomRange(...EDDY_LIFE)
       eddies.push({
         x: side === 1 ? width : side === 3 ? 0 : along * width,
-        y: side === 0 ? 0 : along * eddyCeilingY(),
-        speed: (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY),
+        y,
+        speed: eddyLaunch(y, Math.sin(heading), (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY), life),
         hx: Math.cos(heading),
         hy: Math.sin(heading),
         radius,
         spin: random() < 0.5 ? -1 : 1,
         start: time,
-        life: randomRange(...EDDY_LIFE)
+        life
       })
     }
     const bornDrifter = () => {
       const core = randomRange(...DRIFT_CORE)
       const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
-      const speed = (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY)
+      let speed = (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY)
       // Born on the top or a side, never the floor where the lava sits (Robert: "eddies should
       // not be allowed to spawn on the bottom edge where the lava is"), heading inward within 60
       // degrees of straight in.
       const side = [0, 1, 3][Math.floor(random() * 3)]
       const along = random()
       const heading = eddyHeading(side, side === 0 ? 0 : along)
+      const y = side === 0 ? core : core + along * Math.max(0, eddyCeilingY() - 2 * core)
+      const life = randomRange(...DRIFT_LIFE)
+      speed = eddyLaunch(y, Math.sin(heading), speed, life)
       drifting.push({
         x: side === 1 ? width - core : side === 3 ? core : core + along * (width - 2 * core),
-        y: side === 0 ? core : core + along * Math.max(0, eddyCeilingY() - 2 * core),
+        y,
         speed,
         hx: Math.cos(heading),
         hy: Math.sin(heading),
@@ -610,7 +635,7 @@ export function createSimulation ({ width, height, params }) {
         gain: DRIFT_GAIN * randomRange(...DRIFT_VARIETY),
         spin: random() < 0.5 ? -1 : 1,
         start: time,
-        life: randomRange(...DRIFT_LIFE)
+        life
       })
     }
     // Births come in bursts at skewed gaps (Robert: "sometimes it should be quiet for 10 seconds
