@@ -301,8 +301,9 @@ export function createSettingsPanel () {
   // its picker; the three middle ones are pins that drag along the bar, setting where their colour
   // sits along the heat (settings.js heatCoolAt), each kept GAP_PX from its neighbours so two can
   // always be taken apart with a finger (Robert: "the sliding toggles on the gradient shouldn't be
-  // allowed to overlap"). Everything goes straight onto the lamp.
+  // allowed to overlap"), and pushing them along when it meets them. Everything goes straight onto the lamp.
   const GAP_PX = 30
+  const PUSH_PX = 12 // how far past a neighbour a drag goes before it pushes it
   const STOP_NAMES = ['Cold', 'Cool', 'Warm', 'Hot', 'Peak']
   const liveStops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
   const livePlaces = [heatCoolAt, heatWarmAt, heatHotAt]
@@ -314,16 +315,36 @@ export function createSettingsPanel () {
     const dot = div({ class: pin ? 'swatch gradient-dot pin' : 'swatch gradient-dot end', role: 'button', tabindex: 0, 'aria-label': `${name} colour`, title: pin ? `${name}: click for its colour, drag to move it` : `${name}: click for its colour` })
     dot.swatchTitle = name
     dot.swatchState = liveStops[k]
-    const place = u => {
+    // A pin pushes the ones it meets along, each kept a gap apart, all of them stopping at the
+    // ends (Robert: "sliding a stacked gradient slider should push other sliders out of the way"),
+    // but only once the drag has gone PUSH_PX past the neighbour, so a slip does not move it ("like,
+    // after some force so it doesn't happen on accident"); until then it stops there.
+    const place = (u, drag = {}) => {
       const p = livePlaces.map(s => s())
-      const gap = Math.min(0.24, GAP_PX / Math.max(1, bar.getBoundingClientRect().width))
-      const lo = k === 1 ? gap : p[k - 2] + gap
-      const hi = k === 3 ? 1 - gap : p[k] - gap
-      livePlaces[k - 1](Math.round(Math.max(lo, Math.min(hi, u)) * 1000) / 1000)
+      const width = Math.max(1, bar.getBoundingClientRect().width)
+      const gap = Math.min(0.24, GAP_PX / width)
+      const force = PUSH_PX / width
+      const i = k - 1
+      let x = Math.max(gap * (i + 1), Math.min(1 - gap * (3 - i), u))
+      const hi = i < 2 ? p[i + 1] - gap : Infinity
+      const lo = i > 0 ? p[i - 1] + gap : -Infinity
+      if (x > hi) {
+        if (!drag.up && x - hi < force) x = hi
+        else { drag.up = true; x = Math.max(hi, x - force) }
+      } else drag.up = false
+      if (x < lo) {
+        if (!drag.down && lo - x < force) x = lo
+        else { drag.down = true; x = Math.min(lo, x + force) }
+      } else drag.down = false
+      p[i] = x
+      for (let j = i + 1; j < 3; j++) p[j] = Math.max(p[j], p[j - 1] + gap)
+      for (let j = i - 1; j >= 0; j--) p[j] = Math.min(p[j], p[j + 1] - gap)
+      p.forEach((v, j) => { const r = Math.round(v * 1000) / 1000; if (r !== livePlaces[j]()) livePlaces[j](r) })
     }
     dot.addEventListener('pointerdown', e => {
       e.preventDefault()
       const x0 = e.clientX
+      const drag = {}
       let moved = false
       dot.setPointerCapture(e.pointerId)
       const move = ev => {
@@ -331,7 +352,7 @@ export function createSettingsPanel () {
         if (!moved && Math.abs(ev.clientX - x0) < 4) return
         moved = true
         const r = bar.getBoundingClientRect()
-        place((ev.clientX - r.left) / r.width)
+        place((ev.clientX - r.left) / r.width, drag)
       }
       const up = () => {
         dot.removeEventListener('pointermove', move); dot.removeEventListener('pointerup', up); dot.removeEventListener('pointercancel', up)
