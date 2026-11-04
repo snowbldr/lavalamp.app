@@ -424,10 +424,14 @@ export function createSimulation ({ width, height, params }) {
   const finAt = px => {
     let w = 0
     for (const el of elements) {
-      if (!(el.cupHalf > 0)) continue
+      // Only over a pot that is heating, as hard as it glows: the warm lava rising out of it is
+      // what wobbles, and the rest of the floor stays still (Robert: "not shake the entire floor
+      // at once and maybe shake just above certain pots that have warm lava above them").
+      const lit = Math.min(1, (el.glow || 0) * 1.5)
+      if (!(el.cupHalf > 0) || lit < 0.05) continue
       const half = FIN_WIDTH * el.cupHalf * width
       const d = (px - el.fx * width) / half
-      if (d * d < 9) w = Math.max(w, Math.exp(-d * d)) // narrow, so there is still lava between fins (as wide as the mouths they overlapped, 60 to 70% shaking everywhere); soft sided, since sharp sides tore holes in the pool beside them
+      if (d * d < 9) w = Math.max(w, lit * Math.exp(-d * d)) // narrow, so there is still lava between fins (as wide as the mouths they overlapped, 60 to 70% shaking everywhere); soft sided, since sharp sides tore holes in the pool beside them
     }
     return w
   }
