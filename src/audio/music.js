@@ -81,9 +81,13 @@ const MIN_DB = -90 // the analyser's window, for a file
 const MAX_DB = -10
 const LEVEL_LOUD = -35 // a little under C-C's own, since a file played 1 dB over read a false drop at 0:36 and 1 dB under read as the file (peaks: C-C -34.4, Espresso -34.7, Bangarang -33.4, Drugs I Like -33.0; Sandman, Bohemian Rhapsody -36.5; Killing in the Name -43.6)
 const LEVEL_FORGET = 1 / 20
+// Where it starts: a louder source is learned the moment it plays and a quieter one only as fast as
+// LEVEL_FORGET, so it starts low, at streaming's level (Spotify and YouTube turn a loud master
+// down about this far; Robert's lamp had learned only -39 of Spotify's -41.7 and still missed 0:55).
+const LEVEL_START = -42
 const LEVEL_MOST = 20
 const LEVEL_SILENT = -70 // dB: under this nothing is playing
-const LEVEL_KEY = 'lavalamp-music-level-'
+const LEVEL_KEY = 'lavalamp-music-level-2-' // 2: what the first, starting at -35, had half learned is let go
 const FLOOR_NEAR = 3
 const FLOOR_PATIENCE = 90
 const FLOOR_FALL = 1 / 10
@@ -273,7 +277,7 @@ export function createMusic () {
   let surgeSlow = 0
   let sectionPower = 0
   let peakDb = -90
-  let levelPeak = LEVEL_LOUD // the loudest this source has played (see LEVEL_LOUD)
+  let levelPeak = LEVEL_START // the loudest this source has played (see LEVEL_LOUD)
   let levelSaved = 0
   let floorDrop = 0 // dB the reference's floor has sunk for a quiet recording (see FLOOR_PATIENCE)
   let farFromFloor = 0 // seconds since the song came within FLOOR_NEAR of the floor
@@ -550,7 +554,7 @@ export function createMusic () {
         await open()
         closeSource()
         source = which
-        levelPeak = LEVEL_LOUD
+        levelPeak = LEVEL_START
         try { const v = parseFloat(localStorage.getItem(LEVEL_KEY + which)); if (v > -90 && v < 0) levelPeak = v } catch (e) {}
         if (which === 'test') startTest()
         else if (which === 'file') {

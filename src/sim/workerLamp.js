@@ -29,7 +29,6 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let eddy = 0 // eddies to bear at the next frame (the music's beat)
   let pulse = 0 // pulse waves to send
   let splat = [] // splats to send, [x, y] each
-  let nozzle = [0, 0] // the shaker's nozzle: angle, power
   const flip = [] // eddy flips to send, each a chance
   let vent = 0 // seconds to lift the lid for
   let ventSmall = false // a train's vent: never the drop's big pot
@@ -109,7 +108,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, splat, nozzle, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, chargeFull, drop, dropAt, warmEnd, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, splat, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, chargeFull, drop, dropAt, warmEnd, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
@@ -149,7 +148,6 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     spawnEddy () { eddy++ },
     pulseWave () { pulse++ },
     splat (x, y) { splat.push([x, y]) },
-    swingNozzle (angle, power) { nozzle = [angle || 0, power || 0] },
     flipEddies (chance = 1) { flip.push(chance) },
     ventPot (seconds, smallOnly) { vent = Math.max(vent, seconds || 0); ventSmall = !!smallOnly },
     retirePot () { retire = true },

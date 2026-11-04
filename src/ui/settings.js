@@ -400,10 +400,6 @@ export const musicWobble = fnstate(defaultMusicWobble)
 // possibly keep both with different triggers"). Shake: by a sub note (under 80 Hz) at its pitch
 // over ten, as hard as the note is loud. Shake beat: by the kick, twice a beat, locked to the
 // tempo like a synth's LFO. 0 is off.
-export const defaultMusicShake = 0 // off: "the bass shaker still is not doing it for me... it just looks weird" (the knob stays, to try)
-export const musicShake = fnstate(defaultMusicShake)
-export const defaultMusicShakeBeat = 0 // off to start: one shake at a time while the fins are being judged
-export const musicShakeBeat = fnstate(defaultMusicShakeBeat)
 // Sections: how hard the lamp answers the song's parts around a drop (sections.js): a snare roll
 // or a riser winds the drop's pot up, a roll's end and an impact fire it, half time turns the
 // eddies, a key change is a drop. 0 is off.
@@ -505,10 +501,10 @@ export const putPlaces = theme => AT_KEYS.forEach((k, i) => places[i](Number(the
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { heatCoolAt, heatWarmAt, heatHotAt, interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, musicVent, musicShake, musicShakeBeat, musicSections, seed }
+const numberSettings = { heatCoolAt, heatWarmAt, heatHotAt, interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, musicVent, musicSections, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 // touchStrength and eddyFalloff: their knobs go to 0 (found by the round trip check, 2026-11-03).
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff', 'musicTempo', 'musicPulse', 'musicSpawn', 'musicSpin', 'musicLead', 'musicActivity', 'musicDrop', 'musicBoom', 'musicBusyEddies', 'musicFlip', 'musicWobble', 'musicVent', 'musicShake', 'musicShakeBeat', 'musicSections', 'musicFloor', 'musicLift', 'musicTurb', 'musicKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff', 'musicTempo', 'musicPulse', 'musicSpawn', 'musicSpin', 'musicLead', 'musicActivity', 'musicDrop', 'musicBoom', 'musicBusyEddies', 'musicFlip', 'musicWobble', 'musicVent', 'musicSections', 'musicFloor', 'musicLift', 'musicTurb', 'musicKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -585,8 +581,6 @@ const defaults = () => ({
   musicBusyEddies: defaultMusicBusyEddies,
   musicFlip: defaultMusicFlip,
   musicWobble: defaultMusicWobble,
-  musicShake: defaultMusicShake,
-  musicShakeBeat: defaultMusicShakeBeat,
   musicSections: defaultMusicSections,
   musicVent: defaultMusicVent,
   seed: randomSeed()

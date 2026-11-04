@@ -1254,7 +1254,6 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     endWarmup () { shell.endWarmup(); gpu.endWarmup() },
     pulseWave: shell.pulseWave,
     splat: shell.splat,
-    swingNozzle: shell.swingNozzle,
     flipEddies: shell.flipEddies,
     ventPot: shell.ventPot,
     retirePot: shell.retirePot,
