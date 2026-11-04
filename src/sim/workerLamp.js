@@ -153,7 +153,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     flipEddies (chance = 1) { flip.push(chance) },
     ventPot (seconds, smallOnly) { vent = Math.max(vent, seconds || 0); ventSmall = !!smallOnly },
     retirePot () { retire = true },
-    chargePot (level, big, fullness) { charge = level; chargeBig = !!big; if (fullness) chargeFull = fullness },
+    chargePot (level, big, fullness) { if (level != null) { charge = level; chargeBig = !!big } if (fullness) chargeFull = fullness },
     endWarmup () { warmEnd = true },
     dropPot (strength, at) { drop = Math.max(drop, strength); if (at >= 0) dropAt = at },
     setTouches (list) { touches = list || [] },

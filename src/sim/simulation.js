@@ -409,35 +409,18 @@ export function createSimulation ({ width, height, params }) {
   const SPLAT_SPEED = 320
   const SPLAT_LOBES = [5, 9]
   const splatRequests = [] // [x, y] where each is to start, or null for a point on the pool's surface
-  // The bass shaker: a sideways shake of the floor (px/s, set every frame by the page), strongest
-  // at the floor and gone SHAKE_DEPTH of the height above it, so the lava wobbles at its base as it
-  // rises and nothing higher up moves (Robert: "shake the bottom of the lava to cause it to wobble as
-  // it rises, not shake the whole thing back and forth"; it moved the whole lamp at first).
-  // Then only in fins (Robert: "extend some fins from the bottom plate into the bottom of the lava to
-  // increase the wobble effect. like imagine a row of tubes that we would shake back and forth while
-  // the lava travels through"): a column over each pot, as wide as its mouth and SHAKE_DEPTH of the
-  // height tall, so the lava rising through one is shaken against the still lava beside it and a
-  // wave goes up with it. Shaking the whole floor moved the plume and its surroundings together.
+  // The bass shaker as a nozzle (Robert: "it's not creating the like... zig zag ooze"; "what if we
+  // put a nozzle on top of some of the tubes that swing back and forth to the bass instead?"): the
+  // heat at the mouth of the pot glowing hottest swings side to side with the bass, so the lava
+  // leaving it rises from where the heat was and the column comes up as a zig zag, as paste from a
+  // moving tube. Shaking the lava itself, the floor and then fins over the pots, only ever swayed a
+  // plume and its surroundings together, and this lava relaxes any shear put into it. floorShake is
+  // the swing's speed (px/s, set every frame by the page); nozzle is where it has got to, kept
+  // within NOZZLE_REACH of the mouth's half width and drawn back to the middle over NOZZLE_SETTLE.
   let floorShake = 0
-  const SHAKE_ABOVE = 40 // px over the pool's estimated surface (poolSurface runs deep in warm lava)
-  const SHAKE_DEPTH = 0.08 // short: only the base swings and the lava above keeps its path, so a zig zag is laid down as it rises (at 0.3 the whole lower plume swayed as one)
-  const FIN_WIDTH = 1 // of a pot's mouth's half width (0.5 while several fins shook, so they would not overlap; one at a time, the whole plume)
-  const finAt = px => {
-    // One fin at a time, over the pot glowing hottest, as hard as it glows: the warm lava rising out
-    // of it is what wobbles and the rest of the floor stays still (Robert: "shake just above certain
-    // pots that have warm lava above them", then "maybe only shake one pot at a time?").
-    let w = 0
-    let el = null
-    for (const e of elements) if (e.cupHalf > 0 && (!el || (e.glow || 0) > (el.glow || 0))) el = e
-    if (el) {
-      const lit = Math.min(1, (el.glow || 0) * 1.5)
-      if (lit < 0.05) return 0
-      const half = FIN_WIDTH * el.cupHalf * width
-      const d = (px - el.fx * width) / half
-      if (d * d < 9) w = Math.max(w, lit * Math.exp(-d * d)) // narrow, so there is still lava between fins (as wide as the mouths they overlapped, 60 to 70% shaking everywhere); soft sided, since sharp sides tore holes in the pool beside them
-    }
-    return w
-  }
+  let nozzle = 0
+  const NOZZLE_REACH = 0.9
+  const NOZZLE_SETTLE = 2 // s
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -807,9 +790,6 @@ export function createSimulation ({ width, height, params }) {
     const fade = depthFade(py)
     out[0] = out[0] * fade + splatX
     out[1] = out[1] * fade + splatY
-    // Round the pool's surface, where the lava leaves the pool and can be seen: measured from the
-    // floor, under a pool some 250 px deep, the shake was a tenth of itself by the surface.
-    if (floorShake) out[0] += floorShake * finAt(px) * Math.exp(-Math.abs(py - (poolSurface() - SHAKE_ABOVE)) / (SHAKE_DEPTH * height))
   }
 
   // How many particles the floor's reservoirs hold between them.
@@ -1248,8 +1228,15 @@ export function createSimulation ({ width, height, params }) {
     }
     // Each lit element's glow, 0 to 1, and its reach in px, for this step.
     let maxReach = 0
+    let hottest = null
+    // The hottest pot with lava over it (the page's count, chargePot), else a lit pot with none
+    // swung where nothing could be seen.
+    const swingOf = el => el.heat * (potFullness ? (potFullness[elements.indexOf(el)] || 0) : 1)
+    for (const el of elements) if (el.cupHalf > 0 && swingOf(el) > 0 && (!hottest || swingOf(el) > swingOf(hottest))) hottest = el
+    nozzle = (nozzle + floorShake * dt) * Math.exp(-dt / NOZZLE_SETTLE)
+    if (hottest) nozzle = Math.max(-NOZZLE_REACH * hottest.cupHalf * width, Math.min(NOZZLE_REACH * hottest.cupHalf * width, nozzle))
     for (const el of elements) {
-      el.x = el.fx * width
+      el.x = el.fx * width + (el === hottest ? nozzle : 0)
       el.radius = el.fr * shorter
       el.halfWidth = ELEMENTS_ARE_CUPS ? el.coreFraction * width : el.radius * ELEMENT_ASPECT
       el.capTemp = el.mode === 'charge' || el.mode === 'blast' ? Math.min(maxTemp, gravity * Math.min(el.big ? CHARGE_LIFT : CHARGE_LIFT_BEAT, 1 + liftCap)) : 0
@@ -1900,7 +1887,7 @@ export function createSimulation ({ width, height, params }) {
     shakeFloor (v) { floorShake = v || 0 },
     splat (x, y) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null) },
     flipEddies (chance = 1) { flipRequests.push(chance) },
-    chargePot (level, big, fullness) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big; if (fullness) potFullness = fullness },
+    chargePot (level, big, fullness) { if (level != null) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big } if (fullness) potFullness = fullness }, // a null level only counts the pots
     dropPot (strength, at) { dropRequest = Math.max(dropRequest, strength || 0); if (at >= 0) dropAt = at },
     ventPot (seconds, smallOnly) { ventRequest = Math.max(ventRequest, seconds || 0); ventSmallOnly = !!smallOnly },
     retirePot () { retireRequest = true },

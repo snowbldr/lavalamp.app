@@ -797,6 +797,7 @@ export async function start () {
       for (let i = 0; i < n; i++) if (st.y[i] > 0.8 * H) low++
       lavaLow = low / n < BUFFER
       potFullness = potLava()
+      if (sim.chargePot) sim.chargePot(null, false, potFullness) // the shaker's nozzle swings over a pot with lava in it
     }
     // A deep note's attack is also a kick: its beat pot spent the charge, and the boom at the
     // note's peak a few frames later opened a pot closed that instant, with nothing in it (C-C
