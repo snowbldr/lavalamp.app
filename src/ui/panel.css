@@ -307,5 +307,10 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .icon-button svg { width: 18px; height: 18px; }
 .icon-button.on { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.5); }
 .icon-button.primary { background: var(--accent); color: #111; border-color: transparent; }
+.theme.mine { position: relative; }
+.theme-delete { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; line-height: 15px; border-radius: 50%; background: #2a2a2e; border: 1px solid rgba(255, 255, 255, 0.35); color: #ececec; font-size: 11px; display: none; }
+.theme.mine:hover .theme-delete, .theme.mine.staged .theme-delete { display: block; }
+.theme-add { background: rgba(255, 255, 255, 0.06); border-style: dashed; }
+.theme-add span { background: none; font-size: 16px; }
 .icon-button:disabled { opacity: 0.35; cursor: default; }
 .theme.staged { box-shadow: 0 0 0 2px var(--accent); }

@@ -306,9 +306,61 @@ export function createSettingsPanel () {
   const bar = div({ class: 'gradient-bar' }, midSlider)
   const eye = button({ class: 'icon-button', title: 'Preview on the lamp', 'aria-label': 'Preview on the lamp', 'aria-pressed': 'false', onclick: () => previewing(!previewing()) })
   eye.innerHTML = ICON('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>')
-  const tick = button({ class: 'icon-button primary', title: 'Apply these colours', 'aria-label': 'Apply these colours', onclick: () => { applyPending(); previewing(false); for (const b of panel.querySelectorAll('.theme.staged')) b.classList.remove('staged') } })
+  const tick = button({ class: 'icon-button primary', title: 'Apply these colours', 'aria-label': 'Apply these colours', onclick: () => { applyPending(); previewing(false); unstageTiles() } })
   tick.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
   const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-actions' }, eye, tick))
+  // A theme's tile: a click stages it (the tick applies it); a saved one can be renamed with a
+  // double click and deleted with its cross.
+  const unstageTiles = () => { if (panel) for (const b of panel.querySelectorAll('.theme.staged')) b.classList.remove('staged') }
+  const themeTile = (theme, mine) => {
+    const name = span(theme.name)
+    const tile = button({
+      class: mine ? 'theme mine' : 'theme',
+      title: mine ? `${theme.name}: double click to rename` : theme.name,
+      style: { background: `linear-gradient(90deg, ${STOPS.map(k => css(theme[k])).join(', ')})` },
+      onclick: () => { stagedTheme(theme); unstageTiles(); tile.classList.add('staged') },
+      ondblclick: mine ? () => {
+        name.contentEditable = 'true'
+        name.focus()
+        document.getSelection().selectAllChildren(name)
+      } : undefined
+    }, name)
+    if (mine) {
+      name.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); name.blur() } })
+      name.addEventListener('blur', () => { name.contentEditable = 'false'; const text = name.textContent.trim().slice(0, 24); if (text) { theme.name = text; saveMyThemes() } name.textContent = theme.name })
+      const cross = span({ class: 'theme-delete', title: 'Delete this theme', 'aria-label': 'Delete this theme', onclick: e => { e.stopPropagation(); myThemes = myThemes.filter(t => t !== theme); if (stagedTheme() === theme) stagedTheme(null); saveMyThemes(); fillMyThemes() } }, '×')
+      tile.append(cross)
+    }
+    return tile
+  }
+  // Saved themes (Robert: "my daughter wanted a way to save color presets, so she could make a
+  // bunch"): every colour as it is now, kept in this browser under MY_THEMES_KEY, which Reset
+  // leaves alone. The plus tile saves one.
+  const MY_THEMES_KEY = 'lavalamp-my-themes'
+  let myThemes = []
+  try { myThemes = JSON.parse(localStorage.getItem(MY_THEMES_KEY) || '[]').filter(t => t && t.heatCold) } catch (e) { myThemes = [] }
+  const saveMyThemes = () => { try { localStorage.setItem(MY_THEMES_KEY, JSON.stringify(myThemes)) } catch (e) { notify('Could not save the theme in this browser') } }
+  const myThemesGrid = div({ class: 'themes' })
+  const fillMyThemes = () => {
+    const add = button({
+      class: 'theme theme-add',
+      title: 'Save the colours as they are now as a theme',
+      'aria-label': 'Save these colours as a theme',
+      onclick: () => {
+        const colours = { heatCold, heatCool, heatWarm, heatHot, heatPeak, bgColor, flowSlow, flowFast }
+        let n = myThemes.length + 1
+        while (myThemes.some(t => t.name === `Mine ${n}`)) n++
+        const theme = { name: `Mine ${n}` }
+        for (const [key, state] of Object.entries(colours)) theme[key] = { ...state() }
+        myThemes.push(theme)
+        saveMyThemes()
+        fillMyThemes()
+      }
+    }, span('+'))
+    myThemesGrid.replaceChildren(...myThemes.map(t => themeTile(t, true)), add)
+  }
+  fillMyThemes()
+
   const showPending = () => {
     // Always shown, so the themes do not jump down when one is clicked (Robert: "we should show the
     // full gradient preview and apply always instead of after cliking a theme. the shift is bad"):
@@ -325,7 +377,7 @@ export function createSettingsPanel () {
     window.dispatchEvent(new CustomEvent('lavalamp-preview-colours', { detail: previewing() && colours ? colours : null }))
   }
   for (const state of [gradientKind, gradientFrom, gradientTo, gradientMid, stagedTheme, previewing, heatCold, heatCool, heatWarm, heatHot, heatPeak]) state.subscribe(showPending)
-  gradientKind.subscribe(() => { for (const b of (panel ? panel.querySelectorAll('.theme.staged') : [])) b.classList.remove('staged') })
+  gradientKind.subscribe(unstageTiles)
   showPending()
 
   panel = div(
@@ -368,12 +420,9 @@ export function createSettingsPanel () {
       gradientPending,
       div({ class: 'swatch-row', style: { display: isPresets.bindStyle(() => isPresets() ? 'block' : 'none') } },
         div({ class: 'swatch-caption' }, 'Themes'),
-        div({ class: 'themes' }, ...themes.map(theme => button({
-          class: 'theme',
-          title: theme.name,
-          style: { background: `linear-gradient(90deg, ${['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak'].map(k => `rgb(${theme[k].r},${theme[k].g},${theme[k].b})`).join(', ')})` },
-          onclick: e => { stagedTheme(theme); for (const b of e.currentTarget.parentElement.children) b.classList.toggle('staged', b === e.currentTarget) }
-        }, span(theme.name))))
+        div({ class: 'themes' }, ...themes.map(t => themeTile(t, false))),
+        div({ class: 'swatch-caption', style: { 'margin-top': '10px' } }, 'My themes'),
+        myThemesGrid
       ),
       hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Gradient runs from dark through one colour to another and on to light (the same colour twice for one colour dark to light). Neither changes your colours until you press the tick: the bar shows what you would get, the eye shows it on the lamp, and on Gradient the slider moves the middle hotter or colder. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
       ),
