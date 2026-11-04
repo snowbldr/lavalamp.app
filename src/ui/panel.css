@@ -358,3 +358,16 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .ask-buttons .ask-yes.danger:hover { background: #f05a5f; }
 .ask-buttons button:focus-visible { outline: 2px solid #e8e8ea; outline-offset: 2px; }
 @keyframes ask-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Editing a saved theme: the banner over the bar, and the bar ringed */
+.edit-banner { display: none; align-items: center; gap: 6px; margin: 0 -9px 10px; padding: 6px 6px 6px 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.28); }
+.edit-banner.on { display: flex; animation: edit-pop 0.16s ease-out; }
+.edit-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(236, 236, 236, 0.75); }
+.edit-name { flex: 1; min-width: 0; height: 26px; box-sizing: border-box; padding: 0 8px; border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(0, 0, 0, 0.35); color: #ececec; font: inherit; font-size: 12px; }
+.edit-name:focus { outline: none; border-color: #ececec; }
+.edit-banner button { flex: none; height: 26px; padding: 0 10px; border: 0; border-radius: 7px; font: inherit; font-size: 12px; cursor: pointer; }
+.edit-cancel { background: rgba(255, 255, 255, 0.1); color: #ececec; }
+.edit-save { background: #e8e8ea; color: #1c1c1e; font-weight: 600; }
+.gradient-bar.editing { box-shadow: 0 0 0 2px #e8e8ea; }
+.theme.editing-tile { box-shadow: 0 0 0 2px #e8e8ea, 0 0 10px rgba(232, 232, 234, 0.35); }
+@keyframes edit-pop { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: none; } }

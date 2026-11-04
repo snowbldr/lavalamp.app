@@ -258,7 +258,7 @@ export function createSettingsPanel () {
     )
   })
   const open = () => document.body.append(panel)
-  const close = () => { stopEditing(false); panel.remove() }
+  const close = () => { stopEditing(); panel.remove() }
 
   const copyShareLink = () =>
     navigator.clipboard.writeText(shareLink()).then(
@@ -383,7 +383,7 @@ export function createSettingsPanel () {
   // click the theme you want to delete, then an r u sure"). The trash again, or any other press,
   // leaves it.
   let deleting = false
-  const trash = button({ class: 'theme-trash', title: 'Delete a theme: press this, then the theme', 'aria-label': 'Delete a theme', onclick: () => { stopEditing(false); deleting = !deleting; fillThemes() } })
+  const trash = button({ class: 'theme-trash', title: 'Delete a theme: press this, then the theme', 'aria-label': 'Delete a theme', onclick: () => { stopEditing(); deleting = !deleting; fillThemes() } })
   trash.innerHTML = ICON('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')
   const loadTheme = async theme => {
     if (theme === loadedTheme && sameColours(takeColours(), loaded)) return true
@@ -393,40 +393,63 @@ export function createSettingsPanel () {
     loadedTheme = theme
     return true
   }
-  const stopEditing = save => {
+  // Editing a saved theme shows on the bar itself (Robert: "while editing a theme, it was hard to
+  // really tell that changing the gradient would edit the theme"; "a pop in banner makes sense in
+  // this case since it's edit and we expect things to change"): a banner over the bar, "Editing",
+  // the name, Cancel and Save; the bar ringed; the theme's tile following the colours as they
+  // change. Save keeps them under the name; Cancel puts the theme back as it was saved, on the
+  // lamp too; anything else (another theme, the plus, closing the panel) leaves the edit with the
+  // colours as they are, unsaved, so loading another theme asks as it always does.
+  const editName = input({ class: 'edit-name', type: 'text', maxlength: 24, 'aria-label': 'Theme name',
+    onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') stopEditing('save'); else if (e.key === 'Escape' && !pickerWasOpen) stopEditing('cancel') } })
+  const editBanner = div({ class: 'edit-banner' },
+    span({ class: 'edit-label' }, 'Editing'),
+    editName,
+    button({ class: 'edit-cancel', onclick: () => stopEditing('cancel') }, 'Cancel'),
+    button({ class: 'edit-save', onclick: () => stopEditing('save') }, 'Save'))
+  gradientPending.prepend(editBanner)
+  const startEditing = theme => {
+    editing = { theme, saved: JSON.parse(JSON.stringify(theme)) }
+    editName.value = theme.name
+    editBanner.classList.add('on')
+    bar.classList.add('editing')
+    fillThemes()
+    setTimeout(() => { editName.focus(); editName.select() })
+  }
+  const stopEditing = (how = 'leave') => {
     if (!editing) return
-    const { theme, field } = editing
-    if (save) {
-      Object.assign(theme, takeColours(), { name: field.value.trim().slice(0, 24) || theme.name })
+    const { theme, saved } = editing
+    if (how === 'save') {
+      Object.assign(theme, takeColours(), { name: editName.value.trim().slice(0, 24) || theme.name })
       saveMyThemes()
+      loaded = takeColours()
+      loadedTheme = theme
+    } else if (how === 'cancel') {
+      putColours(saved)
       loaded = takeColours()
       loadedTheme = theme
     }
     editing = null
+    editBanner.classList.remove('on')
+    bar.classList.remove('editing')
     fillThemes()
   }
+  // The edited theme's tile follows the colours.
+  for (const state of [...Object.values(allColours), ...livePlaces]) state.subscribe(() => { if (editing) fillThemes() })
   const PENCIL = '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>'
   const themeTile = (theme, mine) => {
-    if (editing && editing.theme === theme) {
-      const field = input({ class: 'theme-name', type: 'text', maxlength: 24, value: theme.name, 'aria-label': 'Theme name',
-        onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') stopEditing(true); else if (e.key === 'Escape' && !pickerWasOpen) stopEditing(false) } })
-      editing.field = field
-      const save = button({ class: 'icon-button primary theme-save', title: 'Save this theme', 'aria-label': 'Save this theme', onclick: () => stopEditing(true) })
-      save.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
-      setTimeout(() => { field.focus(); field.select() })
-      return div({ class: 'theme-item editing' }, field, save)
-    }
+    const shownTheme = editing && editing.theme === theme ? { ...takeColours(), name: theme.name } : theme
     const tile = button({
-      class: theme === loadedTheme ? 'theme staged' : 'theme',
+      class: editing && editing.theme === theme ? 'theme staged editing-tile' : theme === loadedTheme ? 'theme staged' : 'theme',
       title: theme.name,
       // The theme's background as a solid strip along the bottom of its gradient (Robert: "we should
       // include the background in the theme. we could draw it as a solid bar across the bottom"; then
       // "it should fill the entire bottom like 15-20% of the gradient button"), drawn as its own strip
       // pinned to the bottom edge (panel.css .theme::after); as a second background layer the
       // gradient showed under it.
-      style: { background: `linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
+      style: { background: `linear-gradient(90deg, ${STOPS.map((k, i) => `${css(shownTheme[k])} ${([0, shownTheme.heatCoolAt || 0.25, shownTheme.heatWarmAt || 0.5, shownTheme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
       onclick: () => {
-        stopEditing(false)
+        stopEditing()
         if (deleting && mine) {
           ask(`Delete ${theme.name}?`, { yes: 'Delete', danger: true }).then(yes => {
             if (yes) { myThemes = myThemes.filter(t => t !== theme); if (loadedTheme === theme) loadedTheme = null; saveMyThemes() }
@@ -438,16 +461,12 @@ export function createSettingsPanel () {
         loadTheme(theme).then(ok => { if (ok) fillThemes() })
       }
     }, span(theme.name))
-    if (theme.bgColor) tile.style.setProperty('--theme-back', css(theme.bgColor))
+    if (shownTheme.bgColor) tile.style.setProperty('--theme-back', css(shownTheme.bgColor))
     if (!mine) return tile
     const edit = button({ class: 'theme-edit', title: `Rename or save over ${theme.name}`, 'aria-label': `Edit ${theme.name}`, onclick: () => {
-      stopEditing(false)
+      stopEditing()
       deleting = false
-      loadTheme(theme).then(ok => {
-        if (!ok) return
-        editing = { theme }
-        fillThemes()
-      })
+      loadTheme(theme).then(ok => { if (ok) startEditing(theme) })
     } })
     edit.innerHTML = ICON(PENCIL)
     const item = div({ class: 'theme-item' }, tile, edit)
@@ -472,7 +491,7 @@ export function createSettingsPanel () {
       title: 'Save the colours as they are now as a new theme',
       'aria-label': 'Save these colours as a new theme',
       onclick: () => {
-        stopEditing(false)
+        stopEditing()
         deleting = false
         let n = myThemes.length + 1
         while (myThemes.some(t => t.name === `Mine ${n}`)) n++
@@ -481,8 +500,7 @@ export function createSettingsPanel () {
         saveMyThemes()
         loaded = takeColours()
         loadedTheme = theme
-        editing = { theme }
-        fillThemes()
+        startEditing(theme)
       }
     }, span('+'))
     themesGrid.replaceChildren(...themes.map(t => themeTile(t, false)))
