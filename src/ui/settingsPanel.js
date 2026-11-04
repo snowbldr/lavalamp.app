@@ -307,7 +307,7 @@ export function createSettingsPanel () {
   // hard to select. I think it's probably ok if it goes all the way touching but not overlapping, and
   // same with other sliders"; they were 30 px apart and could sit over the end circles).
   const GAP_PX = 14 // panel.css .gradient-dot.pin width
-  const END_PX = 33 // the end circle's far edge (4 + 22) plus half a pin (7)
+  const END_PX = 36 // the end circle's far edge (7 + 22) plus half a pin (7)
   const PUSH_PX = 12 // how far past a neighbour a drag goes before it pushes it
   const STOP_NAMES = ['Cold', 'Cool', 'Warm', 'Hot', 'Peak']
   const liveStops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
