@@ -34,6 +34,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let retire = false // a train ended: hand the closed pot back
   let charge = 0 // the lidded pot's heat, held
   let chargeBig = false // the drop's pot rather than a beat's
+  let chargeFull = null // the lava in each pot, as the page last counted it
   let drop = 0 // a drop's blast strength, 0 for none
   let dropAt = -1 // the pot it asks for, -1 for the usual
   let sentParams = ''
@@ -105,7 +106,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, drop, dropAt, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, chargeFull, drop, dropAt, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
@@ -145,7 +146,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     flipEddies (chance = 1) { flip.push(chance) },
     ventPot (seconds, smallOnly) { vent = Math.max(vent, seconds || 0); ventSmall = !!smallOnly },
     retirePot () { retire = true },
-    chargePot (level, big) { charge = level; chargeBig = !!big },
+    chargePot (level, big, fullness) { charge = level; chargeBig = !!big; if (fullness) chargeFull = fullness },
     dropPot (strength, at) { drop = Math.max(drop, strength); if (at >= 0) dropAt = at },
     setTouches (list) { touches = list || [] },
     transform (fn) {

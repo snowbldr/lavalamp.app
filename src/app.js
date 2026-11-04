@@ -531,10 +531,10 @@ export async function start () {
   let lavaLow = false
   // The pot holding the most lava, by its index, or -1 when none holds any (or the lava is not
   // known yet): every particle below the floor line counted to its nearest pot.
-  const fullestPot = () => {
+  const potLava = () => {
     const els = sim.heaterElements ? sim.heaterElements() : null
     const st = sim.state, n = sim.count, H = sim.height
-    if (!els || !els.length || !st || !n || !H) return -1
+    if (!els || !els.length || !st || !n || !H) return null
     const counts = new Array(els.length).fill(0)
     for (let i = 0; i < n; i++) {
       if (st.y[i] <= H) continue
@@ -542,10 +542,19 @@ export async function start () {
       for (let k = 1; k < els.length; k++) if (Math.abs(st.x[i] - els[k].x) < Math.abs(st.x[i] - els[best].x)) best = k
       counts[best]++
     }
+    return counts
+  }
+  const fullestPot = () => {
+    const counts = potLava()
+    if (!counts) return -1
     let best = 0
     for (let k = 1; k < counts.length; k++) if (counts[k] > counts[best]) best = k
     return counts[best] > 0 ? best : -1
   }
+  // The lava in each pot, counted twice a second while the music plays and handed to the lid with
+  // its charge (simulation.js chargePot): the drop's pot is chosen by it, and a drop on an empty
+  // one goes to the fullest instead.
+  let potFullness = null
   const CEILING_COOL = 5
   const VENT_TIME = 0.3 // seconds the lid is lifted for
   // Seconds between pots on deep notes: 3 skipped C-C's 0:57.1 (1.9 s after the one at the drop);
@@ -695,7 +704,7 @@ export async function start () {
     // or two spawn at the same time because of all the activity"). Then the beat pots, while busy.
     const lidded = musicDrop() > 0 && !!sim.chargePot
     const calm = m.sinceBeat > DROP_WAIT || m.calm
-    if (lidded) { sim.chargePot(2 * musicDrop(), calm); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
+    if (lidded) { sim.chargePot(2 * musicDrop(), calm, potFullness); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
     const heardNumber = clock.locked ? (clock.until < clock.period / 2 ? clock.index + 1 : clock.index) : -1
     const musicNow = listener.time
     // The drop is music.js's alone: a surge out of a calm part, or the bass back after a cut. The
@@ -724,6 +733,7 @@ export async function start () {
       let low = 0
       for (let i = 0; i < n; i++) if (st.y[i] > 0.8 * H) low++
       lavaLow = low / n < BUFFER
+      potFullness = potLava()
     }
     // A deep note's attack is also a kick: its beat pot spent the charge, and the boom at the
     // note's peak a few frames later opened a pot closed that instant, with nothing in it (C-C
@@ -731,10 +741,9 @@ export async function start () {
     // triggering the pots... sometimes it does seem like it fires, but I'm not sure why the
     // inconsistency"). While a boom waits for its peak, the beat pots wait too.
     const onBeatPot = m.beat && !calm && !lavaLow && !m.boomPending && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
-    // A drop or a stab blasts the pot holding the most lava, as a snap does (Robert: "does the drop
-    // check for biggest filled pots like the snap does? it should probably do that"): the lidded
-    // pot or the biggest cup could be the empty one; a full lidded pot is still the one it takes.
-    const open = strength => { if (sim.dropPot) sim.dropPot(strength, fullestPot()); fired = true }
+    // A drop or a stab goes to the lidded pot if it holds lava, else to the fullest, heated harder
+    // (simulation.js, chargePot and the drop).
+    const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
     // A bass hit (a deep note, a beat on the phrase) is a wave: one vent of the closed pot, the
     // wave form Robert liked ("I really like the wave forms the pulsing releases are, we should make
     // those what happens for any bass trigger"; then "Let's keep waves as bass (looks really cool),

@@ -319,7 +319,17 @@ export function createSimulation ({ width, height, params }) {
   // DROP_BLAST times the top heat times strength, full on for half of DROP_LIFE and tapering over
   // the rest. lidPot is the lidded pot's index, -1 for none, which contain honours.
   let chargeLevel = 0
-  let chargeBig = false // the drop's pot (the biggest cold, the whole cup), else a beat's pot (drawn as the clocks draw them, their usual core)
+  let chargeBig = false // the drop's pot (the fullest cold one, the whole cup), else a beat's pot (drawn as the clocks draw them, their usual core)
+  // The lava in each pot, by element, as the page last counted it (the GPU lamp's lava is not here),
+  // or null. The drop's pot is the fullest cold one, not the biggest (Robert: "we should pick the
+  // biggest filled pot when we choose one to preheat for a drop. Then only if we don't have a
+  // preheated pot with lava in it, and we detect a drop, then we grab the fullest one and heat it
+  // aggressively"). A lidded pot under FULL_SHARE of the fullest pot's lava (and FULL_MIN particles)
+  // counts as empty, and the drop goes to the fullest, EMPTY_BOOST times hotter.
+  let potFullness = null
+  const FULL_SHARE = 0.25
+  const FULL_MIN = 30
+  const EMPTY_BOOST = 1.5
   let charged = null
   let lidPot = -1
   let dropRequest = 0
@@ -1080,8 +1090,14 @@ export function createSimulation ({ width, height, params }) {
       // charging, the drop's is wanted. A whole big pot every beat sent too much up: half the
       // lamp's lava sat in the ceiling bottles by 28 s, against 10 to 20% with no lids.
       if (charged && charged.mode === 'charge' && chargeBig && !charged.big) unlid()
+      const fullOf = el => potFullness ? (potFullness[elements.indexOf(el)] || 0) : 0
+      const fullestCold = () => {
+        let best = null
+        for (const el of elements) if (el.heat <= 0 && !(el.restUntil > heaterTime) && fullOf(el) > 0 && (!best || fullOf(el) > fullOf(best))) best = el
+        return best
+      }
       if (chargeLevel > 0 && !charged) {
-        charged = chargeBig ? biggestCold() : drawnCold()
+        charged = chargeBig ? (fullestCold() || biggestCold()) : drawnCold()
         if (charged) {
           charged.mode = 'charge'
           charged.big = chargeBig
@@ -1105,7 +1121,14 @@ export function createSimulation ({ width, height, params }) {
       if (charged && charged.mode === 'charge') lidPot = heaterTime < ventUntil ? -1 : charged.pot
       if (dropRequest > 0) {
         // A pot asked for by name (a clap's fullest) wins over the lidded one, which is let go.
-        const wanted = dropAt >= 0 ? elements[dropAt] : null
+        let wanted = dropAt >= 0 ? elements[dropAt] : null
+        let boost = 1
+        // No lidded pot, or one with too little lava in it: the fullest pot, heated harder.
+        if (!wanted && potFullness) {
+          let fullest = null
+          for (const el of elements) if (fullOf(el) > 0 && (!fullest || fullOf(el) > fullOf(fullest))) fullest = el
+          if (fullest && (!charged || fullOf(charged) < Math.max(FULL_MIN, FULL_SHARE * fullOf(fullest)))) { wanted = fullest; if (fullest !== charged) boost = EMPTY_BOOST }
+        }
         if (wanted && charged && wanted !== charged) { charged.mode = null; charged.big = false; charged.heat = 0; charged.next = 0; charged = null }
         const el = wanted || charged || biggestCold()
         if (el) {
@@ -1113,7 +1136,7 @@ export function createSimulation ({ width, height, params }) {
           // its whole cup, as the drop's charged one is.
           if (!charged) { el.big = true; el.coreFraction = el.cupHalf }
           el.mode = 'blast'
-          el.heat = elementHeatTop * DROP_BLAST * dropRequest
+          el.heat = elementHeatTop * DROP_BLAST * dropRequest * boost
           el.start = heaterTime
           el.life = DROP_LIFE
           if (!el.big) el.life = DROP_LIFE / 2
@@ -1785,7 +1808,7 @@ export function createSimulation ({ width, height, params }) {
     spawnEddy () { eddyRequests++ },
     pulseWave () { pulseRequests++ },
     flipEddies (chance = 1) { flipRequests.push(chance) },
-    chargePot (level, big) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big },
+    chargePot (level, big, fullness) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big; if (fullness) potFullness = fullness },
     dropPot (strength, at) { dropRequest = Math.max(dropRequest, strength || 0); if (at >= 0) dropAt = at },
     ventPot (seconds, smallOnly) { ventRequest = Math.max(ventRequest, seconds || 0); ventSmallOnly = !!smallOnly },
     retirePot () { retireRequest = true },

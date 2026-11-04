@@ -133,7 +133,7 @@ self.onmessage = ({ data: m }) => {
       for (const c of m.flip || []) sim.flipEddies(c)
       if (m.vent) sim.ventPot(m.vent, m.ventSmall)
       if (m.retire) sim.retirePot()
-      sim.chargePot(m.charge || 0, m.chargeBig)
+      sim.chargePot(m.charge || 0, m.chargeBig, m.chargeFull)
       if (m.drop) sim.dropPot(m.drop, m.dropAt)
       if (m.want) want = m.want
       setPace(m.pace)
