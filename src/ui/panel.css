@@ -337,7 +337,7 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .my-themes-caption { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
 .theme-trash { width: 32px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; border: 1px solid transparent; background: none; color: rgba(236, 236, 236, 0.75); cursor: pointer; }
 .theme-trash svg { width: 19px; height: 19px; }
-.theme-tools { display: inline-flex; gap: 12px; } /* bigger and apart (Robert: "a bit further apart and a little bigger. old people use this") */
+.theme-tools { display: inline-flex; gap: 8px; } /* bigger and apart (Robert: "a bit further apart and a little bigger. old people use this") */
 .theme-share.on { color: var(--edit-accent, #8fa8ff); border-color: rgba(143, 168, 255, 0.6); background: rgba(143, 168, 255, 0.12); }
 .themes.sharing .theme:not(.theme-add) { box-shadow: 0 0 0 2px #8fa8ff; }
 .themes.sharing .theme-add, .themes.sharing .theme-edit { opacity: 0.3; }
@@ -378,10 +378,10 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .edit-row .edit-name { height: 26px; background: rgba(0, 0, 0, 0.28); border-color: rgba(255, 255, 255, 0.55); font-weight: 600; text-shadow: 0 0 3px #000, 0 0 2px #000; }
 /* The tick and cross on a dark pill over the gradient (Robert: "we also need a dark background
    around the save and cancel buttons... a little smaller... Keep the hitbox the same size") */
-.edit-actions { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: rgba(18, 18, 20, 0.88); }
+.edit-actions { display: flex; gap: 8px; padding: 3px 5px; border-radius: 9px; background: rgba(18, 18, 20, 0.88); }
 .edit-row .edit-actions .icon-button { position: relative; width: 20px; height: 20px; border-radius: 6px; }
 .edit-row .edit-actions .icon-button svg { width: 13px; height: 13px; }
-.edit-row .edit-actions .icon-button::before { content: ''; position: absolute; inset: -4px -2px; } /* the hit area as it was */
+.edit-row .edit-actions .icon-button::before { content: ''; position: absolute; inset: -4px; } /* the hit area as it was */
 .edit-banner { display: none; align-items: baseline; gap: 8px; margin: 0 -9px 10px; padding: 7px 10px; border-radius: 9px; background: rgba(143, 168, 255, 0.14); border: 1px solid rgba(143, 168, 255, 0.55); font-size: 12px; color: #ececec; }
 .edit-banner.on { display: flex; animation: edit-pop 0.16s ease-out; }
 .edit-banner .edit-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--edit-accent); }
