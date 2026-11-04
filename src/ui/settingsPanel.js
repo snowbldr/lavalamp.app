@@ -575,7 +575,7 @@ export function createSettingsPanel () {
       div({ class: musicOpen.bindAttr(() => musicOpen() ? 'sub-panel' : 'sub-panel folded') },
         div({ class: 'sub-title foldable', onclick: e => { if (!e.target.closest('.toggle')) musicOpen(!musicOpen()) } },
           span('Music'),
-          span({ class: 'sub-sub music-sub' }, 'the lava dances to sound'),
+          span({ class: 'sub-sub music-sub' }, 'sync the lava to your music'),
           span({ style: { display: 'flex', alignItems: 'center', gap: '8px' } },
             div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music)),
             chevron()
