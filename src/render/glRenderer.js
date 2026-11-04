@@ -1,5 +1,4 @@
 import { drawCooling, drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
-import { drawnTemps, drawnY } from './potCap.js'
 const CULL_MARGIN = 48 // window px past the edge a drawn disc and its blur can still reach
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
@@ -236,10 +235,13 @@ export function createGlRenderer (canvas, look) {
     const top = HEAT_STEPS - 1
     const perTemp = heat ? top / (2 * overlays.neutral) : 0
     const floorY = overlays.floorY ?? Infinity
-    // Pot lava no hotter than neutral (half of it drew warm pot lava purple, a fuzz over every
-    // pot) nor than the lava just above it: see potCap.js.
-    const yOf = drawnY(state, count, floorY, look.particleSize || 4)
-    const tempOf = heat ? drawnTemps(state, count, floorY, overlays.neutral, look.particleSize || 4) : null
+    // Lava in a pot, below the floor's line, is drawn no hotter than neutral, so a closed pot's
+    // superheated lava never glows white (half of neutral drew warm pot lava purple, a fuzz over
+    // every pot). The line itself is off screen now (app.js FLOOR_HIDDEN), which is what hides the
+    // pots' packed rows; a pot row drawn higher and in the colour above (potCap.js) is gone with it.
+    const hiddenTemp = overlays.neutral || 0
+    const yOf = i => state.y[i]
+    const tempOf = heat ? i => (state.y[i] > floorY ? Math.min(state.temp[i], hiddenTemp) : state.temp[i]) : null
     // Only what can show is drawn: the pots' and bottles' reserves sit below the floor and above
     // the ceiling, off screen unless the Reservoirs view fits them in, and a frame built all of
     // them (Robert: "I also noticed that the lava gets pretty laggy": 53055 particles at 2560 by

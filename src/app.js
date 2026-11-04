@@ -373,6 +373,12 @@ export async function start () {
       shown.y[i] = prev.y[i] + (cur.y[i] - prev.y[i]) * a
     }
   }
+  // The lamp's floor sits FLOOR_HIDDEN px under the bottom of the screen: the simulation is that
+  // much taller than the canvas, so the pots' mouths, a closed pot's packed row and its glow are
+  // all off screen and the pool simply runs off the bottom (Robert: "we could move the floor
+  // between the pots down a bit too to allow for that layer to be off screen"; "it'll look like
+  // hidden magic not a weird un-natural layer"). Enough for a disc and its blur.
+  const FLOOR_HIDDEN = 24
   let edge = 'bottom' // the page edge the lamp's floor sits on
   let turns = TURNS[edge]
   let [pageWidth, pageHeight] = pageSize()
@@ -397,10 +403,10 @@ export async function start () {
     setTimeout(() => location.reload(), 1500)
   }
   const sim = device
-    ? createGpuLamp({ device, width, height, params, onLost })
+    ? createGpuLamp({ device, width, height: height + FLOOR_HIDDEN, params, onLost })
     : remote
-      ? createWorkerLamp({ width, height, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
-      : createSimulation({ width, height, params })
+      ? createWorkerLamp({ width, height: height + FLOOR_HIDDEN, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
+      : createSimulation({ width, height: height + FLOOR_HIDDEN, params })
   backendLabel(device ? 'GPU (WebGPU)' : remote ? 'CPU, simulation on a worker thread' : 'CPU, simulation on the page thread')
   // A visitor who tuned the old lamp is told their settings are kept and where it lives.
   const v1Banner = v1SettingsBanner()
@@ -909,7 +915,7 @@ export async function start () {
   function fit () {
     [pageWidth, pageHeight] = pageSize();
     [width, height] = lampSizeFor(turns, pageWidth, pageHeight)
-    sim.resize(width, height)
+    sim.resize(width, height + FLOOR_HIDDEN)
     renderer.resize(width, height)
     lamp.style.transform = `rotate(${turns * 90}deg)`
     refitDefaults(width, height)
