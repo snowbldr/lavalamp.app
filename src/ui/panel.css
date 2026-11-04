@@ -376,7 +376,12 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .edit-row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 7px; background: var(--theme-back, transparent); border-radius: 0 0 8px 8px; pointer-events: none; }
 .edit-row > * { position: relative; z-index: 1; }
 .edit-row .edit-name { height: 26px; background: rgba(0, 0, 0, 0.28); border-color: rgba(255, 255, 255, 0.55); font-weight: 600; text-shadow: 0 0 3px #000, 0 0 2px #000; }
-.edit-row .icon-button { width: 26px; height: 26px; }
+/* The tick and cross on a dark pill over the gradient (Robert: "we also need a dark background
+   around the save and cancel buttons... a little smaller... Keep the hitbox the same size") */
+.edit-actions { display: flex; gap: 3px; padding: 3px; border-radius: 9px; background: rgba(18, 18, 20, 0.88); }
+.edit-row .edit-actions .icon-button { position: relative; width: 20px; height: 20px; border-radius: 6px; }
+.edit-row .edit-actions .icon-button svg { width: 13px; height: 13px; }
+.edit-row .edit-actions .icon-button::before { content: ''; position: absolute; inset: -4px -2px; } /* the hit area as it was */
 .edit-banner { display: none; align-items: baseline; gap: 8px; margin: 0 -9px 10px; padding: 7px 10px; border-radius: 9px; background: rgba(143, 168, 255, 0.14); border: 1px solid rgba(143, 168, 255, 0.55); font-size: 12px; color: #ececec; }
 .edit-banner.on { display: flex; animation: edit-pop 0.16s ease-out; }
 .edit-banner .edit-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--edit-accent); }

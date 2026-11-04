@@ -530,7 +530,7 @@ export function createSettingsPanel () {
     // the button closes the edit? weird. let's make the edit bar's background the gradient
     // instead").
     if (editing && editing.theme === theme) {
-      const row = div({ class: 'theme-item edit-row' }, editName, editSave, editCancel)
+      const row = div({ class: 'theme-item edit-row' }, editName, div({ class: 'edit-actions' }, editSave, editCancel))
       editRow = row
       paintEditRow()
       return row
