@@ -335,9 +335,9 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .theme-edit { flex: none; width: 26px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: rgba(236, 236, 236, 0.8); cursor: pointer; }
 .theme-edit svg { width: 14px; height: 14px; }
 .my-themes-caption { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
-.theme-trash { width: 26px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid transparent; background: none; color: rgba(236, 236, 236, 0.6); cursor: pointer; }
-.theme-trash svg { width: 15px; height: 15px; }
-.theme-tools { display: inline-flex; gap: 2px; }
+.theme-trash { width: 32px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; border: 1px solid transparent; background: none; color: rgba(236, 236, 236, 0.75); cursor: pointer; }
+.theme-trash svg { width: 19px; height: 19px; }
+.theme-tools { display: inline-flex; gap: 12px; } /* bigger and apart (Robert: "a bit further apart and a little bigger. old people use this") */
 .theme-share.on { color: var(--edit-accent, #8fa8ff); border-color: rgba(143, 168, 255, 0.6); background: rgba(143, 168, 255, 0.12); }
 .themes.sharing .theme:not(.theme-add) { box-shadow: 0 0 0 2px #8fa8ff; }
 .themes.sharing .theme-add, .themes.sharing .theme-edit { opacity: 0.3; }
