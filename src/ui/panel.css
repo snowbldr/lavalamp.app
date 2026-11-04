@@ -320,8 +320,12 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .theme-name { flex: 1; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 8px; border-radius: 8px; border: 1px solid var(--accent); background: rgba(0, 0, 0, 0.35); color: #ececec; font: inherit; font-size: 12px; }
 .theme-name:focus { outline: none; }
 .theme-save { width: 30px; height: 30px; flex: none; }
-.theme-delete { position: absolute; top: -6px; left: -6px; width: 16px; height: 16px; line-height: 15px; text-align: center; border-radius: 50%; background: #2a2a2e; border: 1px solid rgba(255, 255, 255, 0.35); color: #ececec; font-size: 11px; cursor: pointer; display: none; }
-.theme-item:hover .theme-delete, .theme-item:has(.staged) .theme-delete { display: block; }
+.my-themes-caption { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.theme-trash { width: 26px; height: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid transparent; background: none; color: rgba(236, 236, 236, 0.6); cursor: pointer; }
+.theme-trash svg { width: 15px; height: 15px; }
+.theme-trash.on { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.6); background: rgba(255, 107, 107, 0.12); }
+.themes.deleting .theme:not(.theme-add) { box-shadow: 0 0 0 2px #ff6b6b; }
+.themes.deleting .theme-add, .themes.deleting .theme-edit { opacity: 0.3; }
 .theme-add { background: rgba(255, 255, 255, 0.06); border-style: dashed; }
 .theme-add span { background: none; font-size: 16px; }
 .icon-button:disabled { opacity: 0.35; cursor: default; }

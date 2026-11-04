@@ -460,21 +460,12 @@ export const applyTheme = theme => {
   for (const [key, state] of Object.entries(colorSettings)) if (theme[key]) state({ ...theme[key] })
 }
 
-// The gradient editor: five colours the person sets, Cold and Peak at the ends and Cool, Warm and
-// Hot on pins that slide between them; the five stops the lamp uses are taken from it at even
-// steps of heat. A theme clicked loads its colours onto it. History: Duotone and Mono (Robert:
-// "maybe we should make like a two color gradient version and luminance gradient"), merged into
-// one From and To gradient ("combine duo tone and mono into gradient"), a midpoint slider ("a
-// slider over the gradient to decide the midpoint"), three pins ("3x pins make sense"), the five
-// heat dots on the bar itself ("we could combine the 5 dots with the gradient selector with the 3
-// pins"), then no Presets and Gradient switch at all ("this also means we really don't need to
-// switch between gradient and presets, we can actually get rid of that toggle").
-// Nothing reaches the lamp until Apply: a theme clicked used to replace the colours at once and a
-// set of chosen colours was lost to browsing (Robert: "my daughter had a problem where she set all
-// the colors, then she was browsing the colors and changing the mode automatically erases all of
-// the chosen colors"). With nothing pending the bar follows the lamp's colours; once changed (a
-// dot, a pin, a theme) it is pending, shown on the lamp while previewed (app.js), applied with the
-// tick. Mixed in linear light so the middle does not go muddy.
+// The heat colours: five stops, Cold and Peak at the ends and Cool, Warm and Hot at places along
+// the heat that the panel's pins set. History of the panel (settingsPanel.js): Duotone and Mono
+// (Robert: "maybe we should make like a two color gradient version and luminance gradient"), one
+// From and To gradient, a midpoint slider, three pins, the five dots on the bar, no Presets and
+// Gradient switch, then no preview and apply at all, themes as starting points with a check
+// before one replaces changed colours.
 // Where Cool, Warm and Hot sit along the heat, 0 to 1, saved with the colours: the renderers
 // draw the gradient through the five at their places (overlays.js heatColor). The pins were first
 // read off as five even steps, and moving one barely changed the lava (Robert: "the gradient
@@ -482,47 +473,9 @@ export const applyTheme = theme => {
 export const heatCoolAt = fnstate(0.25)
 export const heatWarmAt = fnstate(0.5)
 export const heatHotAt = fnstate(0.75)
-const STOP_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
 const AT_KEYS = ['heatCoolAt', 'heatWarmAt', 'heatHotAt']
-const stops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
 const places = [heatCoolAt, heatWarmAt, heatHotAt]
 const EVEN = [0.25, 0.5, 0.75]
-export const gradientColours = stops.map(state => fnstate({ ...state() })) // the five dots' colours
-export const gradientPoints = fnstate(places.map(p => p())) // the pins of Cool, Warm and Hot
-export const pendingExtras = fnstate(null) // a theme's back and flow colours, waiting with it
-export const gradientPending = fnstate(false) // the bar differs from the lamp
-let quiet = false // the bar being set by the code, not by a hand
-const setBar = (colours, points) => { quiet = true; colours.forEach((c, k) => gradientColours[k]({ ...c })); gradientPoints(points.slice()); quiet = false }
-const fromLamp = () => setBar(stops.map(s => s()), places.map(p => p()))
-for (const state of [...gradientColours, gradientPoints]) state.subscribe(() => { if (!quiet) gradientPending(true) })
-// The lamp's colours changed (a swatch, an apply, a reset): the bar follows them when nothing is pending.
-for (const state of [...stops, ...places]) state.subscribe(() => { if (!gradientPending()) fromLamp() })
-// A theme onto the bar, waiting for the tick; one with no places has them even.
-export const loadTheme = theme => {
-  setBar(STOP_KEYS.map(k => theme[k]), AT_KEYS.map((k, i) => Number(theme[k]) > 0 && Number(theme[k]) < 1 ? Number(theme[k]) : EVEN[i]))
-  const extras = {}
-  for (const key of ['bgColor', 'flowSlow', 'flowFast']) if (theme[key]) extras[key] = { ...theme[key] }
-  pendingExtras(extras)
-  gradientPending(true)
-}
-// What Apply would write, or null with nothing pending: the five colours, their places, and a
-// theme's back and flow.
-export const pendingColours = () => {
-  if (!gradientPending()) return null
-  const out = { ...(pendingExtras() || {}) }
-  STOP_KEYS.forEach((key, k) => { out[key] = { ...gradientColours[k]() } })
-  AT_KEYS.forEach((key, k) => { out[key] = gradientPoints()[k] })
-  return out
-}
-export const applyPending = () => {
-  const pending = pendingColours()
-  if (!pending) return
-  for (const [key, value] of Object.entries(pending)) { if (colorSettings[key]) colorSettings[key](value); else if (AT_KEYS.includes(key)) places[AT_KEYS.indexOf(key)](value) }
-  pendingExtras(null)
-  gradientPending(false)
-}
-// Back to the lamp's colours.
-export const dropPending = () => { pendingExtras(null); gradientPending(false); fromLamp() }
 // The places as they are, and set, for a saved theme.
 export const takePlaces = () => Object.fromEntries(AT_KEYS.map((k, i) => [k, places[i]()]))
 export const putPlaces = theme => AT_KEYS.forEach((k, i) => places[i](Number(theme[k]) > 0 && Number(theme[k]) < 1 ? Number(theme[k]) : EVEN[i]))
