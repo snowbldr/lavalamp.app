@@ -172,20 +172,23 @@ const STAB_REST = 10
 // "My kids attempted to snap and clap at it to trigger it when in mic mode, can we add that
 // without breaking the music sync?"). A clap is the CLAP_BAND jumping CLAP_RISE dB over its
 // lowest in the last BEAT_RISE_FRAMES frames and CLAP_OVER over its mean in the last CLAP_BEFORE
-// seconds, rising CLAP_BASS dB more than the bass (20 to 150 Hz) does, at most every
+// seconds, the bass (20 to 150 Hz) rising no more than CLAP_BASS dB past it, at most every
 // CLAP_REFRACTORY. (A snap is a click of 4 ms, under the analyser's 43 ms window: it spills into
-// the bass, up 20 to 26 dB against 36 in the band, so the bass may rise, only less.) It only
-// counts while the lamp is calm and has heard fewer than CLAP_BEATS beats in the last CLAP_QUIET
-// seconds, so a snare or a hat in a song is never a clap, and a snap heard as a beat does not
-// shut out the next claps.
+// the bass. Robert's own snaps, a voice memo of 31: the band up 18 to 44 dB, the bass up to 7.6
+// more than it on the softest, so the bass may rise about as much.) It only counts while the
+// lamp is calm and has heard fewer than CLAP_BEATS beats in the last CLAP_QUIET seconds, so a
+// snare or a hat in a song is never a clap; a beat within CLAP_SNAP_BEAT of the band's jump is
+// the snap's own and is not counted (25 of his 31 snaps were heard as beats, and they shut out
+// the snaps after them: 3 of 31 fired).
 const CLAP_BAND = [1500, 8000]
 const CLAP_RISE = 15
 const CLAP_OVER = 18
 const CLAP_BEFORE = 0.5
-const CLAP_BASS = 8
+const CLAP_BASS = -4
 const CLAP_BEATS = 3
 const CLAP_REFRACTORY = 0.25
 const CLAP_QUIET = 4
+const CLAP_SNAP_BEAT = 0.1 // s: a beat this close after the band's jump is the snap's own, not the music's
 const CLAP_ROOM = -55 // dB: the 2 s level under this, a room with no music (the songs' quiet parts sit about -40 to -55)
 const SECTION_SMOOTH = 2 // seconds the section's power is eased over
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
@@ -261,6 +264,8 @@ export function createMusic () {
   const clapHistory = [] // [time, the clap band in dB, the bass in dB] over CLAP_BEFORE
   let lastSwitch = -1e9 // when the last tempo switch was, so a new tempo counts once
   const recentBeats = [] // times of the beats over the last TEMPO_TO seconds and a few more
+  const musicBeats = [] // the beats over the last CLAP_QUIET seconds that were not a clap's own
+  let lastBandJump = -1e9 // when the clap band last jumped CLAP_RISE
   const scoreHistory = [] // [time, score] ten times a second over the last CUT_BEFORE seconds
   const bandHistory = [] // [time, the STAB_BANDS in dB] over STAB_BEFORE
   let stabPending = null // a calm beat being judged: { at, before, peak }
@@ -549,7 +554,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; floorDrop = 0; farFromFloor = 0; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; lastClap = -1e9; clapHistory.length = 0; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; floorDrop = 0; farFromFloor = 0; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; lastClap = -1e9; clapHistory.length = 0; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; musicBeats.length = 0; lastBandJump = -1e9; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -670,7 +675,8 @@ export function createMusic () {
           const lowest = Math.min(...recent.map(h => h[1]))
           const mean = clapHistory.reduce((a, h) => a + h[1], 0) / clapHistory.length
           const bassRise = bassDb - Math.min(...recent.map(h => h[2]))
-          const quietBeats = recentBeats.filter(t => clock - t <= CLAP_QUIET).length
+          if (clapDb - lowest > CLAP_RISE) lastBandJump = clock
+          const quietBeats = musicBeats.filter(t => clock - t <= CLAP_QUIET).length
           if (clapDb - lowest > CLAP_RISE && clapDb - mean > CLAP_OVER && bassRise < clapDb - lowest - CLAP_BASS && levels.calm && quietBeats < CLAP_BEATS && levels.powerDb < CLAP_ROOM && clock - lastClap > CLAP_REFRACTORY) { levels.clap = true; lastClap = clock }
         }
         clapHistory.push([clock, clapDb, bassDb])
@@ -747,6 +753,7 @@ export function createMusic () {
       }
       if (!scoreHistory.length || clock - scoreHistory[scoreHistory.length - 1][0] >= 0.1) scoreHistory.push([clock, score])
       while (scoreHistory.length && clock - scoreHistory[0][0] > CUT_BEFORE) scoreHistory.shift()
+      if (levels.beat && clock - lastBandJump > CLAP_SNAP_BEAT) { musicBeats.push(clock); while (musicBeats.length && clock - musicBeats[0] > CLAP_QUIET) musicBeats.shift() }
       if (levels.beat) { recentBeats.push(clock); while (recentBeats.length && clock - recentBeats[0] > TEMPO_TO + 2) recentBeats.shift() }
       const tempoSwitched = () => {
         if (levels.calm || recentBeats.length < TEMPO_NEW + 2) return false
