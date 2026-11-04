@@ -440,9 +440,17 @@ export function createSettingsPanel () {
   editSave.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
   const editCancel = button({ class: 'icon-button edit-cancel', title: 'Cancel: put the theme back as it was', 'aria-label': 'Cancel the edit', onclick: () => stopEditing('cancel') })
   editCancel.innerHTML = ICON('<path d="M6 6l12 12M18 6L6 18"/>')
+  // And a banner over the bar saying so (Robert: "missed adding the banner to say it's editing. we
+  // should add it above the gradient and shift everything down").
+  const editTitle = span()
+  const editBanner = div({ class: 'edit-banner' }, span({ class: 'edit-label' }, 'Editing'), editTitle)
+  gradientPending.prepend(editBanner)
+  editName.addEventListener('input', () => { editTitle.textContent = editName.value.trim() || (editing && editing.theme.name) || '' })
   const startEditing = theme => {
     editing = { theme, saved: JSON.parse(JSON.stringify(theme)) }
     editName.value = theme.name
+    editTitle.textContent = theme.name
+    editBanner.classList.add('on')
     bar.classList.add('editing')
     fillThemes()
     setTimeout(() => { editName.focus(); editName.select() })
@@ -461,6 +469,7 @@ export function createSettingsPanel () {
       loadedTheme = theme
     }
     editing = null
+    editBanner.classList.remove('on')
     bar.classList.remove('editing')
     fillThemes()
   }
@@ -504,10 +513,14 @@ export function createSettingsPanel () {
     // it's brighter than real, we just want it to be obvious it's a different color").
     if (shownTheme.bgColor) tile.style.setProperty('--theme-back', css(liftBand(shownTheme.bgColor)))
     if (!mine) return tile
+    // The edit row is the theme itself: its gradient and background band as the row's own
+    // background, the name, tick and cross on it (Robert: "the gradient view here is confusing...
+    // the button closes the edit? weird. let's make the edit bar's background the gradient
+    // instead").
     if (editing && editing.theme === theme) {
-      tile.onclick = null
-      tile.tabIndex = -1
-      return div({ class: 'theme-item edit-row' }, tile, editName, editSave, editCancel)
+      const row = div({ class: 'theme-item edit-row', style: { background: tile.style.background } }, editName, editSave, editCancel)
+      if (shownTheme.bgColor) row.style.setProperty('--theme-back', css(liftBand(shownTheme.bgColor)))
+      return row
     }
     const edit = button({ class: 'theme-edit', title: `Rename or save over ${theme.name}`, 'aria-label': `Edit ${theme.name}`, onclick: () => {
       stopEditing()
@@ -554,10 +567,14 @@ export function createSettingsPanel () {
     themesGrid.replaceChildren(...themes.map(t => themeTile(t, false)))
     myThemesGrid.replaceChildren(...myThemes.map(t => themeTile(t, true)), add)
     // Every tile in its own cell, so the edit row can lie over its row without moving the rest.
-    ;[...myThemesGrid.children].forEach((item, k) => {
-      const across = item.classList.contains('edit-row')
+    // The tile the edit row lies over is hidden outright: its label drew through the row.
+    const items = [...myThemesGrid.children]
+    const editAt = items.findIndex(item => item.classList.contains('edit-row'))
+    items.forEach((item, k) => {
+      const across = k === editAt
       item.style.gridRow = String(Math.floor(k / 2) + 1)
       item.style.gridColumn = across ? '1 / -1' : String(k % 2 + 1)
+      item.style.visibility = editAt >= 0 && !across && Math.floor(k / 2) === Math.floor(editAt / 2) ? 'hidden' : ''
     })
     if (!myThemes.length) { deleting = false; sharing = false }
     myThemesGrid.classList.toggle('deleting', deleting)

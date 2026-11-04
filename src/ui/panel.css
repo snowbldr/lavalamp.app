@@ -364,10 +364,15 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 
 /* Editing a saved theme: a full width row in the grid, and the accent ring on the bar and tile */
 .panel { --edit-accent: #8fa8ff; }
-.theme-item.edit-row { gap: 6px; z-index: 2; background: #232326; border-radius: 8px; box-shadow: 0 0 0 4px #232326; animation: edit-pop 0.16s ease-out; }
-.edit-row .theme { flex: none; width: 56px; }
-.edit-row .theme span { display: none; }
-.edit-name { flex: 1; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 8px; border-radius: 8px; border: 1px solid var(--edit-accent); background: #18181a; color: #ececec; font: inherit; font-size: 12px; }
+.theme-item.edit-row { gap: 6px; z-index: 2; padding: 3px 3px 7px; border-radius: 8px; box-shadow: 0 0 0 2px var(--edit-accent), 0 0 0 5px #232326; animation: edit-pop 0.16s ease-out; }
+.edit-row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 7px; background: var(--theme-back, transparent); border-radius: 0 0 8px 8px; pointer-events: none; }
+.edit-row > * { position: relative; z-index: 1; }
+.edit-row .edit-name { height: 26px; background: rgba(0, 0, 0, 0.28); border-color: rgba(255, 255, 255, 0.55); font-weight: 600; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.edit-row .icon-button { width: 26px; height: 26px; }
+.edit-banner { display: none; align-items: baseline; gap: 8px; margin: 0 -9px 10px; padding: 7px 10px; border-radius: 9px; background: rgba(143, 168, 255, 0.14); border: 1px solid rgba(143, 168, 255, 0.55); font-size: 12px; color: #ececec; }
+.edit-banner.on { display: flex; animation: edit-pop 0.16s ease-out; }
+.edit-banner .edit-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--edit-accent); }
+.edit-name { flex: 1; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 8px; border-radius: 8px; border: 1px solid var(--edit-accent); background: rgba(0, 0, 0, 0.6); color: #ececec; font: inherit; font-size: 12px; }
 .edit-name:focus { outline: none; box-shadow: 0 0 0 1px var(--edit-accent); }
 .edit-row .icon-button { width: 30px; height: 30px; flex: none; }
 .edit-row .icon-button:not(.primary) { background: #2c2c30; }
