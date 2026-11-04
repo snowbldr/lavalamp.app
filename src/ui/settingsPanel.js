@@ -1,5 +1,5 @@
 import { a, button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { TOUCH_UI, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { TOUCH_UI, chevron, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -93,11 +93,12 @@ import {
   themes,
   applyPending,
   gradientPoints,
-  gradientAt,
+  takePlaces,
+  putPlaces,
   pendingColours,
-  stagedTheme,
-  gradientKinds,
-  gradientKind,
+  loadTheme,
+  dropPending,
+  gradientPending as barPending,
   gradientColours,
   soundPending,
   fullscreen,
@@ -192,8 +193,6 @@ const seconds = v => `${v} s`
 const whole = v => String(Math.round(v))
 const fixed = digits => v => Number(v).toFixed(digits)
 const always = fnstate(true)
-const isPresets = fnstate(true)
-gradientKind.subscribe(kind => isPresets(kind === 'presets'))
 const times = v => `${Number(v).toFixed(2)}x`
 // The frequency range knobs, 20 Hz to 12 kHz.
 const HZ = { min: 20, max: 12000, step: 10 }
@@ -263,7 +262,7 @@ export function createSettingsPanel () {
     )
   })
   const open = () => document.body.append(panel)
-  const close = () => { previewing(false); panel.remove() }
+  const close = () => { stopEditing(false); previewing(false); panel.remove() }
 
   const copyShareLink = () =>
     navigator.clipboard.writeText(shareLink()).then(
@@ -305,10 +304,14 @@ export function createSettingsPanel () {
   // with the 3 pins. Clicking on one of the bars, the cold or peak, would open a color selector"):
   // five dots, Cold and Peak at the ends and Cool, Warm and Hot between. A click on a dot opens the
   // picker for it; on Gradient the three middle ones are pins that drag along the bar, each kept
-  // GAP from its neighbours. On Presets the dots are the lamp's own stops, set at once as the
+  // GAP_PX from its neighbours. On Presets the dots are the lamp's own stops, set at once as the
   // swatches were (a theme waiting for the tick is let go first); on Gradient they are the
   // gradient's, written with the tick.
-  const GAP = 0.03
+  // Pins keep a dot and a fingertip apart, in px of the bar, so two never sit on each other and
+  // can always be taken apart (Robert: "the sliding toggles on the gradient shouldn't be allowed to
+  // overlap, and should have some buffer... otherwise it will be impossible to uncollapse them on
+  // mobile with a finger").
+  const GAP_PX = 30
   const STOP_NAMES = ['Cold', 'Cool', 'Warm', 'Hot', 'Peak']
   const liveStops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
   const bar = div({ class: 'gradient-bar' })
@@ -318,19 +321,20 @@ export function createSettingsPanel () {
     const pin = k > 0 && k < 4
     const place = u => {
       const p = gradientPoints().slice()
-      const lo = k === 1 ? GAP : p[k - 2] + GAP
-      const hi = k === 3 ? 1 - GAP : p[k] - GAP
+      const gap = Math.min(0.24, GAP_PX / Math.max(1, bar.getBoundingClientRect().width))
+      const lo = k === 1 ? gap : p[k - 2] + gap
+      const hi = k === 3 ? 1 - gap : p[k] - gap
       p[k - 1] = Math.max(lo, Math.min(hi, u))
       gradientPoints(p)
     }
-    const open = () => { if (gradientKind() === 'presets' && stagedTheme()) stagedTheme(null); picker(dot) }
+    const open = () => picker(dot)
     dot.addEventListener('pointerdown', e => {
       e.preventDefault()
       const x0 = e.clientX
       let moved = false
       dot.setPointerCapture(e.pointerId)
       const move = ev => {
-        if (!pin || gradientKind() === 'presets') return
+        if (!pin) return
         if (!moved && Math.abs(ev.clientX - x0) < 4) return
         moved = true
         const r = bar.getBoundingClientRect()
@@ -346,7 +350,7 @@ export function createSettingsPanel () {
     })
     dot.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { open(); e.preventDefault(); return }
-      if (!pin || gradientKind() === 'presets') return
+      if (!pin) return
       const step = e.shiftKey ? 0.05 : 0.01
       if (e.key === 'ArrowLeft') { place(gradientPoints()[k - 1] - step); e.preventDefault() } else if (e.key === 'ArrowRight') { place(gradientPoints()[k - 1] + step); e.preventDefault() }
     })
@@ -361,29 +365,67 @@ export function createSettingsPanel () {
   // Two labels only, the ends (Robert: "we only really also need two labels there, cold and hot.
   // Everything in between is just implicit from the gradient").
   const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-labels' }, span('Cold'), span('Hot')))
-  // A theme's tile: a click stages it (the tick applies it); a saved one can be renamed with a
-  // double click and deleted with its cross.
+  // A theme's tile: its gradient with its name, and a pencil (Robert: "we should show the gradient
+  // with the name and an edit button. the edit button should cause the gradient to be replaced with
+  // a text input label and replaced with a save button. It should also temporarily load the theme
+  // as the current colors, allow changing the colors, then the theme save button should save the
+  // colors and go back to the colors before clicking edit"). A click on the gradient stages it (the
+  // tick applies it). Editing puts the theme on the lamp, to be changed with the bar and the
+  // swatches; Save keeps the colours as they are then under the name typed, a saved theme in
+  // place and a built in one as a new saved theme, and puts back the colours from before; Escape
+  // puts them back without saving, as does editing another. A saved one also has a cross.
+  const allColours = { heatCold, heatCool, heatWarm, heatHot, heatPeak, bgColor, flowSlow, flowFast }
+  const takeColours = () => { const out = takePlaces(); for (const [key, state] of Object.entries(allColours)) out[key] = { ...state() }; return out }
+  const putColours = colours => { for (const [key, state] of Object.entries(allColours)) if (colours[key]) state({ ...colours[key] }); putPlaces(colours) }
+  let editing = null // { theme, mine, before }
+  // Escape closes an open picker first (components.js, a capture listener on the document); only
+  // an Escape with no picker open cancels the edit. Read before that listener runs.
+  let pickerWasOpen = false
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') pickerWasOpen = !!document.querySelector('.picker') }, true)
   const unstageTiles = () => { if (panel) for (const b of panel.querySelectorAll('.theme.staged')) b.classList.remove('staged') }
-  const themeTile = (theme, mine) => {
-    const name = span(theme.name)
-    const tile = button({
-      class: mine ? 'theme mine' : 'theme',
-      title: mine ? `${theme.name}: double click to rename` : theme.name,
-      style: { background: `linear-gradient(90deg, ${STOPS.map(k => css(theme[k])).join(', ')})` },
-      onclick: () => { stagedTheme(theme); unstageTiles(); tile.classList.add('staged') },
-      ondblclick: mine ? () => {
-        name.contentEditable = 'true'
-        name.focus()
-        document.getSelection().selectAllChildren(name)
-      } : undefined
-    }, name)
-    if (mine) {
-      name.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); name.blur() } })
-      name.addEventListener('blur', () => { name.contentEditable = 'false'; const text = name.textContent.trim().slice(0, 24); if (text) { theme.name = text; saveMyThemes() } name.textContent = theme.name })
-      const cross = span({ class: 'theme-delete', title: 'Delete this theme', 'aria-label': 'Delete this theme', onclick: e => { e.stopPropagation(); myThemes = myThemes.filter(t => t !== theme); if (stagedTheme() === theme) stagedTheme(null); saveMyThemes(); fillMyThemes() } }, '×')
-      tile.append(cross)
+  const stopEditing = save => {
+    if (!editing) return
+    const { theme, mine, before, field } = editing
+    if (save) {
+      const text = field.value.trim().slice(0, 24) || theme.name
+      const colours = takeColours()
+      if (mine) { Object.assign(theme, colours, { name: text }) } else myThemes.push({ name: text, ...colours })
+      saveMyThemes()
     }
-    return tile
+    putColours(before)
+    editing = null
+    fillThemes()
+  }
+  const PENCIL = '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>'
+  const themeTile = (theme, mine) => {
+    if (editing && editing.theme === theme) {
+      const field = input({ class: 'theme-name', type: 'text', maxlength: 24, value: editing.field ? editing.field.value : (mine ? theme.name : `My ${theme.name}`), 'aria-label': 'Theme name',
+        onkeydown: e => { e.stopPropagation(); if (e.key === 'Enter') stopEditing(true); else if (e.key === 'Escape' && !pickerWasOpen) stopEditing(false) } })
+      editing.field = field
+      const save = button({ class: 'icon-button primary theme-save', title: 'Save this theme', 'aria-label': 'Save this theme', onclick: () => stopEditing(true) })
+      save.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
+      setTimeout(() => { field.focus(); field.select() })
+      return div({ class: 'theme-item editing' }, field, save)
+    }
+    const tile = button({
+      class: 'theme',
+      title: theme.name,
+      style: { background: `linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
+      onclick: () => { stopEditing(false); loadTheme(theme); unstageTiles(); tile.classList.add('staged') }
+    }, span(theme.name))
+    const edit = button({ class: 'theme-edit', title: `Edit ${theme.name}`, 'aria-label': `Edit ${theme.name}`, onclick: () => {
+      stopEditing(false)
+      const before = takeColours()
+      previewing(false)
+      dropPending()
+      putColours(theme)
+      editing = { theme, mine, before }
+      fillThemes()
+    } })
+    edit.innerHTML = ICON(PENCIL)
+    const item = div({ class: 'theme-item' }, tile, edit)
+    if (mine) item.append(span({ class: 'theme-delete', title: 'Delete this theme', 'aria-label': 'Delete this theme', onclick: e => { e.stopPropagation(); myThemes = myThemes.filter(t => t !== theme); saveMyThemes(); fillThemes() } }, '×'))
+    return item
   }
   // Saved themes (Robert: "my daughter wanted a way to save color presets, so she could make a
   // bunch"): every colour as it is now, kept in this browser under MY_THEMES_KEY, which Reset
@@ -392,47 +434,42 @@ export function createSettingsPanel () {
   let myThemes = []
   try { myThemes = JSON.parse(localStorage.getItem(MY_THEMES_KEY) || '[]').filter(t => t && t.heatCold) } catch (e) { myThemes = [] }
   const saveMyThemes = () => { try { localStorage.setItem(MY_THEMES_KEY, JSON.stringify(myThemes)) } catch (e) { notify('Could not save the theme in this browser') } }
+  const themesGrid = div({ class: 'themes' })
   const myThemesGrid = div({ class: 'themes' })
-  const fillMyThemes = () => {
+  const fillThemes = () => {
     const add = button({
       class: 'theme theme-add',
       title: 'Save the colours as they are now as a theme',
       'aria-label': 'Save these colours as a theme',
       onclick: () => {
-        const colours = { heatCold, heatCool, heatWarm, heatHot, heatPeak, bgColor, flowSlow, flowFast }
+        stopEditing(false)
         let n = myThemes.length + 1
         while (myThemes.some(t => t.name === `Mine ${n}`)) n++
-        const theme = { name: `Mine ${n}` }
-        for (const [key, state] of Object.entries(colours)) theme[key] = { ...state() }
-        myThemes.push(theme)
+        myThemes.push({ name: `Mine ${n}`, ...takeColours() })
         saveMyThemes()
-        fillMyThemes()
+        fillThemes()
       }
     }, span('+'))
+    themesGrid.replaceChildren(...themes.map(t => themeTile(t, false)))
     myThemesGrid.replaceChildren(...myThemes.map(t => themeTile(t, true)), add)
   }
-  fillMyThemes()
+  fillThemes()
 
   const showPending = () => {
     // Always shown, so the themes do not jump down when one is clicked (Robert: "we should show the
-    // full gradient preview and apply always instead of after cliking a theme. the shift is bad"):
-    // with no theme picked it shows the colours as they are, and the eye and tick wait.
+    // full gradient preview and apply always instead of after cliking a theme. the shift is bad");
+    // with nothing pending it is the lamp's colours, and the eye and tick wait.
     const colours = pendingColours()
-    const shown = colours || { heatCold: heatCold(), heatCool: heatCool(), heatWarm: heatWarm(), heatHot: heatHot(), heatPeak: heatPeak() }
-    const gradient = gradientKind() === 'gradient'
-    const at = gradient ? [0, ...gradientPoints(), 1] : [0, 0.25, 0.5, 0.75, 1]
+    const at = [0, ...gradientPoints(), 1]
     dots.forEach((dot, k) => {
-      dot.swatchState = gradient ? gradientColours[k] : liveStops[k]
+      dot.swatchState = gradientColours[k]
       dot.style.left = `${at[k] * 100}%`
-      dot.style.background = css(gradient ? gradientColours[k]() : shown[STOPS[k]])
-      dot.classList.toggle('pin', gradient && k > 0 && k < 4)
-      dot.title = gradient && k > 0 && k < 4 ? `${STOP_NAMES[k]}: click for its colour, drag to move it` : `${STOP_NAMES[k]}: click for its colour`
+      dot.style.background = css(gradientColours[k]())
+      dot.classList.toggle('pin', k > 0 && k < 4)
+      dot.title = k > 0 && k < 4 ? `${STOP_NAMES[k]}: click for its colour, drag to move it` : `${STOP_NAMES[k]}: click for its colour`
     })
-    // On Gradient the bar is the whole gradient; on Presets, the five stops of the theme picked or
-    // of the colours as they are.
-    bar.style.background = gradient
-      ? `linear-gradient(90deg, ${Array.from({ length: 33 }, (_, i) => css(gradientAt(i / 32))).join(', ')})`
-      : `linear-gradient(90deg, ${STOPS.map(k => css(shown[k])).join(', ')})`
+    // The bar as the lamp draws it: straight blends between the five at their places.
+    bar.style.background = `linear-gradient(90deg, ${dots.map((d, k) => `${css(gradientColours[k]())} ${(at[k] * 100).toFixed(1)}%`).join(', ')})`
     eye.disabled = !colours
     tick.disabled = !colours
     if (!colours && previewing()) { previewing(false); return }
@@ -440,8 +477,10 @@ export function createSettingsPanel () {
     eye.setAttribute('aria-pressed', String(previewing()))
     window.dispatchEvent(new CustomEvent('lavalamp-preview-colours', { detail: previewing() && colours ? colours : null }))
   }
-  for (const state of [gradientKind, ...gradientColours, gradientPoints, stagedTheme, previewing, heatCold, heatCool, heatWarm, heatHot, heatPeak]) state.subscribe(showPending)
-  gradientKind.subscribe(unstageTiles)
+  for (const state of [...gradientColours, gradientPoints, barPending, previewing]) state.subscribe(showPending)
+  barPending.subscribe(on => { if (!on) unstageTiles() })
+  // While a theme is being edited the bar's changes go straight onto the lamp, to be saved with it.
+  for (const state of [...gradientColours, gradientPoints]) state.subscribe(() => { if (editing && barPending()) applyPending() })
   showPending()
 
   panel = div(
@@ -465,18 +504,17 @@ export function createSettingsPanel () {
       // like that too").
       div({ class: 'sub-panel' },
       div({ class: 'swatch-row' },
-        div({ class: 'swatch-caption' }, 'Heat colours'),
-        div({ class: 'gradient-top' }, segmented('gradient', gradientKind, gradientKinds), gradientActions),
+        // The background as one small swatch where the Presets and Gradient switch was (Robert: "we
+        // need a better way to set the background. this is wasting way too much space"; "we can
+        // actually get rid of that toggle and put the background selection there").
+        div({ class: 'gradient-top' }, swatch('Background', 'bgColor', bgColor), span({ class: 'gradient-top-label' }, 'Background'), gradientActions),
         gradientPending
       ),
-      div({ class: 'swatch-row', style: { display: isPresets.bindStyle(() => isPresets() ? 'block' : 'none') } },
+      div({ class: 'swatch-row' },
         div({ class: 'swatch-caption' }, 'Themes'),
-        div({ class: 'themes' }, ...themes.map(t => themeTile(t, false))),
+        themesGrid,
         div({ class: 'swatch-caption', style: { 'margin-top': '10px' } }, 'My themes'),
         myThemesGrid
-      ),
-      swatchRow('Background', always, true,
-        swatch('Back', 'bgColor', bgColor)
       ),
       swatchRow('Flow colours', showFlow, true,
         swatch('Slow', 'flowSlow', flowSlow),
@@ -498,9 +536,10 @@ export function createSettingsPanel () {
       div({ class: musicOpen.bindAttr(() => musicOpen() ? 'sub-panel' : 'sub-panel folded') },
         div({ class: 'sub-title foldable', onclick: e => { if (!e.target.closest('.toggle')) musicOpen(!musicOpen()) } },
           span('Music'),
+          span({ class: 'sub-sub music-sub' }, 'the lava dances to sound'),
           span({ style: { display: 'flex', alignItems: 'center', gap: '8px' } },
             div({ class: musicPending.bindAttr(() => musicPending() ? 'pending' : '') }, toggle('music', music)),
-            span({ class: 'chevron' }, '▾')
+            chevron()
           )
         ),
         div({ class: 'sub-body' },

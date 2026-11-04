@@ -130,8 +130,8 @@
 .swatch-row { padding: 4px 0 8px; }
 .swatch-caption { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(236, 236, 236, 0.6); margin-bottom: 6px; }
 .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
-.themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.theme { height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; font: inherit; }
+.themes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.theme { flex: 1; min-width: 0; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; font: inherit; }
 .theme span { display: inline-block; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); color: #ececec; font-size: 11px; font-weight: 600; }
 .swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
 .swatch-well {
@@ -205,8 +205,10 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .spectrum-wrap { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; display: none; pointer-events: none; }
 .spectrum-view { display: block; width: 100%; height: 200px; opacity: 0.92; }
 .spectrum-legend { position: absolute; right: 10px; top: 4px; font: 11px system-ui, sans-serif; color: rgba(236, 236, 236, 0.7); }
-.sub-title.foldable { cursor: pointer; align-items: center; }
-.sub-title .chevron { margin-left: 8px; transition: transform 0.2s; font-size: 10px; }
+.sub-title.foldable { cursor: pointer; align-items: center; flex-wrap: nowrap; }
+.sub-title .music-sub { flex: 1; min-width: 0; text-align: right; }
+.chevron { display: inline-flex; align-items: center; }
+.sub-title .chevron { margin-left: 4px; transition: transform 0.2s; color: rgba(236, 236, 236, 0.8); }
 .sub-panel.folded .chevron { transform: rotate(-90deg); }
 .sub-panel.folded .sub-body { display: none; }
 .music-pick { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: inherit; color: inherit; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; padding: 4px 8px; cursor: pointer; }
@@ -297,7 +299,7 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 /* The pending gradient: a bar with the midpoint's slider over it, and the eye and tick */
 .gradient-pending { display: flex; flex-direction: column; padding: 6px 9px 6px; }
 .gradient-labels { display: flex; justify-content: space-between; margin: 8px -9px 0; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
-.gradient-bar { position: relative; flex: none; height: 22px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); }
+.gradient-bar { position: relative; flex: none; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); }
 .gradient-bar .gradient-dot { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; padding: 0; gap: 0; border-radius: 50%; border: 2px solid #ececec; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 1px 4px rgba(0, 0, 0, 0.6); cursor: pointer; touch-action: none; box-sizing: border-box; }
 .gradient-bar .gradient-dot.pin { cursor: ew-resize; }
 .gradient-bar .gradient-dot::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; } /* a fingertip's hit area */
@@ -310,10 +312,23 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .icon-button svg { width: 18px; height: 18px; }
 .icon-button.on { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.5); }
 .icon-button.primary { background: var(--accent); color: #111; border-color: transparent; }
-.theme.mine { position: relative; }
-.theme-delete { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; line-height: 15px; border-radius: 50%; background: #2a2a2e; border: 1px solid rgba(255, 255, 255, 0.35); color: #ececec; font-size: 11px; display: none; }
-.theme.mine:hover .theme-delete, .theme.mine.staged .theme-delete { display: block; }
+.theme-item { position: relative; display: flex; gap: 4px; align-items: center; }
+.theme-item.editing { gap: 6px; }
+.theme-edit { flex: none; width: 26px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: rgba(236, 236, 236, 0.8); cursor: pointer; }
+.theme-edit svg { width: 14px; height: 14px; }
+.theme-name { flex: 1; min-width: 0; height: 30px; box-sizing: border-box; padding: 0 8px; border-radius: 8px; border: 1px solid var(--accent); background: rgba(0, 0, 0, 0.35); color: #ececec; font: inherit; font-size: 12px; }
+.theme-name:focus { outline: none; }
+.theme-save { width: 30px; height: 30px; flex: none; }
+.theme-delete { position: absolute; top: -6px; left: -6px; width: 16px; height: 16px; line-height: 15px; text-align: center; border-radius: 50%; background: #2a2a2e; border: 1px solid rgba(255, 255, 255, 0.35); color: #ececec; font-size: 11px; cursor: pointer; display: none; }
+.theme-item:hover .theme-delete, .theme-item:has(.staged) .theme-delete { display: block; }
 .theme-add { background: rgba(255, 255, 255, 0.06); border-style: dashed; }
 .theme-add span { background: none; font-size: 16px; }
 .icon-button:disabled { opacity: 0.35; cursor: default; }
 .theme.staged { box-shadow: 0 0 0 2px var(--accent); }
+
+/* The background swatch, small, in the row with Presets | Gradient */
+.gradient-top .swatch { flex: none; }
+.gradient-top-label { font-size: 12px; color: rgba(236, 236, 236, 0.75); }
+.gradient-top .gradient-actions { margin-left: auto; }
+.gradient-top .swatch label { display: none; }
+.gradient-top .swatch .swatch-well { width: 26px; height: 26px; }

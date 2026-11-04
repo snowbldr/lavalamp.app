@@ -460,57 +460,72 @@ export const applyTheme = theme => {
   for (const [key, state] of Object.entries(colorSettings)) if (theme[key]) state({ ...theme[key] })
 }
 
-// The gradient editor. Presets are the six themes; Gradient is five colours the person sets, Cold
-// and Peak at the ends and Cool, Warm and Hot on pins that slide between them, the five stops the
-// lamp uses taken from it at even steps of heat. It starts from the colours on the lamp and follows
-// them while Presets is shown, so switching to Gradient begins from what is there. Mixed in linear
-// light so the middle does not go muddy. History: Duotone and Mono (Robert: "maybe we should make
-// like a two color gradient version and luminance gradient"), merged into one From and To gradient
-// ("combine duo tone and mono into gradient"), a midpoint slider ("a slider over the gradient to
-// decide the midpoint"), three pins ("3x pins make sense"), then the five heat dots on the bar
-// itself ("we could combine the 5 dots with the gradient selector with the 3 pins. Clicking on one
-// of the bars, the cold or peak, would open a color selector").
-// Nothing is written to the stops until Apply: switching the kind, or a theme clicked, used to
-// replace the five at once and a set of chosen colours was lost to browsing (Robert: "my daughter
-// had a problem where she set all the colors, then she was browsing the colors and changing the
-// mode automatically erases all of the chosen colors"). What would be written is the pending
-// gradient, shown on the bar, on the lamp while previewed (app.js), and applied with the tick.
-export const gradientKinds = ['presets', 'gradient']
-export const gradientKind = fnstate('presets')
-export const stagedTheme = fnstate(null) // a theme clicked, waiting for Apply
-const toLinear = c => Math.pow(c / 255, 2.2)
-const fromLinear = v => Math.round(Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2) * 255)
-const mixLinear = (a, b, t) => ({ r: fromLinear(toLinear(a.r) * (1 - t) + toLinear(b.r) * t), g: fromLinear(toLinear(a.g) * (1 - t) + toLinear(b.g) * t), b: fromLinear(toLinear(a.b) * (1 - t) + toLinear(b.b) * t) })
+// The gradient editor: five colours the person sets, Cold and Peak at the ends and Cool, Warm and
+// Hot on pins that slide between them; the five stops the lamp uses are taken from it at even
+// steps of heat. A theme clicked loads its colours onto it. History: Duotone and Mono (Robert:
+// "maybe we should make like a two color gradient version and luminance gradient"), merged into
+// one From and To gradient ("combine duo tone and mono into gradient"), a midpoint slider ("a
+// slider over the gradient to decide the midpoint"), three pins ("3x pins make sense"), the five
+// heat dots on the bar itself ("we could combine the 5 dots with the gradient selector with the 3
+// pins"), then no Presets and Gradient switch at all ("this also means we really don't need to
+// switch between gradient and presets, we can actually get rid of that toggle").
+// Nothing reaches the lamp until Apply: a theme clicked used to replace the colours at once and a
+// set of chosen colours was lost to browsing (Robert: "my daughter had a problem where she set all
+// the colors, then she was browsing the colors and changing the mode automatically erases all of
+// the chosen colors"). With nothing pending the bar follows the lamp's colours; once changed (a
+// dot, a pin, a theme) it is pending, shown on the lamp while previewed (app.js), applied with the
+// tick. Mixed in linear light so the middle does not go muddy.
+// Where Cool, Warm and Hot sit along the heat, 0 to 1, saved with the colours: the renderers
+// draw the gradient through the five at their places (overlays.js heatColor). The pins were first
+// read off as five even steps, and moving one barely changed the lava (Robert: "the gradient
+// rendering doesn't change on the lava itself when I change how the gradient applies").
+export const heatCoolAt = fnstate(0.25)
+export const heatWarmAt = fnstate(0.5)
+export const heatHotAt = fnstate(0.75)
 const STOP_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
+const AT_KEYS = ['heatCoolAt', 'heatWarmAt', 'heatHotAt']
 const stops = [heatCold, heatCool, heatWarm, heatHot, heatPeak]
+const places = [heatCoolAt, heatWarmAt, heatHotAt]
+const EVEN = [0.25, 0.5, 0.75]
 export const gradientColours = stops.map(state => fnstate({ ...state() })) // the five dots' colours
-export const gradientPoints = fnstate([0.25, 0.5, 0.75]) // the pins of Cool, Warm and Hot, 0 to 1
-// Follow the lamp's colours while Presets is shown: the pins back to even.
-const followStops = () => { if (gradientKind() === 'presets') { stops.forEach((state, k) => gradientColours[k]({ ...state() })); gradientPoints([0.25, 0.5, 0.75]) } }
-for (const state of stops) state.subscribe(followStops)
-// The gradient at u, 0 to 1: the five dots at their places, joined in linear light.
-export const gradientAt = u => {
-  const at = [0, ...gradientPoints(), 1]
-  let k = 0
-  while (k < 3 && u > at[k + 1]) k++
-  const span = at[k + 1] - at[k]
-  return mixLinear(gradientColours[k](), gradientColours[k + 1](), span > 0 ? Math.max(0, Math.min(1, (u - at[k]) / span)) : 0)
+export const gradientPoints = fnstate(places.map(p => p())) // the pins of Cool, Warm and Hot
+export const pendingExtras = fnstate(null) // a theme's back and flow colours, waiting with it
+export const gradientPending = fnstate(false) // the bar differs from the lamp
+let quiet = false // the bar being set by the code, not by a hand
+const setBar = (colours, points) => { quiet = true; colours.forEach((c, k) => gradientColours[k]({ ...c })); gradientPoints(points.slice()); quiet = false }
+const fromLamp = () => setBar(stops.map(s => s()), places.map(p => p()))
+for (const state of [...gradientColours, gradientPoints]) state.subscribe(() => { if (!quiet) gradientPending(true) })
+// The lamp's colours changed (a swatch, an apply, a reset): the bar follows them when nothing is pending.
+for (const state of [...stops, ...places]) state.subscribe(() => { if (!gradientPending()) fromLamp() })
+// A theme onto the bar, waiting for the tick; one with no places has them even.
+export const loadTheme = theme => {
+  setBar(STOP_KEYS.map(k => theme[k]), AT_KEYS.map((k, i) => Number(theme[k]) > 0 && Number(theme[k]) < 1 ? Number(theme[k]) : EVEN[i]))
+  const extras = {}
+  for (const key of ['bgColor', 'flowSlow', 'flowFast']) if (theme[key]) extras[key] = { ...theme[key] }
+  pendingExtras(extras)
+  gradientPending(true)
 }
-// The colours Apply would write: the five stops for Gradient, every colour of a staged theme for
-// Presets, or null with no theme staged.
+// What Apply would write, or null with nothing pending: the five colours, their places, and a
+// theme's back and flow.
 export const pendingColours = () => {
-  if (gradientKind() === 'presets') { const t = stagedTheme(); if (!t) return null; const out = {}; for (const key of Object.keys(colorSettings)) if (t[key]) out[key] = { ...t[key] }; return out }
-  const out = {}
-  STOP_KEYS.forEach((key, k) => { out[key] = gradientAt(k / 4) })
+  if (!gradientPending()) return null
+  const out = { ...(pendingExtras() || {}) }
+  STOP_KEYS.forEach((key, k) => { out[key] = { ...gradientColours[k]() } })
+  AT_KEYS.forEach((key, k) => { out[key] = gradientPoints()[k] })
   return out
 }
 export const applyPending = () => {
-  const colours = pendingColours()
-  if (!colours) return
-  for (const [key, value] of Object.entries(colours)) colorSettings[key](value)
-  stagedTheme(null)
+  const pending = pendingColours()
+  if (!pending) return
+  for (const [key, value] of Object.entries(pending)) { if (colorSettings[key]) colorSettings[key](value); else if (AT_KEYS.includes(key)) places[AT_KEYS.indexOf(key)](value) }
+  pendingExtras(null)
+  gradientPending(false)
 }
-gradientKind.subscribe(() => { stagedTheme(null); followStops() })
+// Back to the lamp's colours.
+export const dropPending = () => { pendingExtras(null); gradientPending(false); fromLamp() }
+// The places as they are, and set, for a saved theme.
+export const takePlaces = () => Object.fromEntries(AT_KEYS.map((k, i) => [k, places[i]()]))
+export const putPlaces = theme => AT_KEYS.forEach((k, i) => places[i](Number(theme[k]) > 0 && Number(theme[k]) < 1 ? Number(theme[k]) : EVEN[i]))
 
 // These keys are the saved and shared JSON format, so they must not change.
 // lavaColor and lavaHighlight were here until 2026-10-31, when the heat map became the only
@@ -518,7 +533,7 @@ gradientKind.subscribe(() => { stagedTheme(null); followStops() })
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, musicVent, seed }
+const numberSettings = { heatCoolAt, heatWarmAt, heatHotAt, interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, musicVent, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 // touchStrength and eddyFalloff: their knobs go to 0 (found by the round trip check, 2026-11-03).
 const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff', 'musicTempo', 'musicPulse', 'musicSpawn', 'musicSpin', 'musicLead', 'musicActivity', 'musicDrop', 'musicBoom', 'musicBusyEddies', 'musicFlip', 'musicWobble', 'musicVent', 'musicFloor', 'musicLift', 'musicTurb', 'musicKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
@@ -532,6 +547,9 @@ const defaults = () => ({
   heatPeak: { ...defaultHeatColors.heatPeak },
   flowSlow: { ...defaultFlowSlow },
   flowFast: { ...defaultFlowFast },
+  heatCoolAt: 0.25,
+  heatWarmAt: 0.5,
+  heatHotAt: 0.75,
   interactionRadius: defaultInteractionRadius(),
   gravityStrength: defaultGravityStrength(),
   pull: defaultPull(),

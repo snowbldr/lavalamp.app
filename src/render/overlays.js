@@ -12,14 +12,19 @@ export const HEATER_CELL = 4 // lamp px per column of the heater strip
 
 export const mix = (a, b, f) => [a.r + (b.r - a.r) * f, a.g + (b.g - a.g) * f, a.b + (b.b - a.b) * f].map(Math.round)
 
-// The heat colour for t in [0, 1], interpolated along the five stops in `look`.
+// The heat colour for t in [0, 1], interpolated along the five stops in `look`, each at its place
+// in look.heatAt (0, Cool, Warm, Hot, 1; even when it is missing), set by the gradient's pins.
+const EVEN_AT = [0, 0.25, 0.5, 0.75, 1]
 export function heatColor (look, t) {
-  const pos = Math.max(0, Math.min(1, t)) * (HEAT_STOPS.length - 1)
-  const k = Math.min(HEAT_STOPS.length - 2, Math.floor(pos))
-  return mix(look[HEAT_STOPS[k]], look[HEAT_STOPS[k + 1]], pos - k)
+  const at = look.heatAt || EVEN_AT
+  const u = Math.max(0, Math.min(1, t))
+  let k = 0
+  while (k < HEAT_STOPS.length - 2 && u > at[k + 1]) k++
+  const span = at[k + 1] - at[k]
+  return mix(look[HEAT_STOPS[k]], look[HEAT_STOPS[k + 1]], span > 0 ? Math.max(0, Math.min(1, (u - at[k]) / span)) : 0)
 }
 
-export const paletteKey = look => HEAT_STOPS.map(stop => { const c = look[stop]; return c ? `${c.r},${c.g},${c.b}` : '' }).join('/')
+export const paletteKey = look => HEAT_STOPS.map(stop => { const c = look[stop]; return c ? `${c.r},${c.g},${c.b}` : '' }).join('/') + '@' + (look.heatAt || EVEN_AT).join(',')
 
 // A strip along the floor coloured by the heater power under each column, with the heating
 // elements sitting on it as half ellipses in their own proportions (footballs, three times wider

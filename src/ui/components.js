@@ -460,6 +460,13 @@ export const pair = (titleA, controlA, titleB, controlB) => div(
 // without, it is untitled and always open (Robert: "Remove the word lamp"). `tools`, when
 // given, sit on the title bar beside the chevron (the help button lives by Advanced; Robert:
 // "probably can move the ? down by advanced").
+// A fold's arrow, drawn rather than a character, big enough to read as one (Robert: "the expand
+// arrow is super tiny and needs to be more obviously an arrow").
+export const chevron = () => {
+  const c = span({ class: 'chevron' })
+  c.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
+  return c
+}
 export const section = (title, open, ...rows) => sectionWith(null, title, open, ...rows)
 export const sectionWith = (tools, title, open, ...rows) => open
   ? div(
@@ -469,7 +476,7 @@ export const sectionWith = (tools, title, open, ...rows) => open
       button(
         { class: 'panel-section-title', onclick: () => open(!open()) },
         span(title),
-        span({ class: 'chevron' }, '▾')
+        chevron()
       ),
       ...(tools ? [tools] : [])
     ),

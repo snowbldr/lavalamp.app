@@ -89,6 +89,9 @@ import {
   gravityStrength,
   heatSpots,
   heatCold,
+  heatCoolAt,
+  heatWarmAt,
+  heatHotAt,
   heatCool,
   heatHot,
   heatPeak,
@@ -294,10 +297,15 @@ export async function start () {
   const look = {}
   // The colours panel's preview: the pending gradient (a theme, Duotone or Mono) drawn on the lamp
   // without being set, and the set colours back when it ends (settingsPanel.js).
+  // Where Cool, Warm and Hot sit along the heat (settings.js heatCoolAt), for the renderers.
+  const heatAtNow = () => [0, heatCoolAt(), heatWarmAt(), heatHotAt(), 1]
+  look.heatAt = heatAtNow()
+  for (const state of [heatCoolAt, heatWarmAt, heatHotAt]) state.subscribe(() => { look.heatAt = heatAtNow() })
   const colourStates = { heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
   window.addEventListener('lavalamp-preview-colours', e => {
     const colours = e.detail
     for (const [key, state] of Object.entries(colourStates)) look[key] = colours && colours[key] ? colours[key] : state()
+    look.heatAt = colours && colours.heatCoolAt ? [0, colours.heatCoolAt, colours.heatWarmAt, colours.heatHotAt, 1] : heatAtNow()
     const back = colours && colours.bgColor ? colours.bgColor : bgColor()
     const el = document.getElementById('lamp-back')
     if (el) el.style.background = `rgb(${back.r}, ${back.g}, ${back.b})`
