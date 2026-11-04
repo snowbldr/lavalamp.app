@@ -408,7 +408,7 @@ export function createSimulation ({ width, height, params }) {
   const SPLAT_PX = 240
   const SPLAT_SPEED = 320
   const SPLAT_LOBES = [5, 9]
-  const splatRequests = [] // [x, y] where each is to start, or null for a point on the pool's surface
+  const splatRequests = [] // [x, y, size] where each is to start (null for a point on the pool's surface) and how big, 1 a drop's
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -679,7 +679,7 @@ export function createSimulation ({ width, height, params }) {
       const lobes = Math.round(randomRange(SPLAT_LOBES[0], SPLAT_LOBES[1]))
       // From a point on the lava's surface (the page finds it from the particles; the estimate here,
       // poolSurface, sits deep in warm lava, and from the open tank it only reached the pool faded).
-      pulses.push({ x: at ? at[0] : randomRange(0.15, 0.85) * width, y: at ? at[1] : poolSurface(), start: time, splat: { lobes, a: random() * 2 * Math.PI, b: random() * 2 * Math.PI } })
+      pulses.push({ x: at && at[0] != null ? at[0] : randomRange(0.15, 0.85) * width, y: at && at[1] != null ? at[1] : poolSurface(), start: time, splat: { lobes, a: random() * 2 * Math.PI, b: random() * 2 * Math.PI, size: at && at[2] > 0 ? Math.min(1, at[2]) : 1 } })
     }
     for (let k = pulses.length - 1; k >= 0; k--) if (time - pulses[k].start > PULSE_LIFE) pulses.splice(k, 1)
     if (alive < drifters && time >= nextDrifter) {
@@ -761,6 +761,10 @@ export function createSimulation ({ width, height, params }) {
       const speed = w.splat ? SPLAT_SPEED : PULSE_SPEED
       const u = (r - speed * age) / PULSE_WIDTH
       if (u * u > 9) continue
+      // A small splat (a hi-hat's) carries the lava as far as its size and lives as long: a quarter
+      // of a drop's goes 60 px and is gone in 0.4 s.
+      const size = w.splat ? w.splat.size : 1
+      if (age > PULSE_LIFE * size) continue
       // The ring's speed: the derivative of a Gaussian, out ahead of the ring and in behind it; a
       // splat's shaped by its lobes round the circle.
       let shape = 1
@@ -771,7 +775,7 @@ export function createSimulation ({ width, height, params }) {
       // A pulse pushes out ahead and back in behind, no net move; a splat only out, so the lava it
       // shoots along a lobe stays thrown, SPLAT_PX at the peak of a lobe.
       const v = w.splat
-        ? Math.exp(-u * u) * SPLAT_PX * speed / (PULSE_WIDTH * 1.772) * (1 - age / PULSE_LIFE) * shape
+        ? Math.exp(-u * u) * SPLAT_PX * size * speed / (PULSE_WIDTH * 1.772) * (1 - age / (PULSE_LIFE * size)) * shape
         : -u * Math.exp(-u * u) * PULSE_PX * speed / PULSE_WIDTH * 2.33 * (1 - age / PULSE_LIFE)
       if (w.splat) { splatX += dx / r * v; splatY += dy / r * v } else { out[0] += dx / r * v; out[1] += dy / r * v }
     }
@@ -1865,7 +1869,7 @@ export function createSimulation ({ width, height, params }) {
     // immediately start reacting to the music").
     endWarmup () { heaterTime = Math.max(heaterTime, WARMUP); nextDrifter = Math.min(nextDrifter, time) },
     pulseWave () { pulseRequests++ },
-    splat (x, y) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null) },
+    splat (x, y, size) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y, size] : [null, null, size]) },
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big, fullness) { if (level != null) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big } if (fullness) potFullness = fullness }, // a null level only counts the pots
     dropPot (strength, at) { dropRequest = Math.max(dropRequest, strength || 0); if (at >= 0) dropAt = at },

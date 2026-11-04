@@ -28,7 +28,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let light = 0 // pots to light at the next frame (the music's beat)
   let eddy = 0 // eddies to bear at the next frame (the music's beat)
   let pulse = 0 // pulse waves to send
-  let splat = [] // splats to send, [x, y] each
+  let splat = [] // splats to send, [x, y, size] each
   const flip = [] // eddy flips to send, each a chance
   let vent = 0 // seconds to lift the lid for
   let ventSmall = false // a train's vent: never the drop's big pot
@@ -147,7 +147,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     lightElement () { light++ },
     spawnEddy () { eddy++ },
     pulseWave () { pulse++ },
-    splat (x, y) { splat.push([x, y]) },
+    splat (x, y, size) { splat.push([x, y, size]) },
     flipEddies (chance = 1) { flip.push(chance) },
     ventPot (seconds, smallOnly) { vent = Math.max(vent, seconds || 0); ventSmall = !!smallOnly },
     retirePot () { retire = true },

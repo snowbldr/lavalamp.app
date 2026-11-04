@@ -941,7 +941,7 @@ export function createSettingsPanel () {
           ['Floor', 'How much the heat range turns up the floor heat, on top of the Floor knob: at 1x a full signal doubles it.'],
           ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
           ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
-          ['Kick', 'How much the kick range sharpens the Kick, the recoil of necks and skins.'],
+          ['Kick', 'The kick range (the yellow band, 2 to 8 kHz: hi-hats and the click of a kick): each hit throws a small splat into the lava, this big (1 is a drop\'s), and its level sharpens the recoil of necks and skins. 0 is off.'],
           ['Lead', 'With Drop at 0: how many seconds before a beat a pot is lit, so the blob lifts on the beat rather than after it. The lamp learns the beat from the music and predicts the next one; 0 lights the pot as the beat is heard.'],
           ['Drop', 'One pot is kept closed and superheating; on the beat it opens and is blasted, so a hot glob leaves exactly on the beat, and the next pot closes. It opens every Every beats, and on the first kick after a breakdown, when it has charged longest and goes up hottest. 0 lights the pots ahead of the beat instead, by Lead.'],
           ['Boom', 'A deep bass note, one that comes in out of a quiet low end and holds, opens a pot while the song is busy, so a burst of lava goes up with it. Sets how hard it is blasted; 0 is off.'],

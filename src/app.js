@@ -537,6 +537,7 @@ export async function start () {
   const MID_HIT_BASS = 1 // the bass's rise under this: not a kick
   let dropCharged = false // a pot is lidded and heating (see driveMusic)
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
+  const HAT_SPLAT = 1 // by Kick (0.5 by default): half a drop's splat; a quarter only ruffled the pool's surface
   const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; train = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters(); params.ceilingCool = 1 }
   music.subscribe(on => { if (on) { musicLog.length = 0; musicLogStart = listener.time; if (sim.endWarmup) sim.endWarmup(); listen() } else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
@@ -571,13 +572,13 @@ export async function start () {
   // known yet): every particle below the floor line counted to its nearest pot.
   // A splat's start: the top of the lava in a random column, a particle's own place, so it blasts
   // into the lava from its surface (a pool's top or a blob's).
-  const splatAt = () => {
+  const splatAt = size => {
     const st = sim.state, n = sim.count, H = sim.height, W = sim.width
-    if (!st || !n || !W) { if (sim.splat) sim.splat(); return }
+    if (!st || !n || !W) { if (sim.splat) sim.splat(undefined, undefined, size); return }
     const x0 = (0.15 + 0.7 * Math.random()) * W
     let best = Infinity
     for (let i = 0; i < n; i++) { const y = st.y[i]; if (y < best && y > 0 && y < H && Math.abs(st.x[i] - x0) < 30) best = y }
-    if (sim.splat) { if (best < Infinity) sim.splat(x0, best); else sim.splat() }
+    if (sim.splat) { if (best < Infinity) sim.splat(x0, best, size); else sim.splat(undefined, undefined, size) }
   }
   const potLava = () => {
     const els = sim.heaterElements ? sim.heaterElements() : null
@@ -903,6 +904,10 @@ export async function start () {
     }
     // A hat brings a spinning eddy now and then, more often in a busy part.
     if (m.hat && sim.spawnEddy && Math.random() < musicSpin() * act * chance * 0.25) sim.spawnEddy()
+    // A hi-hat (the kick range, 2 to 8 kHz) throws a small splat, HAT_SPLAT of a drop's by Kick, so
+    // the lava sizzles with the hats (Robert: "for the kick yellow band... should have a stronger
+    // effect. I noticed zero effect from it"; it only sharpened the recoil of parting necks).
+    if (m.hat && !calm && musicKick() > 0) splatAt(HAT_SPLAT * musicKick())
     // Pace follows the tempo a little: against 120 bpm, by Tempo, held to 0.75 to 1.3 times,
     // eased over two seconds so it breathes rather than jumps.
     if (m.bpm > 40) {
