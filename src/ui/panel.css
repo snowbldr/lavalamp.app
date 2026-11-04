@@ -146,10 +146,12 @@
 .picker-sv { position: relative; height: 110px; border-radius: 6px; cursor: crosshair; touch-action: none; }
 .picker-hue { position: relative; height: 12px; margin-top: 10px; border-radius: 6px; cursor: pointer; touch-action: none; background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
 .picker-dot { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); transform: translate(-50%, -50%); pointer-events: none; }
-.picker-row { margin-top: 8px; }
-.picker-from { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: rgba(236, 236, 236, 0.7); flex-wrap: wrap; }
+.picker-row { margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.picker-row .picker-hex { width: 62px; flex: none; box-sizing: border-box; }
+.picker-from { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 11px; color: rgba(236, 236, 236, 0.7); flex-wrap: nowrap; }
 .picker-from-label { margin-right: 2px; }
-.picker-from-well { width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); cursor: pointer; padding: 0; }
+.picker-from-well { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.35); cursor: pointer; padding: 0; }
+.picker-from-well.current { border-color: #ececec; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6), 0 0 0 3px #ececec; cursor: default; }
 /* The hex of the last hovered or pressed swatch, to copy from or paste into */
 .swatch-hexrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
 .swatch-hex-name { min-width: 36px; }

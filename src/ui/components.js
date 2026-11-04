@@ -362,20 +362,23 @@ export const picker = sw => {
   const hue = div({ class: 'picker-hue' }, hueDot)
   dragger(sv, (fx, fy) => { s = fx; v = 1 - fy; set() })
   dragger(hue, fx => { h = Math.min(359.99, fx * 360); set() })
-  const others = [...sw.parentElement.children].filter(o => o !== sw && o.swatchState)
-  const from = div(
+  // The From row holds every swatch of the row, this one too, ringed, so the row reads in its order
+  // with none missing (Robert: "the from should show the currently selected position too... it's
+  // kind of confusing when it's missing one. also the hex code can be on the same row as from").
+  const row = [...sw.parentElement.children].filter(o => o.swatchState)
+  const from = row.length > 1 ? div(
     { class: 'picker-from' },
     span({ class: 'picker-from-label' }, 'From'),
-    ...others.map(o => button({
+    ...row.map(o => button({
       type: 'button',
-      class: 'picker-from-well',
-      title: `Take ${o.swatchTitle}'s colour`,
-      'aria-label': `Take ${o.swatchTitle}'s colour`,
+      class: o === sw ? 'picker-from-well current' : 'picker-from-well',
+      title: o === sw ? `${o.swatchTitle}, the one being changed` : `Take ${o.swatchTitle}'s colour`,
+      'aria-label': o === sw ? `${o.swatchTitle}, the one being changed` : `Take ${o.swatchTitle}'s colour`,
       style: { background: o.swatchState.bindStyle(() => rgbToHex(o.swatchState())) },
-      onclick: () => { state({ ...o.swatchState() }); ({ h, s, v } = rgbToHsv(state())); paint() }
+      onclick: () => { if (o === sw) return; state({ ...o.swatchState() }); ({ h, s, v } = rgbToHsv(state())); paint() }
     }))
-  )
-  const el = div({ class: 'picker' }, div({ class: 'picker-title' }, sw.swatchTitle), sv, hue, div({ class: 'picker-row' }, hex), from)
+  ) : null
+  const el = div({ class: 'picker' }, div({ class: 'picker-title' }, sw.swatchTitle), sv, hue, div({ class: 'picker-row' }, hex, ...(from ? [from] : [])))
   el.swatch = sw
   sw.closest('.swatch-row').appendChild(el)
   openPicker = el
