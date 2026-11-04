@@ -309,15 +309,23 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .gradient-labels .back-button label { display: none; }
 .gradient-labels .back-button .swatch-well { width: 96px; height: 24px; border-radius: 8px; border-width: 1px; display: flex; align-items: center; justify-content: center; }
 .gradient-labels .back-button .swatch-well::after { content: 'Background'; font-size: 11px; font-weight: 600; color: #ececec; text-shadow: 0 0 3px #000, 0 0 2px #000; }
-.gradient-bar { position: relative; flex: none; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); }
+.gradient-bar { position: relative; flex: none; height: 30px; border-radius: 15px; border: 0; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 2px 3px rgba(0, 0, 0, 0.45); }
+/* A machined aluminium rim (Robert: "it needs a cool border around the gradient. Like maybe something
+   that looks like a machined aluminum rim"): a 3 px bezel lit at a few angles round the turn, a dark
+   lip where it meets the gradient, and a faint shadow under it. */
+.gradient-bar::before { content: ''; position: absolute; inset: -4px; z-index: -1; border-radius: 19px; pointer-events: none;
+  background: conic-gradient(from 200deg, #f4f4f7, #8d8e94 12%, #d9dade 24%, #6f7076 38%, #eeeef2 50%, #8d8e94 62%, #cfd0d5 74%, #6f7076 88%, #f4f4f7);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(0, 0, 0, 0.6); }
 .gradient-bar .gradient-dot { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; padding: 0; gap: 0; border-radius: 50%; border: 2px solid #ececec; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 1px 4px rgba(0, 0, 0, 0.6); cursor: pointer; touch-action: none; box-sizing: border-box; }
 /* Two kinds of knob (Robert: "I think we need two different knobs for cold, hot and the 3 sliders.
    it's confusing that the end ones don't move and I keep trying to move them"): the ends are
    rounded squares sat inside the bar's ends, colour chips to click; the pins are tall handles
    standing out of the bar with a grip line, to drag. */
-.gradient-bar .gradient-dot.end { width: 20px; height: 20px; margin-top: -10px; border-radius: 6px; }
-.gradient-bar .gradient-dot.end:first-child { margin-left: 3px; }
-.gradient-bar .gradient-dot.end:last-child { margin-left: -23px; }
+/* Cold and Hot as circles nested in the bar's round ends, each centred on its end's curve (Robert:
+   "make the ends full rounded and make the cold/hot circles nested in the fully rounded edges") */
+.gradient-bar .gradient-dot.end { width: 22px; height: 22px; margin-top: -11px; border-radius: 50%; }
+.gradient-bar .gradient-dot.end:first-child { margin-left: 4px; }
+.gradient-bar .gradient-dot.end:last-child { margin-left: -26px; }
 .gradient-bar .gradient-dot.pin { width: 14px; height: 24px; margin: -12px 0 0 -7px; border-radius: 7px; cursor: ew-resize; } /* inside the bar (Robert: "make the pills fit inside the gradient bar") */
 .gradient-bar .gradient-dot.pin::after { content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 10px; margin: -5px 0 0 -1px; border-radius: 1px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 2px rgba(0, 0, 0, 0.8); }
 .gradient-bar .gradient-dot::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; } /* a fingertip's hit area */
@@ -389,6 +397,6 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .edit-name:focus { outline: none; box-shadow: 0 0 0 1px var(--edit-accent); }
 .edit-row .icon-button { width: 30px; height: 30px; flex: none; }
 .edit-row .icon-button:not(.primary) { background: #2c2c30; }
-.gradient-bar.editing { box-shadow: 0 0 0 2px var(--edit-accent); }
+.gradient-bar.editing { outline: 2px solid var(--edit-accent); outline-offset: 6px; border-radius: 15px; }
 .theme.editing-tile { box-shadow: 0 0 0 2px var(--edit-accent); }
 @keyframes edit-pop { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
