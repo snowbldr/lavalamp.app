@@ -35,6 +35,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let charge = 0 // the lidded pot's heat, held
   let chargeBig = false // the drop's pot rather than a beat's
   let drop = 0 // a drop's blast strength, 0 for none
+  let dropAt = -1 // the pot it asks for, -1 for the usual
   let sentParams = ''
   const empty = new Float32Array(0)
   const state = { x: empty, y: empty, vx: empty, vy: empty, temp: empty, id: new Int32Array(0) }
@@ -104,7 +105,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, drop, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, drop, dropAt, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
@@ -113,6 +114,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       ventSmall = false
       retire = false
       drop = 0
+      dropAt = -1
       if (!wantNow.cups) { cups = null }
     },
     // Fill `shown` with the positions for this instant, between the last two states, and give
@@ -144,7 +146,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     ventPot (seconds, smallOnly) { vent = Math.max(vent, seconds || 0); ventSmall = !!smallOnly },
     retirePot () { retire = true },
     chargePot (level, big) { charge = level; chargeBig = !!big },
-    dropPot (strength) { drop = Math.max(drop, strength) },
+    dropPot (strength, at) { drop = Math.max(drop, strength); if (at >= 0) dropAt = at },
     setTouches (list) { touches = list || [] },
     transform (fn) {
       const map = affine(fn)

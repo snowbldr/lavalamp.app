@@ -318,6 +318,7 @@ export function createSimulation ({ width, height, params }) {
   let charged = null
   let lidPot = -1
   let dropRequest = 0
+  let dropAt = -1 // the pot a drop asks for by index (a clap: the one holding the most lava), -1 for the usual
   // The pump (Robert: "on the drop, the heat should radiate up into the lamp from the pot that
   // fires. that way it gets motion even if the pot is completely empty. it should follow a gradient
   // of some kind. one realistic version of this would be a pulse pump that shot hot fluid from the
@@ -1096,7 +1097,10 @@ export function createSimulation ({ width, height, params }) {
       if (ventRequest > 0) { if (charged && charged.mode === 'charge' && !(ventSmallOnly && charged.big) && !(charged.coolUntil > 0)) ventUntil = heaterTime + ventRequest; ventRequest = 0; ventSmallOnly = false }
       if (charged && charged.mode === 'charge') lidPot = heaterTime < ventUntil ? -1 : charged.pot
       if (dropRequest > 0) {
-        const el = charged || biggestCold()
+        // A pot asked for by name (a clap's fullest) wins over the lidded one, which is let go.
+        const wanted = dropAt >= 0 ? elements[dropAt] : null
+        if (wanted && charged && wanted !== charged) { charged.mode = null; charged.big = false; charged.heat = 0; charged.next = 0; charged = null }
+        const el = wanted || charged || biggestCold()
         if (el) {
           // A pot not charged beforehand (a clap, or a drop with nothing closed) is blasted across
           // its whole cup, as the drop's charged one is.
@@ -1113,10 +1117,12 @@ export function createSimulation ({ width, height, params }) {
         charged = null
         lidPot = -1
         dropRequest = 0
+        dropAt = -1
       }
     } else {
       lightRequests = 0
       dropRequest = 0
+      dropAt = -1
       charged = null
       lidPot = -1
       for (const el of elements) {
@@ -1773,7 +1779,7 @@ export function createSimulation ({ width, height, params }) {
     pulseWave () { pulseRequests++ },
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big },
-    dropPot (strength) { dropRequest = Math.max(dropRequest, strength || 0) },
+    dropPot (strength, at) { dropRequest = Math.max(dropRequest, strength || 0); if (at >= 0) dropAt = at },
     ventPot (seconds, smallOnly) { ventRequest = Math.max(ventRequest, seconds || 0); ventSmallOnly = !!smallOnly },
     retirePot () { retireRequest = true },
     get lid () { return lidPot },

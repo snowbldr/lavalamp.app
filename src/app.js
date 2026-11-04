@@ -512,6 +512,23 @@ export async function start () {
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
   let bufferAt = -1e9
   let lavaLow = false
+  // The pot holding the most lava, by its index, or -1 when none holds any (or the lava is not
+  // known yet): every particle below the floor line counted to its nearest pot.
+  const fullestPot = () => {
+    const els = sim.heaterElements ? sim.heaterElements() : null
+    const st = sim.state, n = sim.count, H = sim.height
+    if (!els || !els.length || !st || !n || !H) return -1
+    const counts = new Array(els.length).fill(0)
+    for (let i = 0; i < n; i++) {
+      if (st.y[i] <= H) continue
+      let best = 0
+      for (let k = 1; k < els.length; k++) if (Math.abs(st.x[i] - els[k].x) < Math.abs(st.x[i] - els[best].x)) best = k
+      counts[best]++
+    }
+    let best = 0
+    for (let k = 1; k < counts.length; k++) if (counts[k] > counts[best]) best = k
+    return counts[best] > 0 ? best : -1
+  }
   const CEILING_COOL = 5
   const VENT_TIME = 0.3 // seconds the lid is lifted for
   // Seconds between pots on deep notes: 3 skipped C-C's 0:57.1 (1.9 s after the one at the drop);
@@ -575,8 +592,13 @@ export async function start () {
     // It should heat a whole pot instantly"): a clap blasts a whole pot as a drop does (the charged
     // one if there is one, else the biggest cold pot, its whole cup) with the drop's pump, at most
     // every CLAP_POT_GAP; the claps between bring the eddy and the ring.
+    // The pot fired is the one holding the most lava, counted from the particles in each pot's
+    // cup (below the floor line, each to its nearest pot): the lidded pot or the biggest cup was
+    // at times an empty one with full ones beside it (Robert: "sometimes it's firing pots that are
+    // empty when there are pots with lava, when we get a snap in mic mode we should fire the
+    // biggest filled lava pot").
     if (m.clap && musicSource() === 'mic') {
-      if (musicNow0 - lastClapPotAt >= CLAP_POT_GAP && sim.dropPot) { lastClapPotAt = musicNow0; sim.dropPot(1.5) }
+      if (musicNow0 - lastClapPotAt >= CLAP_POT_GAP && sim.dropPot) { lastClapPotAt = musicNow0; sim.dropPot(1.5, fullestPot()) }
       if (sim.spawnEddy) sim.spawnEddy()
       if (sim.pulseWave) sim.pulseWave()
     }

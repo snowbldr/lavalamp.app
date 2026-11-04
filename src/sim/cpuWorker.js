@@ -134,7 +134,7 @@ self.onmessage = ({ data: m }) => {
       if (m.vent) sim.ventPot(m.vent, m.ventSmall)
       if (m.retire) sim.retirePot()
       sim.chargePot(m.charge || 0, m.chargeBig)
-      if (m.drop) sim.dropPot(m.drop)
+      if (m.drop) sim.dropPot(m.drop, m.dropAt)
       if (m.want) want = m.want
       setPace(m.pace)
       break
