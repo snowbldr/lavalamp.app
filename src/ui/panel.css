@@ -132,10 +132,11 @@
 .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
 .themes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .themes.builtin { grid-template-columns: repeat(3, 1fr); }
-.theme { position: relative; flex: 1; min-width: 0; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0 0 7px; font: inherit; } /* the name centred on the gradient, above the background band */
+.theme { position: relative; flex: 1; min-width: 0; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; font: inherit; }
 .theme-add { padding: 0; }
-.theme::after { content: ''; position: absolute; left: -1px; right: -1px; bottom: -1px; height: calc(25% + 1px); background: var(--theme-back, transparent); border-top: 1px solid rgba(255, 255, 255, 0.4); border-radius: 0 0 8px 8px; pointer-events: none; }
+.theme::after { content: ''; position: absolute; left: -1px; right: -1px; bottom: -1px; height: calc(25% + 1px); background: var(--theme-back, transparent); border-radius: 0 0 8px 8px; pointer-events: none; }
 .theme-add::after { display: none; }
+.theme:not(.theme-add) span { position: relative; z-index: 1; transform: translateY(-4px); } /* the name centred on the gradient, above the background band */
 .theme span { display: inline-block; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); color: #ececec; font-size: 11px; font-weight: 600; }
 .swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
 .swatch-well {
