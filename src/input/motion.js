@@ -55,12 +55,14 @@ export function createMotionInput () {
       if (Math.abs(y) > Math.abs(x) + margin) return y > 0 ? 'bottom' : 'top'
       return current
     },
-    // iOS only delivers motion events after the page asks, and only from inside a user gesture.
+    // iOS only delivers motion events after the page asks, and only from inside a user gesture
+    // that counts (a touchend or a click: a pointerup on the lamp, which takes its own touches, does
+    // not, and the ask is refused without a prompt). Resolves true once there is an answer, either
+    // way, so the caller can stop asking; false to ask again on the next tap.
     requestPermission () {
       asked = true
-      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
-        DeviceMotionEvent.requestPermission().catch(() => {})
-      }
+      if (typeof DeviceMotionEvent === 'undefined' || typeof DeviceMotionEvent.requestPermission !== 'function') return Promise.resolve(true)
+      return DeviceMotionEvent.requestPermission().then(state => state === 'granted' || state === 'denied', () => false)
     },
     // One line for the panel: whether motion events arrive, and the likeliest reason when they
     // do not. A browser only delivers them on a secure context (https, and a certificate it

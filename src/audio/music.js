@@ -168,6 +168,25 @@ const STAB_GAP = 0.1
 const STAB_AFTER = 0.05
 const STAB_BASS = 35
 const STAB_REST = 10
+// The clap: a hand clap or a finger snap at the microphone, for when no music is playing (Robert:
+// "My kids attempted to snap and clap at it to trigger it when in mic mode, can we add that
+// without breaking the music sync?"). A clap is the CLAP_BAND jumping CLAP_RISE dB over its
+// lowest in the last BEAT_RISE_FRAMES frames and CLAP_OVER over its mean in the last CLAP_BEFORE
+// seconds, rising CLAP_BASS dB more than the bass (20 to 150 Hz) does, at most every
+// CLAP_REFRACTORY. (A snap is a click of 4 ms, under the analyser's 43 ms window: it spills into
+// the bass, up 20 to 26 dB against 36 in the band, so the bass may rise, only less.) It only
+// counts while the lamp is calm and has heard fewer than CLAP_BEATS beats in the last CLAP_QUIET
+// seconds, so a snare or a hat in a song is never a clap, and a snap heard as a beat does not
+// shut out the next claps.
+const CLAP_BAND = [1500, 8000]
+const CLAP_RISE = 15
+const CLAP_OVER = 18
+const CLAP_BEFORE = 0.5
+const CLAP_BASS = 8
+const CLAP_BEATS = 3
+const CLAP_REFRACTORY = 0.25
+const CLAP_QUIET = 4
+const CLAP_ROOM = -55 // dB: the 2 s level under this, a room with no music (the songs' quiet parts sit about -40 to -55)
 const SECTION_SMOOTH = 2 // seconds the section's power is eased over
 const PUNCH_AVERAGE = 2 // seconds of history each sync's punch is judged against
 // The beat clock: the lamp has to move before the beat to land on it (a pot takes a while to
@@ -208,7 +227,7 @@ export function createMusic () {
   let enabled = false
   let error = ''
   let binHz = 0
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, clap: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -238,6 +257,8 @@ export function createMusic () {
   const averages = { heat: 0, eddy: 0, kick: 0 }
   let lastBeat = -1
   let lastBoom = -1e9
+  let lastClap = -1e9
+  const clapHistory = [] // [time, the clap band in dB, the bass in dB] over CLAP_BEFORE
   let lastSwitch = -1e9 // when the last tempo switch was, so a new tempo counts once
   const recentBeats = [] // times of the beats over the last TEMPO_TO seconds and a few more
   const scoreHistory = [] // [time, score] ten times a second over the last CUT_BEFORE seconds
@@ -528,7 +549,7 @@ export function createMusic () {
           context.createMediaStreamSource(stream).connect(analyser)
         }
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; floorDrop = 0; farFromFloor = 0; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; floorDrop = 0; farFromFloor = 0; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; lastClap = -1e9; clapHistory.length = 0; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
@@ -639,6 +660,22 @@ export function createMusic () {
         if (lowDb < boomArmed.max - BOOM_FALL || clock - boomArmed.at >= BOOM_WAIT) { levels.boom = true; boomArmed = null }
       }
       levels.boomPending = !!boomArmed
+      // The clap (see CLAP_BAND).
+      levels.clap = false
+      {
+        const clapDb = 10 * Math.log10(power(CLAP_BAND) + 1e-12)
+        const bassDb = 10 * Math.log10(power([20, 150]) + 1e-12)
+        const recent = clapHistory.slice(-BEAT_RISE_FRAMES)
+        if (recent.length === BEAT_RISE_FRAMES && clapHistory.length > BEAT_RISE_FRAMES) {
+          const lowest = Math.min(...recent.map(h => h[1]))
+          const mean = clapHistory.reduce((a, h) => a + h[1], 0) / clapHistory.length
+          const bassRise = bassDb - Math.min(...recent.map(h => h[2]))
+          const quietBeats = recentBeats.filter(t => clock - t <= CLAP_QUIET).length
+          if (clapDb - lowest > CLAP_RISE && clapDb - mean > CLAP_OVER && bassRise < clapDb - lowest - CLAP_BASS && levels.calm && quietBeats < CLAP_BEATS && levels.powerDb < CLAP_ROOM && clock - lastClap > CLAP_REFRACTORY) { levels.clap = true; lastClap = clock }
+        }
+        clapHistory.push([clock, clapDb, bassDb])
+        while (clapHistory.length && clock - clapHistory[0][0] > CLAP_BEFORE) clapHistory.shift()
+      }
       subHistory.push([clock, subDb])
       while (subHistory.length && clock - subHistory[0][0] > BOOM_BEFORE) subHistory.shift()
       const total = power([40, 12000])

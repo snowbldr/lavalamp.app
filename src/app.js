@@ -564,6 +564,15 @@ export async function start () {
     // seconds and turn them back on once there's sound again"). After SILENT_AFTER seconds under
     // SILENT_DB the lamp is its own again (unMusic: the knobs, the lid let go); the meter still
     // moves, and the first sound picks the music back up.
+    // A clap or a snap at the microphone, with no music playing (music.js, the clap; Robert: "My
+    // kids attempted to snap and clap at it to trigger it when in mic mode... only in microphone
+    // mode makes sense"): a pot lit through the lamp's own lighting, an eddy and a ring. Before the
+    // silence rest below, so a quiet room still answers a clap.
+    if (m.clap && musicSource() === 'mic') {
+      if (sim.lightElement) sim.lightElement()
+      if (sim.spawnEddy) sim.spawnEddy()
+      if (sim.pulseWave) sim.pulseWave()
+    }
     silentFor = m.powerDb < SILENT_DB ? silentFor + dt : 0
     if (silentFor > SILENT_AFTER) {
       if (!musicResting) { unMusic(); musicResting = true }
@@ -882,18 +891,29 @@ export async function start () {
     screenLabel('Screen: no way to keep it awake here' + (window.isSecureContext ? '' : ' (not a secure context: needs https)'))
     return false
   }
-  // Browsers only allow the wake lock and the motion sensors from inside a user gesture. A tap
-  // ends in pointerup and click both; the first of either does it.
+  // Browsers only allow the wake lock and the motion sensors from inside a user gesture. The wake
+  // lock takes the first one. iOS asks about motion only from a touchend or a click, and a touch on
+  // the lamp is neither (it takes its own touches), so the first tap's ask was refused with no
+  // prompt and never made again: the prompt came only with the settings button (Robert: "motion
+  // detection is not working on iOS until the allow motion detection, but it doesn't pop up untill
+  // settings are open"). It is asked again on every tap until iOS answers.
+  const GESTURES = ['click', 'pointerup', 'touchend', 'keydown']
   let gestureSeen = false
-  const onFirstGesture = () => {
-    if (gestureSeen) return
-    gestureSeen = true
-    for (const event of ['click', 'pointerup', 'keydown']) document.removeEventListener(event, onFirstGesture)
-    keepAwake().then(ok => { if (ok) notify('Wake Lock Activated') })
-    motion.requestPermission()
+  let motionAnswered = false
+  let motionAsking = false
+  const onFirstGesture = event => {
+    if (!gestureSeen) {
+      gestureSeen = true
+      keepAwake().then(ok => { if (ok) notify('Wake Lock Activated') })
+    }
+    if (!motionAnswered && !motionAsking && event.type !== 'pointerup') { // pointerup never counts for it on iOS
+      motionAsking = true
+      motion.requestPermission().then(answered => { motionAsking = false; motionAnswered = answered; motionLabel(motion.status()) })
+    }
+    if (gestureSeen && motionAnswered) for (const event of GESTURES) document.removeEventListener(event, onFirstGesture)
     motionLabel(motion.status())
   }
-  for (const event of ['click', 'pointerup', 'keydown']) document.addEventListener(event, onFirstGesture)
+  for (const event of GESTURES) document.addEventListener(event, onFirstGesture)
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && gestureSeen && 'wakeLock' in navigator) keepAwake() })
   motionLabel(motion.status())
   setInterval(() => motionLabel(motion.status()), 1000)
