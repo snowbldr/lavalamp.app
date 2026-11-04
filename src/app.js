@@ -539,7 +539,7 @@ export async function start () {
   const MID_HIT_BASS = 1 // the bass's rise under this: not a kick
   let dropCharged = false // a pot is lidded and heating (see driveMusic)
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
-  const unMusic = () => { if (sim.shakeFloor) sim.shakeFloor(0); if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; train = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters(); params.ceilingCool = 1 }
+  const unMusic = () => { if (sim.swingNozzle) sim.swingNozzle(0, 0); if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; train = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters(); params.ceilingCool = 1 }
   music.subscribe(on => { if (on) { musicLog.length = 0; musicLogStart = listener.time; if (sim.endWarmup) sim.endWarmup(); listen() } else { listener.stop(); unMusic() } })
   musicSource.subscribe(() => { if (music()) listen() })
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
@@ -568,7 +568,6 @@ export async function start () {
   let lastDropAt = -1e9
   const SHAKE_DIVIDE = 25 // a sub note shakes at its pitch over this (10 was a jiggle: Robert: "shake it a little bit slower and further... flow back and forth a significant amount to really cause like good sized zig zags in the lava")
   const SHAKE_PER_BEAT = 2 // the beat's shake: eighth notes
-  const SHAKE_PX = 60 // px the floor swings each way at full strength (was 25), whatever the rate (as speed, 160 px/s at 4 Hz moved it 6 px and showed nothing)
   let shakePhase = 0
   let beatShakePhase = 0
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
@@ -797,7 +796,7 @@ export async function start () {
       for (let i = 0; i < n; i++) if (st.y[i] > 0.8 * H) low++
       lavaLow = low / n < BUFFER
       potFullness = potLava()
-      if (sim.chargePot) sim.chargePot(null, false, potFullness) // the shaker's nozzle swings over a pot with lava in it
+      if (sim.chargePot) sim.chargePot(null, false, potFullness) // the shaker's nozzle goes on a pot with lava in it
     }
     // A deep note's attack is also a kick: its beat pot spent the charge, and the boom at the
     // note's peak a few frames later opened a pot closed that instant, with nothing in it (C-C
@@ -839,21 +838,23 @@ export async function start () {
       if (sec.half && sim.flipEddies) sim.flipEddies(Math.min(1, secK))
       if (sec.double && sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
     }
-    // The bass shaker (settings.js Shake, Shake beat): the floor shaken sideways, a sub note at its
-    // pitch over ten as hard as it is loud, and the kick twice a beat in time with the tempo.
-    if (sim.shakeFloor) {
-      let ax = 0
+    // The bass shaker (settings.js Shake, Shake beat): the nozzle swung on its pivot (simulation.js
+    // swingNozzle), by a sub note at its pitch over SHAKE_DIVIDE as hard as it is loud, or by the
+    // kick SHAKE_PER_BEAT times a beat in time with the tempo.
+    if (sim.swingNozzle) {
+      let angle = 0
+      let power = 0
       if (musicShake() > 0 && sec.sub > 0 && sec.subHz > 0) {
-        const f = sec.subHz / SHAKE_DIVIDE
-        shakePhase += 2 * Math.PI * f * dt
-        ax += SHAKE_PX * 2 * Math.PI * f * musicShake() * sec.sub * sec.sub * Math.sin(shakePhase)
+        shakePhase += 2 * Math.PI * sec.subHz / SHAKE_DIVIDE * dt
+        angle = Math.sin(shakePhase)
+        power = musicShake() * sec.sub
       }
-      if (musicShakeBeat() > 0 && m.bpm > 0) {
-        const f = m.bpm / 60 * SHAKE_PER_BEAT
-        beatShakePhase += 2 * Math.PI * f * dt
-        ax += SHAKE_PX * 2 * Math.PI * f * musicShakeBeat() * m.heat * m.heat * Math.sin(beatShakePhase)
+      if (musicShakeBeat() > 0 && m.bpm > 0 && musicShakeBeat() * m.heat > power) {
+        beatShakePhase += 2 * Math.PI * m.bpm / 60 * SHAKE_PER_BEAT * dt
+        angle = Math.sin(beatShakePhase)
+        power = musicShakeBeat() * m.heat
       }
-      sim.shakeFloor(ax) // the floor's shake, the lava wobbling at its base (simulation.js floorShake)
+      sim.swingNozzle(angle, power)
     }
     if (isDrop) {
       lastDropAt = musicNow

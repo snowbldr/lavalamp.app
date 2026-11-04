@@ -409,18 +409,22 @@ export function createSimulation ({ width, height, params }) {
   const SPLAT_SPEED = 320
   const SPLAT_LOBES = [5, 9]
   const splatRequests = [] // [x, y] where each is to start, or null for a point on the pool's surface
-  // The bass shaker as a nozzle (Robert: "it's not creating the like... zig zag ooze"; "what if we
-  // put a nozzle on top of some of the tubes that swing back and forth to the bass instead?"): the
-  // heat at the mouth of the pot glowing hottest swings side to side with the bass, so the lava
-  // leaving it rises from where the heat was and the column comes up as a zig zag, as paste from a
-  // moving tube. Shaking the lava itself, the floor and then fins over the pots, only ever swayed a
-  // plume and its surroundings together, and this lava relaxes any shear put into it. floorShake is
-  // the swing's speed (px/s, set every frame by the page); nozzle is where it has got to, kept
-  // within NOZZLE_REACH of the mouth's half width and drawn back to the middle over NOZZLE_SETTLE.
-  let floorShake = 0
-  let nozzle = 0
-  const NOZZLE_REACH = 0.9
-  const NOZZLE_SETTLE = 2 // s
+  // The bass shaker as a nozzle on a pivot (Robert: "it's not creating the like... zig zag ooze";
+  // "what if we put a nozzle on top of some of the tubes that swing back and forth to the bass
+  // instead?"; "a real nozzle, like that rotates from a center pivot"): a jet out of the mouth of the
+  // hottest pot with lava over it, pointing up at an angle that swings to the bass, pivoting at the
+  // floor. Lava the jet has thrown keeps the way it was thrown while the jet sweeps on, so the
+  // column comes up as a zig zag, as from a garden hose waved. Tried first: shaking the lava (the
+  // floor, then fins over the pots) swayed a plume and its surroundings together; swinging the
+  // pot's heat across its mouth barely moved where the lava left it. nozzleAngle is -1 to 1 of
+  // NOZZLE_ANGLE and nozzlePower 0 to 1, set every frame by the page.
+  let nozzleAngle = 0
+  let nozzlePower = 0
+  let nozzlePot = null
+  const NOZZLE_ANGLE = 40 * Math.PI / 180 // the swing each way from straight up
+  const NOZZLE_SPEED = 220 // px/s along the jet at full power
+  const NOZZLE_HALF = 0.7 // the jet's half width, of the pot's mouth's half width
+  const NOZZLE_REACH = 0.3 // of the height: the jet's push falls off over this along it
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -790,6 +794,18 @@ export function createSimulation ({ width, height, params }) {
     const fade = depthFade(py)
     out[0] = out[0] * fade + splatX
     out[1] = out[1] * fade + splatY
+    if (nozzlePower > 0 && nozzlePot) {
+      const a = nozzleAngle * NOZZLE_ANGLE
+      const dx = Math.sin(a), dy = -Math.cos(a)
+      const rx = px - nozzlePot.fx * width, ry = py - height
+      const along = rx * dx + ry * dy
+      if (along > 0) {
+        const across = (rx * dy - ry * dx) / (NOZZLE_HALF * nozzlePot.cupHalf * width)
+        const v = NOZZLE_SPEED * nozzlePower * Math.exp(-across * across - along / (NOZZLE_REACH * height))
+        out[0] += v * dx
+        out[1] += v * dy
+      }
+    }
   }
 
   // How many particles the floor's reservoirs hold between them.
@@ -1229,14 +1245,13 @@ export function createSimulation ({ width, height, params }) {
     // Each lit element's glow, 0 to 1, and its reach in px, for this step.
     let maxReach = 0
     let hottest = null
-    // The hottest pot with lava over it (the page's count, chargePot), else a lit pot with none
-    // swung where nothing could be seen.
+    // The nozzle's pot: the hottest with lava over it (the page's count, chargePot); the hottest
+    // alone was often one with nothing above it.
     const swingOf = el => el.heat * (potFullness ? (potFullness[elements.indexOf(el)] || 0) : 1)
     for (const el of elements) if (el.cupHalf > 0 && swingOf(el) > 0 && (!hottest || swingOf(el) > swingOf(hottest))) hottest = el
-    nozzle = (nozzle + floorShake * dt) * Math.exp(-dt / NOZZLE_SETTLE)
-    if (hottest) nozzle = Math.max(-NOZZLE_REACH * hottest.cupHalf * width, Math.min(NOZZLE_REACH * hottest.cupHalf * width, nozzle))
+    nozzlePot = hottest
     for (const el of elements) {
-      el.x = el.fx * width + (el === hottest ? nozzle : 0)
+      el.x = el.fx * width
       el.radius = el.fr * shorter
       el.halfWidth = ELEMENTS_ARE_CUPS ? el.coreFraction * width : el.radius * ELEMENT_ASPECT
       el.capTemp = el.mode === 'charge' || el.mode === 'blast' ? Math.min(maxTemp, gravity * Math.min(el.big ? CHARGE_LIFT : CHARGE_LIFT_BEAT, 1 + liftCap)) : 0
@@ -1884,7 +1899,7 @@ export function createSimulation ({ width, height, params }) {
     // immediately start reacting to the music").
     endWarmup () { heaterTime = Math.max(heaterTime, WARMUP); nextDrifter = Math.min(nextDrifter, time) },
     pulseWave () { pulseRequests++ },
-    shakeFloor (v) { floorShake = v || 0 },
+    swingNozzle (angle, power) { nozzleAngle = Math.max(-1, Math.min(1, angle || 0)); nozzlePower = Math.max(0, Math.min(1, power || 0)) },
     splat (x, y) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null) },
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big, fullness) { if (level != null) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big } if (fullness) potFullness = fullness }, // a null level only counts the pots
