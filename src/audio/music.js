@@ -64,6 +64,26 @@ const REFERENCE_FALL = 1 / 15
 // under -36 it read calm the whole first movement, its 5:36 climax at -44 included (Robert:
 // "symphony no 5 looked a little too calm around 5:36. I guess that's the beethoven drop right
 // htere lol"); C-C, Drugs I Like and Bangarang reach the floor in their first minute.
+// The listening level (Robert: "can we check the volume level and normalize it so the reaction
+// doesn't depend on listening volume? that seems wrong"): through Spotify, system audio reached the
+// lamp 7 dB under the mp3 of the same song (Spotify's own normalizing, the capture after it), and
+// C-C's drop at 0:55 was missed. The lamp keeps the loudest system audio has played (2 s power),
+// forgetting LEVEL_FORGET dB a second while anything plays, remembered between songs and visits,
+// and the analyser's window is moved down by as far as that is under LEVEL_LOUD (where the files
+// the lamp was tuned on peak), LEVEL_MOST at most, so the bytes read as the file's would. C-C
+// rendered 7.3 dB quiet: the drops at 55.1, 139.9 and 209.0 with the window moved 6.9 to 7.7 dB,
+// as the file's; unmoved, 0:55 lost and a false one at 92.9. System audio only: a file plays at its
+// own level, and a microphone's is the room's (the clap wants the room's quiet as it is; Sense is
+// its knob). Tried first: the floor under the reference lowered (the rest still heard a quiet
+// song: a false drop at 0:36), and the bytes raised (what sank under the window's floor was lost:
+// C-C so lifted to its own level still read a false drop at 0:36).
+const MIN_DB = -90 // the analyser's window, for a file
+const MAX_DB = -10
+const LEVEL_LOUD = -35 // a little under C-C's own, since a file played 1 dB over read a false drop at 0:36 and 1 dB under read as the file (peaks: C-C -34.4, Espresso -34.7, Bangarang -33.4, Drugs I Like -33.0; Sandman, Bohemian Rhapsody -36.5; Killing in the Name -43.6)
+const LEVEL_FORGET = 1 / 20
+const LEVEL_MOST = 20
+const LEVEL_SILENT = -70 // dB: under this nothing is playing
+const LEVEL_KEY = 'lavalamp-music-level-'
 const FLOOR_NEAR = 3
 const FLOOR_PATIENCE = 90
 const FLOOR_FALL = 1 / 10
@@ -236,7 +256,7 @@ export function createMusic () {
   let binHz = 0
   const sections = createSections()
   let waited = 0 // seconds since the music was last heard (see ANALYSIS_RATE)
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, clap: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, clap: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, quiet: 0, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
@@ -253,6 +273,8 @@ export function createMusic () {
   let surgeSlow = 0
   let sectionPower = 0
   let peakDb = -90
+  let levelPeak = LEVEL_LOUD // the loudest this source has played (see LEVEL_LOUD)
+  let levelSaved = 0
   let floorDrop = 0 // dB the reference's floor has sunk for a quiet recording (see FLOOR_PATIENCE)
   let farFromFloor = 0 // seconds since the song came within FLOOR_NEAR of the floor
   let breadth = 0
@@ -290,6 +312,7 @@ export function createMusic () {
   let fileStream = null // the playing file's sound as a MediaStream, for recording
   let onFileEnd = null // called when a playing file reaches its end
 
+  const saveLevel = () => { levelSaved = clock; if (enabled && source === 'system') try { localStorage.setItem(LEVEL_KEY + source, levelPeak.toFixed(1)) } catch (e) {} }
   const band = ([lo, hi]) => {
     if (hi < lo) [lo, hi] = [hi, lo]
     const a = Math.min(bins.length - 1, Math.max(1, Math.floor(lo / binHz)))
@@ -321,8 +344,8 @@ export function createMusic () {
     // Headroom: the browser maps -100 to -30 dB onto the bytes, and louder clips at 255. The
     // test's bass sat at 0.98 to 1.0 of full scale every frame, so a kick had nothing to rise
     // into; a loud song through a loopback input does the same. -90 to -10 dB leaves room.
-    analyser.minDecibels = -90
-    analyser.maxDecibels = -10
+    analyser.minDecibels = MIN_DB - levels.quiet
+    analyser.maxDecibels = MAX_DB - levels.quiet
     bins = new Uint8Array(analyser.frequencyBinCount)
     binHz = context.sampleRate / FFT
   }
@@ -527,6 +550,8 @@ export function createMusic () {
         await open()
         closeSource()
         source = which
+        levelPeak = LEVEL_LOUD
+        try { const v = parseFloat(localStorage.getItem(LEVEL_KEY + which)); if (v > -90 && v < 0) levelPeak = v } catch (e) {}
         if (which === 'test') startTest()
         else if (which === 'file') {
           const buffer = await context.decodeAudioData(file.data.slice(0))
@@ -572,6 +597,7 @@ export function createMusic () {
       }
     },
     stop () {
+      saveLevel()
       enabled = false
       closeSource()
       levels.heat = levels.eddy = levels.kick = levels.level = 0
@@ -610,6 +636,7 @@ export function createMusic () {
         analyser.getByteFrequencyData(bins)
       }
       clock += dt
+      const quiet = levels.quiet
       const raw = levels.raw
       raw.beat = band(ranges.beat); raw.heat = band(ranges.heat); raw.eddy = band(ranges.eddy); raw.kick = band(ranges.kick)
       // Each sync follows its range's punch, how far it is above its own average over the last
@@ -716,6 +743,17 @@ export function createMusic () {
       const db = 10 * Math.log10(Math.max(1e-12, sectionPower))
       const fastDb = 10 * Math.log10(Math.max(1e-12, surgeFast))
       peakDb = Math.max(db, peakDb - REFERENCE_FALL * dt)
+      if (db - quiet > LEVEL_SILENT) levelPeak = Math.max(db - quiet, levelPeak - LEVEL_FORGET * dt) // as the source played it, before the lift; a pause forgets nothing
+      if (clock - levelSaved > 10) saveLevel()
+      // Lifted to the files' level (see LEVEL_LOUD): the analyser's decibel window moved down by as
+      // much, so the bytes read as the file's would. Adding to the bytes instead lost what had sunk
+      // under the window's floor (C-C so lifted to its own level still read a false drop at 0:36).
+      const wantQuiet = source !== 'system' || frame ? 0 : Math.max(0, Math.min(LEVEL_MOST, LEVEL_LOUD - levelPeak))
+      if (analyser && Math.abs(wantQuiet - levels.quiet) >= 0.1) {
+        levels.quiet = wantQuiet
+        analyser.minDecibels = MIN_DB - wantQuiet
+        analyser.maxDecibels = MAX_DB - wantQuiet
+      }
       const floorTop = REFERENCE_DB - 10 * Math.log10(Math.max(0.2, sensitivity))
       if (db > floorTop + floorDrop - FLOOR_NEAR) { farFromFloor = 0; floorDrop = Math.min(0, floorDrop + FLOOR_FALL * dt) } else farFromFloor += dt
       if (farFromFloor > FLOOR_PATIENCE) floorDrop = Math.max(FLOOR_LOWEST - floorTop, floorDrop - FLOOR_FALL * dt)
@@ -808,6 +846,7 @@ export function createMusic () {
       return levels
     },
     get beats () { return beatCount },
+    get levelPeak () { return levelPeak }, // the loudest this source has played (see LEVEL_LOUD)
     get time () { return clock }, // seconds this module has been listening, all told
     get fileStream () { return source === 'file' ? fileStream : null },
     set onFileEnd (f) { onFileEnd = f },
