@@ -1181,6 +1181,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
       return out
     },
     debug () { return { warned, reads, alive, capacity } },
+    endWarmup () { heaterTime = Math.max(heaterTime, 2) }, // the floor's heat front done (simulation.js endWarmup)
     gpu: true
   }
 }
@@ -1250,6 +1251,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     heaterElements: shell.heaterElements,
     lightElement: shell.lightElement,
     spawnEddy: shell.spawnEddy,
+    endWarmup () { shell.endWarmup(); gpu.endWarmup() },
     pulseWave: shell.pulseWave,
     flipEddies: shell.flipEddies,
     ventPot: shell.ventPot,

@@ -1831,6 +1831,11 @@ export function createSimulation ({ width, height, params }) {
     // Light a pot at the next step, as its clock would have (the music's beat).
     lightElement () { lightRequests++ },
     spawnEddy () { eddyRequests++ },
+    // Music on: the warm up is over at once, the heat front done and the first eddy free to come,
+    // so the lamp answers the music from its first beat (Robert: "the warm up should not apply
+    // when music mode is started... it should stop immediately if music mode is turned on and
+    // immediately start reacting to the music").
+    endWarmup () { heaterTime = Math.max(heaterTime, WARMUP); nextDrifter = Math.min(nextDrifter, time) },
     pulseWave () { pulseRequests++ },
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big, fullness) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big; if (fullness) potFullness = fullness },

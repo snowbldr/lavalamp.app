@@ -135,6 +135,7 @@ self.onmessage = ({ data: m }) => {
       if (m.retire) sim.retirePot()
       sim.chargePot(m.charge || 0, m.chargeBig, m.chargeFull)
       if (m.drop) sim.dropPot(m.drop, m.dropAt)
+      if (m.warmEnd) sim.endWarmup()
       if (m.want) want = m.want
       setPace(m.pace)
       break

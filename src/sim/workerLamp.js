@@ -35,6 +35,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let charge = 0 // the lidded pot's heat, held
   let chargeBig = false // the drop's pot rather than a beat's
   let chargeFull = null // the lava in each pot, as the page last counted it
+  let warmEnd = false // music on: the worker's warm up to be ended
   let drop = 0 // a drop's blast strength, 0 for none
   let dropAt = -1 // the pot it asks for, -1 for the usual
   let sentParams = ''
@@ -106,7 +107,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, chargeFull, drop, dropAt, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, chargeFull, drop, dropAt, warmEnd, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
@@ -116,6 +117,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       retire = false
       drop = 0
       dropAt = -1
+      warmEnd = false
       if (!wantNow.cups) { cups = null }
     },
     // Fill `shown` with the positions for this instant, between the last two states, and give
@@ -147,6 +149,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     ventPot (seconds, smallOnly) { vent = Math.max(vent, seconds || 0); ventSmall = !!smallOnly },
     retirePot () { retire = true },
     chargePot (level, big, fullness) { charge = level; chargeBig = !!big; if (fullness) chargeFull = fullness },
+    endWarmup () { warmEnd = true },
     dropPot (strength, at) { drop = Math.max(drop, strength); if (at >= 0) dropAt = at },
     setTouches (list) { touches = list || [] },
     transform (fn) {
