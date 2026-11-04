@@ -420,8 +420,9 @@ export function createSettingsPanel () {
       class: theme === loadedTheme ? 'theme staged' : 'theme',
       title: theme.name,
       // The theme's background as a solid strip along the bottom of its gradient (Robert: "we should
-      // include the background in the theme. we could draw it as a solid bar across the bottom").
-      style: { background: `${theme.bgColor ? `linear-gradient(${css(theme.bgColor)}, ${css(theme.bgColor)}) bottom / 100% 7px no-repeat, ` : ''}linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
+      // include the background in the theme. we could draw it as a solid bar across the bottom"; then
+      // "it should fill the entire bottom like 15-20% of the gradient button").
+      style: { background: `${theme.bgColor ? `linear-gradient(${css(theme.bgColor)}, ${css(theme.bgColor)}) bottom / 100% 18% no-repeat, ` : ''}linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
       onclick: () => {
         stopEditing(false)
         if (deleting && mine) {

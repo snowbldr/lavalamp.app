@@ -132,7 +132,7 @@
 .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
 .themes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .themes.builtin { grid-template-columns: repeat(3, 1fr); }
-.theme { flex: 1; min-width: 0; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; font: inherit; }
+.theme { flex: 1; min-width: 0; height: 30px; background-origin: border-box; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); cursor: pointer; padding: 0; font: inherit; }
 .theme span { display: inline-block; padding: 1px 6px; border-radius: 6px; background: rgba(0, 0, 0, 0.55); color: #ececec; font-size: 11px; font-weight: 600; }
 .swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
 .swatch-well {

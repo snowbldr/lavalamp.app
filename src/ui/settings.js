@@ -447,14 +447,18 @@ export const eddyCurve = fnstate(defaultEddyCurve)
 // defaults above (Robert: "radar and thermal should swap spots"); Radar (was Weather, renamed at
 // Robert's request) was the default before it. The rest are Claude's first draft for Robert to
 // repaint. Applying one just sets the colour states, so Save and Share carry the result.
+// Backgrounds (Robert: "We should probably pick a few different backgrounds from black for the
+// themes too, to illustrate the difference. like probably acid with a cool contrasting color, lava
+// with like a nearly black brown color, like a cave, radar stays black, neon probably a dark
+// blurple, spectrum black, thermal black").
 const rgb = (r, g, b) => ({ r, g, b })
 export const themes = [
   { name: 'Thermal', heatCold: rgb(0, 0, 0), heatCool: rgb(90, 0, 130), heatWarm: rgb(220, 30, 0), heatHot: rgb(255, 220, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(90, 0, 130), flowFast: rgb(255, 220, 0) },
   { name: 'Spectrum', heatCold: rgb(30, 0, 90), heatCool: rgb(0, 170, 170), heatWarm: rgb(255, 230, 0), heatHot: rgb(230, 30, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(30, 0, 90), flowFast: rgb(255, 230, 0) },
-  { name: 'Neon', heatCold: rgb(0, 40, 60), heatCool: rgb(0, 220, 255), heatWarm: rgb(255, 0, 200), heatHot: rgb(255, 230, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(5, 5, 15), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0) },
+  { name: 'Neon', heatCold: rgb(0, 40, 60), heatCool: rgb(0, 220, 255), heatWarm: rgb(255, 0, 200), heatHot: rgb(255, 230, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(22, 14, 58), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0) },
   { name: 'Radar', heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40) },
-  { name: 'Lava', heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(8, 4, 4), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120) },
-  { name: 'Acid', heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100) }
+  { name: 'Lava', heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(28, 15, 8), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120) },
+  { name: 'Acid', heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(38, 10, 62), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100) }
 ]
 export const applyTheme = theme => {
   for (const [key, state] of Object.entries(colorSettings)) if (theme[key]) state({ ...theme[key] })
