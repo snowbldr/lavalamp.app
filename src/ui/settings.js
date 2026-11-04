@@ -471,36 +471,37 @@ export const applyTheme = theme => {
 // gradient, shown in the panel's bar, on the lamp while previewed (app.js), and applied with the
 // tick. The midpoint is where the gradient's middle sits along the heat, 0.5 even (Robert: "have a
 // slider over the gradient to decide the midpoint of the gradient").
-export const gradientKinds = ['presets', 'duotone', 'mono'] // six contrast presets; two colours; one colour dark to light
+// Duotone and Mono are one Gradient (Robert: "I think we should also combine duo tone and mono into
+// gradient, and they can just select the same color for mono"): near black, half of From, the
+// two mixed, To half way to white, near white; with From and To the same that is Mono's five stops
+// exactly, and the midpoint slider moves its middle.
+export const gradientKinds = ['presets', 'gradient'] // six contrast presets; a gradient from two colours, the same twice for one colour dark to light
 export const gradientKind = fnstate('presets')
 export const gradientFrom = fnstate(rgb(0, 20, 117))
 export const gradientTo = fnstate(rgb(255, 255, 230))
-export const gradientHue = fnstate(rgb(255, 126, 20))
 export const gradientMid = fnstate(0.5)
 export const stagedTheme = fnstate(null) // a theme clicked, waiting for Apply
 const toLinear = c => Math.pow(c / 255, 2.2)
 const fromLinear = v => Math.round(Math.pow(Math.max(0, Math.min(1, v)), 1 / 2.2) * 255)
 const mixLinear = (a, b, t) => ({ r: fromLinear(toLinear(a.r) * (1 - t) + toLinear(b.r) * t), g: fromLinear(toLinear(a.g) * (1 - t) + toLinear(b.g) * t), b: fromLinear(toLinear(a.b) * (1 - t) + toLinear(b.b) * t) })
 const STOP_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
-// The kind's gradient at u, 0 to 1. Luminance is its five stops as they were (12% of the colour,
-// half, the colour, half way to white, 92% of the way), joined in linear light.
-const gradientAt = (kind, u) => {
-  if (kind === 'duotone') return mixLinear(gradientFrom(), gradientTo(), u)
-  const c = gradientHue(); const black = rgb(0, 0, 0); const white = rgb(255, 255, 255)
-  const points = [mixLinear(black, c, 0.12), mixLinear(black, c, 0.5), c, mixLinear(c, white, 0.5), mixLinear(c, white, 0.92)]
+// The gradient at u, 0 to 1, its five points joined in linear light.
+const gradientAt = u => {
+  const a = gradientFrom(); const b = gradientTo(); const black = rgb(0, 0, 0); const white = rgb(255, 255, 255)
+  const points = [mixLinear(black, a, 0.12), mixLinear(black, a, 0.5), mixLinear(a, b, 0.5), mixLinear(b, white, 0.5), mixLinear(b, white, 0.92)]
   const k = Math.min(3, Math.floor(u * 4))
   return mixLinear(points[k], points[k + 1], u * 4 - k)
 }
 // The stop at heat p samples the gradient so that its middle falls at the midpoint m.
 const warp = (p, m) => p <= m ? 0.5 * p / m : 0.5 + 0.5 * (p - m) / (1 - m)
-// The colours Apply would write: the five stops for Duotone or Mono, every colour of a staged
+// The colours Apply would write: the five stops for Gradient, every colour of a staged
 // theme for Presets, or null with no theme staged.
 export const pendingColours = () => {
   const kind = gradientKind()
   if (kind === 'presets') { const t = stagedTheme(); if (!t) return null; const out = {}; for (const key of Object.keys(colorSettings)) if (t[key]) out[key] = { ...t[key] }; return out }
   const m = Math.max(0.05, Math.min(0.95, gradientMid()))
   const out = {}
-  STOP_KEYS.forEach((key, k) => { out[key] = gradientAt(kind, warp(k / 4, m)) })
+  STOP_KEYS.forEach((key, k) => { out[key] = gradientAt(warp(k / 4, m)) })
   return out
 }
 export const applyPending = () => {

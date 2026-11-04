@@ -99,7 +99,6 @@ import {
   gradientKind,
   gradientFrom,
   gradientTo,
-  gradientHue,
   soundPending,
   fullscreen,
   soundBed,
@@ -195,8 +194,7 @@ const fixed = digits => v => Number(v).toFixed(digits)
 const always = fnstate(true)
 const isPresets = fnstate(true)
 const isTwoTone = fnstate(false)
-const isLuminance = fnstate(false)
-gradientKind.subscribe(kind => { isPresets(kind === 'presets'); isTwoTone(kind === 'duotone'); isLuminance(kind === 'mono') })
+gradientKind.subscribe(kind => { isPresets(kind === 'presets'); isTwoTone(kind === 'gradient') })
 const times = v => `${Number(v).toFixed(2)}x`
 // The frequency range knobs, 20 Hz to 12 kHz.
 const HZ = { min: 20, max: 12000, step: 10 }
@@ -299,7 +297,7 @@ export function createSettingsPanel () {
   })
 
   // The pending gradient: what Apply would write (settings.js pendingColours), as a bar with the
-  // midpoint's slider over it on Duotone and Mono, an eye to see it on the lamp while held on, and
+  // midpoint's slider over it on Gradient, an eye to see it on the lamp while held on, and
   // a tick to apply it.
   const previewing = fnstate(false)
   const STOPS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak']
@@ -320,7 +318,7 @@ export function createSettingsPanel () {
     eye.setAttribute('aria-pressed', String(previewing()))
     window.dispatchEvent(new CustomEvent('lavalamp-preview-colours', { detail: previewing() && colours ? colours : null }))
   }
-  for (const state of [gradientKind, gradientFrom, gradientTo, gradientHue, gradientMid, stagedTheme, previewing]) state.subscribe(showPending)
+  for (const state of [gradientKind, gradientFrom, gradientTo, gradientMid, stagedTheme, previewing]) state.subscribe(showPending)
   gradientKind.subscribe(() => { for (const b of (panel ? panel.querySelectorAll('.theme.staged') : [])) b.classList.remove('staged') })
   showPending()
 
@@ -357,12 +355,9 @@ export function createSettingsPanel () {
         swatch('Fast', 'flowFast', flowFast)
       ),
       row('Gradient', segmented('gradient', gradientKind, gradientKinds)),
-      swatchRow('Duotone', isTwoTone, true,
+      swatchRow('From and to', isTwoTone, true,
         swatch('From', 'gradientFrom', gradientFrom),
         swatch('To', 'gradientTo', gradientTo)
-      ),
-      swatchRow('Mono', isLuminance, true,
-        swatch('Colour', 'gradientHue', gradientHue)
       ),
       gradientPending,
       div({ class: 'swatch-row', style: { display: isPresets.bindStyle(() => isPresets() ? 'block' : 'none') } },
@@ -374,7 +369,7 @@ export function createSettingsPanel () {
           onclick: e => { stagedTheme(theme); for (const b of e.currentTarget.parentElement.children) b.classList.toggle('staged', b === e.currentTarget) }
         }, span(theme.name))))
       ),
-      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Duotone runs from one colour to another; Mono runs one colour from dark to light. None of them changes your colours until you press the tick: the bar shows what you would get, the eye shows it on the lamp, and on Duotone and Mono the slider moves the middle of the gradient hotter or colder. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
+      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. Presets are six gradients that jump hue; Gradient runs from dark through one colour to another and on to light (the same colour twice for one colour dark to light). Neither changes your colours until you press the tick: the bar shows what you would get, the eye shows it on the lamp, and on Gradient the slider moves the middle hotter or colder. The swatches above still change any single stop, and the flow colours are the slowest to fastest arrow.')
       ),
       // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
       // thirteen year old (Robert: "I want to make it look more like a sub panel").
