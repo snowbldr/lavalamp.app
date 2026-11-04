@@ -311,7 +311,15 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .gradient-labels .back-button .swatch-well::after { content: 'Background'; font-size: 11px; font-weight: 600; color: #ececec; text-shadow: 0 0 3px #000, 0 0 2px #000; }
 .gradient-bar { position: relative; flex: none; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); }
 .gradient-bar .gradient-dot { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; padding: 0; gap: 0; border-radius: 50%; border: 2px solid #ececec; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 1px 4px rgba(0, 0, 0, 0.6); cursor: pointer; touch-action: none; box-sizing: border-box; }
-.gradient-bar .gradient-dot.pin { cursor: ew-resize; }
+/* Two kinds of knob (Robert: "I think we need two different knobs for cold, hot and the 3 sliders.
+   it's confusing that the end ones don't move and I keep trying to move them"): the ends are
+   rounded squares sat inside the bar's ends, colour chips to click; the pins are tall handles
+   standing out of the bar with a grip line, to drag. */
+.gradient-bar .gradient-dot.end { width: 20px; height: 20px; margin-top: -10px; border-radius: 6px; }
+.gradient-bar .gradient-dot.end:first-child { margin-left: 3px; }
+.gradient-bar .gradient-dot.end:last-child { margin-left: -23px; }
+.gradient-bar .gradient-dot.pin { width: 14px; height: 38px; margin: -19px 0 0 -7px; border-radius: 7px; cursor: ew-resize; }
+.gradient-bar .gradient-dot.pin::after { content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 12px; margin: -6px 0 0 -1px; border-radius: 1px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 2px rgba(0, 0, 0, 0.8); }
 .gradient-bar .gradient-dot::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; } /* a fingertip's hit area */
 .gradient-bar .gradient-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gradient-top { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; }
