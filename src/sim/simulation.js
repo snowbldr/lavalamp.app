@@ -422,13 +422,15 @@ export function createSimulation ({ width, height, params }) {
   const SHAKE_DEPTH = 0.3
   const FIN_WIDTH = 0.5 // of a pot's mouth's half width
   const finAt = px => {
+    // One fin at a time, over the pot glowing hottest, as hard as it glows: the warm lava rising out
+    // of it is what wobbles and the rest of the floor stays still (Robert: "shake just above certain
+    // pots that have warm lava above them", then "maybe only shake one pot at a time?").
     let w = 0
-    for (const el of elements) {
-      // Only over a pot that is heating, as hard as it glows: the warm lava rising out of it is
-      // what wobbles, and the rest of the floor stays still (Robert: "not shake the entire floor
-      // at once and maybe shake just above certain pots that have warm lava above them").
+    let el = null
+    for (const e of elements) if (e.cupHalf > 0 && (!el || (e.glow || 0) > (el.glow || 0))) el = e
+    if (el) {
       const lit = Math.min(1, (el.glow || 0) * 1.5)
-      if (!(el.cupHalf > 0) || lit < 0.05) continue
+      if (lit < 0.05) return 0
       const half = FIN_WIDTH * el.cupHalf * width
       const d = (px - el.fx * width) / half
       if (d * d < 9) w = Math.max(w, lit * Math.exp(-d * d)) // narrow, so there is still lava between fins (as wide as the mouths they overlapped, 60 to 70% shaking everywhere); soft sided, since sharp sides tore holes in the pool beside them
