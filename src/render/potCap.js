@@ -19,31 +19,42 @@ let counts = new Uint16Array(0)
 const LIFT_BAND = 2
 const LIFT = 1.5
 
-export function drawnY (state, floorY, size) {
-  if (!(floorY < Infinity)) return i => state.y[i]
-  const bottom = floorY + LIFT_BAND * size
-  const lift = LIFT * size
-  return i => { const y = state.y[i]; return y > floorY && y < bottom ? y - lift : y }
-}
-
-export function drawnTemps (state, count, floorY, neutral, size) {
-  if (!(floorY < Infinity)) return i => state.temp[i]
+// The columns of lava on screen just over the line, BIN px wide and BAND sizes deep: their count
+// and summed temperature. Filled by drawnY, read by drawnTemps (each renderer calls drawnY first).
+let bins = 0
+const fillColumns = (state, count, floorY, size) => {
   let maxX = 0
   for (let i = 0; i < count; i++) if (state.x[i] > maxX) maxX = state.x[i]
-  const bins = Math.ceil(maxX / BIN) + 1
+  bins = Math.ceil(maxX / BIN) + 1
   if (sums.length < bins) { sums = new Float32Array(bins); counts = new Uint16Array(bins) } else { sums.fill(0, 0, bins); counts.fill(0, 0, bins) }
   const top = floorY - BAND * size
   for (let i = 0; i < count; i++) {
     const y = state.y[i]
     if (y > floorY || y < top) continue
     const b = Math.max(0, Math.floor(state.x[i] / BIN))
-    sums[b] += state.temp[i]
+    sums[b] += state.temp ? state.temp[i] : 0
     if (counts[b] < 65535) counts[b]++
   }
+}
+const column = x => Math.max(0, Math.min(bins - 1, Math.floor(x / BIN)))
+
+// The lift only where there is lava on screen above to close the gap to: with none, a closed pot's
+// row drawn higher showed over the floor line as a bright strip (Robert: "I can see the pot caps on
+// the bottom of the screen when they're holding lava and no lava covering them").
+export function drawnY (state, count, floorY, size) {
+  if (!(floorY < Infinity)) return i => state.y[i]
+  fillColumns(state, count, floorY, size)
+  const bottom = floorY + LIFT_BAND * size
+  const lift = LIFT * size
+  return i => { const y = state.y[i]; return y > floorY && y < bottom && counts[column(state.x[i])] ? y - lift : y }
+}
+
+export function drawnTemps (state, count, floorY, neutral, size) {
+  if (!(floorY < Infinity)) return i => state.temp[i]
   return i => {
     const t = state.temp[i]
     if (state.y[i] <= floorY) return t
-    const b = Math.max(0, Math.min(bins - 1, Math.floor(state.x[i] / BIN)))
+    const b = column(state.x[i])
     return counts[b] ? sums[b] / counts[b] : Math.min(t, neutral)
   }
 }

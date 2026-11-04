@@ -238,7 +238,7 @@ export function createGlRenderer (canvas, look) {
     const floorY = overlays.floorY ?? Infinity
     // Pot lava no hotter than neutral (half of it drew warm pot lava purple, a fuzz over every
     // pot) nor than the lava just above it: see potCap.js.
-    const yOf = drawnY(state, floorY, look.particleSize || 4)
+    const yOf = drawnY(state, count, floorY, look.particleSize || 4)
     const tempOf = heat ? drawnTemps(state, count, floorY, overlays.neutral, look.particleSize || 4) : null
     // Only what can show is drawn: the pots' and bottles' reserves sit below the floor and above
     // the ceiling, off screen unless the Reservoirs view fits them in, and a frame built all of

@@ -66,7 +66,7 @@ export function createCanvasRenderer (canvas, look) {
       const offset = span / 2
       const top = HEAT_STEPS - 1
       const perTemp = top / (2 * overlays.neutral)
-      const yOf = drawnY(state, overlays.floorY ?? Infinity, look.particleSize)
+      const yOf = drawnY(state, count, overlays.floorY ?? Infinity, look.particleSize)
       const tempOf = drawnTemps(state, count, overlays.floorY ?? Infinity, overlays.neutral, look.particleSize) // lava in a pot (see potCap.js)
       for (let i = 0; i < count; i++) {
         const dy = (yOf(i) * view.k + view.oy) * scale - offset
