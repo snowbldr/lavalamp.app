@@ -340,3 +340,17 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .gradient-top .gradient-actions { margin-left: auto; }
 .gradient-top .swatch label { display: none; }
 .gradient-top .swatch .swatch-well { width: 26px; height: 26px; }
+
+/* The lamp's own "are you sure" (components.js ask) */
+.ask { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: ask-in 0.12s ease-out; }
+.ask-card { width: 300px; max-width: 100%; box-sizing: border-box; padding: 18px 18px 14px; border-radius: 16px; background: rgba(28, 28, 30, 0.96); border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); color: #ececec; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.ask-message { margin-bottom: 16px; }
+.ask-buttons { display: flex; gap: 8px; }
+.ask-buttons button { flex: 1; border: 0; border-radius: 8px; padding: 9px 6px; font: inherit; font-size: 13px; cursor: pointer; background: rgba(255, 255, 255, 0.1); color: inherit; }
+.ask-buttons button:hover { background: rgba(255, 255, 255, 0.18); }
+.ask-buttons .ask-yes { background: #e8e8ea; color: #1c1c1e; font-weight: 600; }
+.ask-buttons .ask-yes:hover { background: #ffffff; }
+.ask-buttons .ask-yes.danger { background: #e5484d; color: #fff; }
+.ask-buttons .ask-yes.danger:hover { background: #f05a5f; }
+.ask-buttons button:focus-visible { outline: 2px solid #e8e8ea; outline-offset: 2px; }
+@keyframes ask-in { from { opacity: 0; } to { opacity: 1; } }

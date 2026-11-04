@@ -487,6 +487,24 @@ export const sectionWith = (tools, title, open, ...rows) => open
     div({ class: 'panel-rows' }, ...rows)
   )
 
+// The lamp's own "are you sure", in the panel's look (Robert: "can we not use the default r u sure
+// and use a nice themed custom one? the default one is so ugly and jarring"). Resolves true for
+// the yes button or Enter, false for the other, Escape or a press outside the card.
+export const ask = (message, { yes = 'OK', no = 'Cancel', danger = false } = {}) => new Promise(resolve => {
+  const done = answer => { overlay.remove(); document.removeEventListener('keydown', onKey, true); resolve(answer) }
+  const onKey = e => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false) } else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true) }
+  }
+  const yesButton = button({ class: danger ? 'ask-yes danger' : 'ask-yes', onclick: () => done(true) }, yes)
+  const card = div({ class: 'ask-card', role: 'alertdialog', 'aria-modal': 'true', onclick: e => e.stopPropagation(), onpointerdown: e => e.stopPropagation() },
+    div({ class: 'ask-message' }, message),
+    div({ class: 'ask-buttons' }, button({ class: 'ask-no', onclick: () => done(false) }, no), yesButton))
+  const overlay = div({ class: 'ask', onclick: e => { e.stopPropagation(); done(false) }, onpointerdown: e => e.stopPropagation() }, card)
+  document.body.append(overlay)
+  document.addEventListener('keydown', onKey, true)
+  setTimeout(() => yesButton.focus())
+})
+
 export function notify (...message) {
   const notification = div(
     {

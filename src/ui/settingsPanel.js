@@ -1,5 +1,5 @@
 import { a, button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { TOUCH_UI, chevron, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { TOUCH_UI, ask, chevron, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -252,7 +252,7 @@ export function createSettingsPanel () {
     const older = list.filter(v => Number(v.version) < Number(CURRENT))
     versionRow.replaceChildren(
       span(`Version ${CURRENT}${newer.length ? '' : ', the newest'}. `),
-      ...newer.map(v => button({ class: 'small primary', style: { 'margin-right': '6px' }, title: v.description, onclick: () => { if (confirm(`Upgrade to ${v.label}? These settings are mapped onto it; this version's save is kept.`)) window.location.href = `${v.path}&upgrade=${CURRENT}&from=${encodeURIComponent(btoa(JSON.stringify(getSettings())))}` } }, `Upgrade to ${v.label}`)),
+      ...newer.map(v => button({ class: 'small primary', style: { 'margin-right': '6px' }, title: v.description, onclick: async () => { if (await ask(`Upgrade to ${v.label}? These settings are mapped onto it; this version's save is kept.`, { yes: 'Upgrade' })) window.location.href = `${v.path}&upgrade=${CURRENT}&from=${encodeURIComponent(btoa(JSON.stringify(getSettings())))}` } }, `Upgrade to ${v.label}`)),
       span('Older: '),
       ...older.map(v => button({ class: 'small', style: { 'margin-right': '6px' }, title: `${v.date}: ${v.description}`, onclick: () => goTo(v.version) }, v.label))
     )
@@ -270,7 +270,7 @@ export function createSettingsPanel () {
     )
 
   const resetDefaults = () => {
-    if (confirm('This will reset ALL defaults and remove saved settings')) resetAndReload()
+    ask('Reset everything to the defaults and remove the saved settings? Your saved themes stay.', { yes: 'Reset', danger: true }).then(yes => { if (yes) resetAndReload() })
   }
 
   // The seed: typed in and applied on Enter or when the field loses focus, or drawn afresh with
@@ -385,9 +385,9 @@ export function createSettingsPanel () {
   let deleting = false
   const trash = button({ class: 'theme-trash', title: 'Delete a theme: press this, then the theme', 'aria-label': 'Delete a theme', onclick: () => { stopEditing(false); deleting = !deleting; fillThemes() } })
   trash.innerHTML = ICON('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')
-  const loadTheme = theme => {
+  const loadTheme = async theme => {
     if (theme === loadedTheme && sameColours(takeColours(), loaded)) return true
-    if (!sameColours(takeColours(), loaded) && !confirm(`Your colour changes are not saved as a theme. Load ${theme.name} anyway?`)) return false
+    if (!sameColours(takeColours(), loaded) && !(await ask(`Your colour changes aren't saved as a theme. Load ${theme.name} anyway?`, { yes: `Load ${theme.name}`, no: 'Keep mine' }))) return false
     putColours(theme)
     loaded = takeColours()
     loadedTheme = theme
@@ -425,21 +425,25 @@ export function createSettingsPanel () {
       onclick: () => {
         stopEditing(false)
         if (deleting && mine) {
-          if (confirm(`Delete ${theme.name}?`)) { myThemes = myThemes.filter(t => t !== theme); if (loadedTheme === theme) loadedTheme = null; saveMyThemes() }
-          deleting = false
-          fillThemes()
+          ask(`Delete ${theme.name}?`, { yes: 'Delete', danger: true }).then(yes => {
+            if (yes) { myThemes = myThemes.filter(t => t !== theme); if (loadedTheme === theme) loadedTheme = null; saveMyThemes() }
+            deleting = false
+            fillThemes()
+          })
           return
         }
-        if (loadTheme(theme)) fillThemes()
+        loadTheme(theme).then(ok => { if (ok) fillThemes() })
       }
     }, span(theme.name))
     if (!mine) return tile
     const edit = button({ class: 'theme-edit', title: `Rename or save over ${theme.name}`, 'aria-label': `Edit ${theme.name}`, onclick: () => {
       stopEditing(false)
       deleting = false
-      if (!loadTheme(theme)) return
-      editing = { theme }
-      fillThemes()
+      loadTheme(theme).then(ok => {
+        if (!ok) return
+        editing = { theme }
+        fillThemes()
+      })
     } })
     edit.innerHTML = ICON(PENCIL)
     const item = div({ class: 'theme-item' }, tile, edit)
