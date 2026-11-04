@@ -400,6 +400,15 @@ export function createSimulation ({ width, height, params }) {
   const PULSE_WIDTH = 40 // px
   const PULSE_LIFE = 1.6 // s
   const PULSE_PX = 14 // how far the ring carries the lava at its peak
+  // The splat (Robert: "a pressure wave blasted out from a random point at a strong event... shaped
+  // like a splat so it creates fingers and blobs instead of spreading evenly"): a stronger ring from
+  // a random point over the pool whose push is shaped round its circle, SPLAT_LOBES[0] to [1] lobes
+  // at random angles and a finer ripple over them, near nothing between lobes, so the lava is
+  // shot out in fingers along them and left in blobs between.
+  const SPLAT_PX = 240
+  const SPLAT_SPEED = 320
+  const SPLAT_LOBES = [5, 9]
+  const splatRequests = [] // [x, y] where each is to start, or null for a point on the pool's surface
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
   let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
@@ -665,6 +674,13 @@ export function createSimulation ({ width, height, params }) {
       const from = drifting.length ? drifting[Math.floor(random() * drifting.length)] : null
       pulses.push({ x: from ? from.x : random() * width, y: from ? from.y : random() * eddyFloorY(), start: time })
     }
+    while (splatRequests.length) {
+      const at = splatRequests.shift()
+      const lobes = Math.round(randomRange(SPLAT_LOBES[0], SPLAT_LOBES[1]))
+      // From a point on the lava's surface (the page finds it from the particles; the estimate here,
+      // poolSurface, sits deep in warm lava, and from the open tank it only reached the pool faded).
+      pulses.push({ x: at ? at[0] : randomRange(0.15, 0.85) * width, y: at ? at[1] : poolSurface(), start: time, splat: { lobes, a: random() * 2 * Math.PI, b: random() * 2 * Math.PI } })
+    }
     for (let k = pulses.length - 1; k >= 0; k--) if (time - pulses[k].start > PULSE_LIFE) pulses.splice(k, 1)
     if (alive < drifters && time >= nextDrifter) {
       const missing = drifters - alive
@@ -733,6 +749,8 @@ export function createSimulation ({ width, height, params }) {
       out[0] += -dy / r * speed * e.spin
       out[1] += dx / r * speed * e.spin
     }
+    let splatX = 0
+    let splatY = 0 // a splat's push, added after the depth fade: it is meant for the lava
     for (let k = 0; k < pulses.length; k++) {
       const w = pulses[k]
       const dx = px - w.x
@@ -740,16 +758,26 @@ export function createSimulation ({ width, height, params }) {
       const r = Math.hypot(dx, dy)
       if (r === 0) continue
       const age = time - w.start
-      const u = (r - PULSE_SPEED * age) / PULSE_WIDTH
+      const speed = w.splat ? SPLAT_SPEED : PULSE_SPEED
+      const u = (r - speed * age) / PULSE_WIDTH
       if (u * u > 9) continue
-      // The ring's speed: the derivative of a Gaussian, out ahead of the ring and in behind it.
-      const v = -u * Math.exp(-u * u) * PULSE_PX * PULSE_SPEED / PULSE_WIDTH * 2.33 * (1 - age / PULSE_LIFE)
-      out[0] += dx / r * v
-      out[1] += dy / r * v
+      // The ring's speed: the derivative of a Gaussian, out ahead of the ring and in behind it; a
+      // splat's shaped by its lobes round the circle.
+      let shape = 1
+      if (w.splat) {
+        const th = Math.atan2(dy, dx)
+        shape = Math.max(0, 0.35 + 0.9 * Math.cos(w.splat.lobes * th + w.splat.a) + 0.35 * Math.cos((w.splat.lobes + 3) * th + w.splat.b))
+      }
+      // A pulse pushes out ahead and back in behind, no net move; a splat only out, so the lava it
+      // shoots along a lobe stays thrown, SPLAT_PX at the peak of a lobe.
+      const v = w.splat
+        ? Math.exp(-u * u) * SPLAT_PX * speed / (PULSE_WIDTH * 1.772) * (1 - age / PULSE_LIFE) * shape
+        : -u * Math.exp(-u * u) * PULSE_PX * speed / PULSE_WIDTH * 2.33 * (1 - age / PULSE_LIFE)
+      if (w.splat) { splatX += dx / r * v; splatY += dy / r * v } else { out[0] += dx / r * v; out[1] += dy / r * v }
     }
     const fade = depthFade(py)
-    out[0] *= fade
-    out[1] *= fade
+    out[0] = out[0] * fade + splatX
+    out[1] = out[1] * fade + splatY
   }
 
   // How many particles the floor's reservoirs hold between them.
@@ -1837,6 +1865,7 @@ export function createSimulation ({ width, height, params }) {
     // immediately start reacting to the music").
     endWarmup () { heaterTime = Math.max(heaterTime, WARMUP); nextDrifter = Math.min(nextDrifter, time) },
     pulseWave () { pulseRequests++ },
+    splat (x, y) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null) },
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big, fullness) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big; if (fullness) potFullness = fullness },
     dropPot (strength, at) { dropRequest = Math.max(dropRequest, strength || 0); if (at >= 0) dropAt = at },

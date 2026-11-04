@@ -135,6 +135,9 @@ import {
   musicBusyEddies,
   musicFlip,
   musicWobble,
+  musicShake,
+  musicShakeBeat,
+  musicSections,
   musicVent,
   showSpectrum,
   musicBeatLo,
@@ -563,11 +566,26 @@ export async function start () {
   const DROP_WAIT = 2 // seconds without a kick before the drop's pot is charged
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
+  const SHAKE_DIVIDE = 10 // a sub note shakes at its pitch over this
+  const SHAKE_PER_BEAT = 2 // the beat's shake: eighth notes
+  const SHAKE_SPEED = 120 // px/s the lava is swung sideways at full strength (a push is a velocity for one step, mixed into the stirring)
+  let shakePhase = 0
+  let beatShakePhase = 0
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
   let bufferAt = -1e9
   let lavaLow = false
   // The pot holding the most lava, by its index, or -1 when none holds any (or the lava is not
   // known yet): every particle below the floor line counted to its nearest pot.
+  // A splat's start: the top of the lava in a random column, a particle's own place, so it blasts
+  // into the lava from its surface (a pool's top or a blob's).
+  const splatAt = () => {
+    const st = sim.state, n = sim.count, H = sim.height, W = sim.width
+    if (!st || !n || !W) { if (sim.splat) sim.splat(); return }
+    const x0 = (0.15 + 0.7 * Math.random()) * W
+    let best = Infinity
+    for (let i = 0; i < n; i++) { const y = st.y[i]; if (y < best && y > 0 && y < H && Math.abs(st.x[i] - x0) < 30) best = y }
+    if (sim.splat) { if (best < Infinity) sim.splat(x0, best); else sim.splat() }
+  }
   const potLava = () => {
     const els = sim.heaterElements ? sim.heaterElements() : null
     const st = sim.state, n = sim.count, H = sim.height
@@ -685,7 +703,12 @@ export async function start () {
     // m.heat, not m.bass: after the ranges came in this read a name that no longer existed, the
     // floor heat and Lift became NaN every frame, and the whole pool read hot with artifacts
     // (Robert: "The music mode is causing all of the lava to stay completely hot the whole time").
-    params.floorHeat = floorHeat() * (1 + musicFloor() * m.heat)
+    // The song's parts around a drop (sections.js): a snare roll or a riser winds up toward it, the
+    // drop's pot charging hotter and the floor's heat rising with how far along it is.
+    const sec = m.sections || {}
+    const secK = musicSections()
+    const windup = secK > 0 ? secK * Math.max(sec.roll || 0, sec.riser || 0) : 0
+    params.floorHeat = floorHeat() * (1 + musicFloor() * m.heat) * (1 + 0.5 * windup)
     params.liftCap = lift() * (1 + musicLift() * m.heat)
     params.turbulence = turbulence() * busy * (1 + musicTurb() * m.eddy)
     params.wobbleKick = wobbleKick() * (1 + musicKick() * m.kick)
@@ -741,7 +764,7 @@ export async function start () {
     // or two spawn at the same time because of all the activity"). Then the beat pots, while busy.
     const lidded = musicDrop() > 0 && !!sim.chargePot
     const calm = m.sinceBeat > DROP_WAIT || m.calm
-    if (lidded) { sim.chargePot(2 * musicDrop(), calm, potFullness); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
+    if (lidded) { sim.chargePot(2 * musicDrop() * (1 + windup), calm || windup > 0, potFullness); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
     const heardNumber = clock.locked ? (clock.until < clock.period / 2 ? clock.index + 1 : clock.index) : -1
     const musicNow = listener.time
     // The drop is music.js's alone: a surge out of a calm part, or the bass back after a cut. The
@@ -755,7 +778,10 @@ export async function start () {
     // if it's really busy, all the lava gets hot, and that matches the music because it's real
     // intense"). music.js already keeps them sparse: a drop comes out of calm, after a cut, or on a
     // tempo switch.
-    const isDrop = m.drop && musicNow - musicLogStart > DROP_SETTLE
+    // A key change while the song is going (sections.js) is a drop of its own; in a quiet part, an
+    // outro or a fade, it was a false one (Bangarang 3:34.6, Bohemian Rhapsody 5:54.3).
+    const keyDrop = secK > 0 && sec.key && !calm
+    const isDrop = (m.drop || keyDrop) && musicNow - musicLogStart > DROP_SETTLE
     if (m.beat) beatsHeard++
     // The lava buffer (Robert: "I think we have a lava starvation problem. We should try to keep a
     // lava buffer in the pots so that we always can fire something"). Measured on Bangarang, live:
@@ -804,9 +830,34 @@ export async function start () {
       if (sim.ventPot) sim.ventPot(TRAIN_GLOB, true)
       fired = true
     }
+    // A roll's end is where the drop lands, and an impact is a crash on the one: both fire the pot
+    // (when the drop rules did not already); half time turns the eddies, double time brings more.
+    if (secK > 0 && !isDrop) {
+      if (sec.rollEnd && lidded) { open(musicDrop() * 1.5 * Math.min(1, secK)); if (sim.spawnEddy) sim.spawnEddy() }
+      else if (sec.impact && lidded) { open(musicDrop() * Math.min(1.5, secK)); splatAt() }
+      if (sec.half && sim.flipEddies) sim.flipEddies(Math.min(1, secK))
+      if (sec.double && sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
+    }
+    // The bass shaker (settings.js Shake, Shake beat): the lamp rocked sideways, a sub note at its
+    // pitch over ten as hard as it is loud, and the kick twice a beat in time with the tempo.
+    if (sim.push && (musicShake() > 0 || musicShakeBeat() > 0)) {
+      let ax = 0
+      if (musicShake() > 0 && sec.sub > 0 && sec.subHz > 0) {
+        const f = sec.subHz / SHAKE_DIVIDE
+        shakePhase += 2 * Math.PI * f * dt
+        ax += SHAKE_SPEED * musicShake() * sec.sub * sec.sub * Math.sin(shakePhase)
+      }
+      if (musicShakeBeat() > 0 && m.bpm > 0) {
+        const f = m.bpm / 60 * SHAKE_PER_BEAT
+        beatShakePhase += 2 * Math.PI * f * dt
+        ax += SHAKE_SPEED * musicShakeBeat() * m.heat * m.heat * Math.sin(beatShakePhase)
+      }
+      if (ax) sim.push(ax, 0)
+    }
     if (isDrop) {
       lastDropAt = musicNow
       dropped = true
+      splatAt() // a splat on the drop (simulation.js SPLAT)
       if (lidded) open(musicDrop() * 1.5)
       if (sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
       // The eddies already turning swing round on the drop (Robert: "the eddies could abruptly
