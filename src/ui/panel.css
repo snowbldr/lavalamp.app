@@ -318,8 +318,8 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .gradient-bar .gradient-dot.end { width: 20px; height: 20px; margin-top: -10px; border-radius: 6px; }
 .gradient-bar .gradient-dot.end:first-child { margin-left: 3px; }
 .gradient-bar .gradient-dot.end:last-child { margin-left: -23px; }
-.gradient-bar .gradient-dot.pin { width: 14px; height: 38px; margin: -19px 0 0 -7px; border-radius: 7px; cursor: ew-resize; }
-.gradient-bar .gradient-dot.pin::after { content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 12px; margin: -6px 0 0 -1px; border-radius: 1px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 2px rgba(0, 0, 0, 0.8); }
+.gradient-bar .gradient-dot.pin { width: 14px; height: 24px; margin: -12px 0 0 -7px; border-radius: 7px; cursor: ew-resize; } /* inside the bar (Robert: "make the pills fit inside the gradient bar") */
+.gradient-bar .gradient-dot.pin::after { content: ''; position: absolute; left: 50%; top: 50%; width: 2px; height: 10px; margin: -5px 0 0 -1px; border-radius: 1px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 2px rgba(0, 0, 0, 0.8); }
 .gradient-bar .gradient-dot::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; } /* a fingertip's hit area */
 .gradient-bar .gradient-dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .gradient-top { display: flex; align-items: center; gap: 8px; padding: 2px 0 8px; }
