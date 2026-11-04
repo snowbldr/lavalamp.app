@@ -247,6 +247,11 @@ export function createSettingsPanel () {
   // versions of the lava lamp"); a newer one than this, when there is one, is offered first as
   // an upgrade that maps these settings onto it (src/versions.js). Filled once the manifest loads.
   const versionRow = div({ class: 'panel-note' }, `Version ${CURRENT}`)
+  // The build that is deployed (Robert: "I can't tell if it's deployed, let's add a version viewable
+  // after expanding advanced"): the deploy writes the commit and its date into version.txt (the
+  // snowbuilt lavalamp.app Dockerfile); served from a checkout there is none, so it says local.
+  const buildRow = div({ class: 'panel-note' }, 'Build: local')
+  fetch('version.txt', { cache: 'no-store' }).then(r => r.ok ? r.text() : null).then(text => { if (text && text.trim() && !/<html/i.test(text)) buildRow.textContent = `Build: ${text.trim()}` }).catch(() => {})
   versions().then(list => {
     const newer = list.filter(v => Number(v.version) > Number(CURRENT))
     const older = list.filter(v => Number(v.version) < Number(CURRENT))
@@ -416,6 +421,7 @@ export function createSettingsPanel () {
       div({ class: 'panel-note' }, screenLabel.bindAs(() => screenLabel())),
       div({ class: 'panel-note' }, motionLabel.bindAs(() => motionLabel())),
       versionRow,
+      buildRow,
       // One long list under headings, no folding inside Advanced, each group split a layer
       // further (Robert: "The advanced panel should become one giant list. we may want to break
       // up the groups a bit further, perhaps another layer of subgroups").
