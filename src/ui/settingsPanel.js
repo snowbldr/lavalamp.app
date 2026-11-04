@@ -331,7 +331,7 @@ export function createSettingsPanel () {
       const end = Math.min(0.3, END_PX / width)
       const force = PUSH_PX / width
       const i = k - 1
-      let x = Math.max(end + gap * i, Math.min(1 - end - gap * (2 - i), u))
+      let x = u
       const hi = i < 2 ? p[i + 1] - gap : Infinity
       const lo = i > 0 ? p[i - 1] + gap : -Infinity
       if (x > hi) {
@@ -342,7 +342,9 @@ export function createSettingsPanel () {
         if (!drag.down && lo - x < force) x = lo
         else { drag.down = true; x = Math.min(lo, x + force) }
       } else drag.down = false
-      p[i] = x
+      // The ends last: applied before the push's lag, a pushed row stopped PUSH_PX short of the end
+      // (Robert: "I can't push the last one closer by pushing the furthest one").
+      p[i] = Math.max(end + gap * i, Math.min(1 - end - gap * (2 - i), x))
       for (let j = i + 1; j < 3; j++) p[j] = Math.max(p[j], p[j - 1] + gap)
       for (let j = i - 1; j >= 0; j--) p[j] = Math.min(p[j], p[j + 1] - gap)
       p.forEach((v, j) => { const r = Math.round(v * 1000) / 1000; if (r !== livePlaces[j]()) livePlaces[j](r) })
