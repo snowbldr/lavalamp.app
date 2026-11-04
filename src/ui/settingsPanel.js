@@ -355,7 +355,12 @@ export function createSettingsPanel () {
   showBar()
   // Two labels only, the ends (Robert: "we only really also need two labels there, cold and hot.
   // Everything in between is just implicit from the gradient").
-  const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-labels' }, span('Cold'), span('Hot')))
+  // The background as a rounded button between the two labels, under the bar (Robert: "We should
+  // move background to a rounded rectangle button underneath the gradient and between the cold and
+  // hot labels"); before, a swatch on its own row and then one in a row above the bar.
+  const backButton = swatch('Background', 'bgColor', bgColor)
+  backButton.classList.add('back-button')
+  const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-labels' }, span('Cold'), backButton, span('Hot')))
 
   // Themes are starting points (Robert: "they click an existing theme as a starting point or load
   // the default one on start up. They drag the gradient, change colors. then if they want to save
@@ -414,7 +419,9 @@ export function createSettingsPanel () {
     const tile = button({
       class: theme === loadedTheme ? 'theme staged' : 'theme',
       title: theme.name,
-      style: { background: `linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
+      // The theme's background as a solid strip along the bottom of its gradient (Robert: "we should
+      // include the background in the theme. we could draw it as a solid bar across the bottom").
+      style: { background: `${theme.bgColor ? `linear-gradient(${css(theme.bgColor)}, ${css(theme.bgColor)}) bottom / 100% 7px no-repeat, ` : ''}linear-gradient(90deg, ${STOPS.map((k, i) => `${css(theme[k])} ${([0, theme.heatCoolAt || 0.25, theme.heatWarmAt || 0.5, theme.heatHotAt || 0.75, 1][i] * 100).toFixed(1)}%`).join(', ')})` },
       onclick: () => {
         stopEditing(false)
         if (deleting && mine) {
@@ -500,10 +507,6 @@ export function createSettingsPanel () {
       // like that too").
       div({ class: 'sub-panel' },
       div({ class: 'swatch-row' },
-        // The background as one small swatch where the Presets and Gradient switch was (Robert: "we
-        // need a better way to set the background. this is wasting way too much space"; "we can
-        // actually get rid of that toggle and put the background selection there").
-        div({ class: 'gradient-top' }, swatch('Background', 'bgColor', bgColor), span({ class: 'gradient-top-label' }, 'Background')),
         gradientPending
       ),
       div({ class: 'swatch-row' },

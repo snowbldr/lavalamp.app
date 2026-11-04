@@ -299,7 +299,10 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 
 /* The pending gradient: a bar with the midpoint's slider over it, and the eye and tick */
 .gradient-pending { display: flex; flex-direction: column; padding: 6px 9px 6px; }
-.gradient-labels { display: flex; justify-content: space-between; margin: 8px -9px 0; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
+.gradient-labels { display: flex; justify-content: space-between; align-items: flex-start; margin: 8px -9px 0; font-size: 11px; color: rgba(236, 236, 236, 0.7); }
+.gradient-labels .back-button label { display: none; }
+.gradient-labels .back-button .swatch-well { width: 96px; height: 24px; border-radius: 8px; border-width: 1px; display: flex; align-items: center; justify-content: center; }
+.gradient-labels .back-button .swatch-well::after { content: 'Background'; font-size: 11px; font-weight: 600; color: #ececec; text-shadow: 0 0 3px #000, 0 0 2px #000; }
 .gradient-bar { position: relative; flex: none; height: 30px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18); }
 .gradient-bar .gradient-dot { position: absolute; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; padding: 0; gap: 0; border-radius: 50%; border: 2px solid #ececec; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 1px 4px rgba(0, 0, 0, 0.6); cursor: pointer; touch-action: none; box-sizing: border-box; }
 .gradient-bar .gradient-dot.pin { cursor: ew-resize; }
