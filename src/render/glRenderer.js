@@ -1,4 +1,5 @@
 import { drawCooling, drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
+const CULL_MARGIN = 48 // window px past the edge a drawn disc and its blur can still reach
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
 // WebGL exists: soft discs composited source-over into a texture, then one fullscreen pass
@@ -235,10 +236,21 @@ export function createGlRenderer (canvas, look) {
     const perTemp = heat ? top / (2 * overlays.neutral) : 0
     const floorY = overlays.floorY ?? Infinity
     const hiddenTemp = overlays.neutral || 0 // half of it drew warm pot lava purple, a fuzz over every pot; neutral still keeps the superheated (1.5 to 3 times) from white
+    // Only what can show is drawn: the pots' and bottles' reserves sit below the floor and above
+    // the ceiling, off screen unless the Reservoirs view fits them in, and a frame built all of
+    // them (Robert: "I also noticed that the lava gets pretty laggy": 53055 particles at 2560 by
+    // 1294, 21604 below the floor and 813 above, the discs 10 to 11 ms of a 16 ms frame). A disc
+    // and its blur reach CULL_MARGIN window px past the edge at most.
+    const cullTop = -CULL_MARGIN * scale
+    const cullBottom = height + CULL_MARGIN * scale
+    const cullRight = width + CULL_MARGIN * scale
     let k = 0
+    let drawn = 0
     for (let i = 0; i < count; i++) {
       const cx = (state.x[i] * view.k + view.ox) * scale
       const cy = (state.y[i] * view.k + view.oy) * scale
+      if (cy < cullTop || cy > cullBottom || cx < cullTop || cx > cullRight) continue
+      drawn++
       let cr = lava[0]
       let cg = lava[1]
       let cb = lava[2]
@@ -272,7 +284,7 @@ export function createGlRenderer (canvas, look) {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
     gl.useProgram(particles)
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
-    gl.bufferData(gl.ARRAY_BUFFER, vertexData.subarray(0, floats), gl.DYNAMIC_DRAW)
+    gl.bufferData(gl.ARRAY_BUFFER, vertexData.subarray(0, k), gl.DYNAMIC_DRAW)
     const bytes = STRIDE * 4
     gl.enableVertexAttribArray(pLoc.aCentre)
     gl.vertexAttribPointer(pLoc.aCentre, 2, gl.FLOAT, false, bytes, 0)
@@ -294,7 +306,7 @@ export function createGlRenderer (canvas, look) {
     const discScale = Math.sqrt(view.k) * scale
     const disc = look.particleSize
     gl.uniform1f(pLoc.uSize, view.k < 1 ? Math.max(MIN_VIEW_DISC, disc * discScale) : disc * discScale)
-    gl.drawArrays(gl.TRIANGLES, 0, count * 6)
+    gl.drawArrays(gl.TRIANGLES, 0, drawn * 6)
     gl.disableVertexAttribArray(pLoc.aColor)
     gl.disableVertexAttribArray(pLoc.aCorner)
     let t1 = now(); profile.discs = t1 - t; t = t1

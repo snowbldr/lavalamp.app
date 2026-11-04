@@ -67,9 +67,11 @@ export function createCanvasRenderer (canvas, look) {
       const perTemp = top / (2 * overlays.neutral)
       const floorY = overlays.floorY ?? Infinity // lava in a pot drawn no hotter than neutral (see glRenderer.js)
       for (let i = 0; i < count; i++) {
+        const dy = (state.y[i] * view.k + view.oy) * scale - offset
+        if (dy < -span || dy > height) continue // off screen: the reserves below the floor and above the ceiling (see glRenderer.js)
         const temp = state.y[i] > floorY ? Math.min(state.temp[i], overlays.neutral) : state.temp[i]
         const step = Math.max(0, Math.min(top, Math.round(temp * perTemp)))
-        context.drawImage(heatDiscs[step], (state.x[i] * view.k + view.ox) * scale - offset, (state.y[i] * view.k + view.oy) * scale - offset, span, span)
+        context.drawImage(heatDiscs[step], (state.x[i] * view.k + view.ox) * scale - offset, dy, span, span)
       }
     } else {
       prepareDisc(size, r, g, b)
