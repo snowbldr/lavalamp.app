@@ -134,6 +134,9 @@ const BOOM_BEFORE = 0.6
 const BOOM_GAP = 0.1
 const BOOM_PEAK = 14
 const BOOM_PEAK_FALL = 0.6 // dB a second
+const ANALYSIS_RATE = 60 // frames a second the music is heard at, at most (see update)
+const FRAME_EVENTS = ['beat', 'hat', 'boom', 'clap', 'drop', 'wobbleNote', 'stab']
+const SECTION_EVENTS = ['drumHit', 'soloStart', 'leadNote', 'rollEnd', 'impact', 'half', 'double', 'key']
 const BOOM_REFRACTORY = 0 // was 1 s: no limits on how often (app.js BOOM_POT_GAP)
 const BOOM_FALL = 2 // dB under the note's highest: past its peak (1 fired on frame jitter, 0:55.15 for a peak at 0:55.33)
 const BOOM_WAIT = 0.6 // seconds after the attack at most
@@ -232,6 +235,7 @@ export function createMusic () {
   let error = ''
   let binHz = 0
   const sections = createSections()
+  let waited = 0 // seconds since the music was last heard (see ANALYSIS_RATE)
   const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, clap: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
@@ -579,6 +583,22 @@ export function createMusic () {
       levels.beat = false
       levels.hat = false
       levels.boom = false
+      // Heard at ANALYSIS_RATE whatever the screen's rate: the beat's rise is over
+      // BEAT_RISE_FRAMES frames and the lamp was tuned at 60 of them a second. At 120 a second
+      // the rise was over half the time, and C-C's drop at 0:55 went (a false one at 0:27.7, and
+      // none at all live in Chrome at 120 Hz). Between, only the one-frame events are cleared.
+      if (!frame) {
+        waited += dt
+        if (waited < 1 / ANALYSIS_RATE - 0.002) {
+          for (const k of FRAME_EVENTS) levels[k] = false
+          if (levels.sections) for (const k of SECTION_EVENTS) levels.sections[k] = false
+          beatClock.tick = false
+          beatClock.hit = false
+          return levels
+        }
+        dt = waited
+        waited = 0
+      }
       if (frame) {
         // A frame given rather than read (docs/methods/tools/song-scan.js runs a whole song
         // through this offline, faster than it plays): its bytes and Hz a bin.
