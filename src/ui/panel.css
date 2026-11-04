@@ -307,4 +307,5 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .icon-button svg { width: 18px; height: 18px; }
 .icon-button.on { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.5); }
 .icon-button.primary { background: var(--accent); color: #111; border-color: transparent; }
+.icon-button:disabled { opacity: 0.35; cursor: default; }
 .theme.staged { box-shadow: 0 0 0 2px var(--accent); }

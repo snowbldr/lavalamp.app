@@ -310,15 +310,21 @@ export function createSettingsPanel () {
   tick.innerHTML = ICON('<path d="M4 12.5l5 5L20 6.5"/>')
   const gradientPending = div({ class: 'gradient-pending' }, bar, div({ class: 'gradient-actions' }, eye, tick))
   const showPending = () => {
+    // Always shown, so the themes do not jump down when one is clicked (Robert: "we should show the
+    // full gradient preview and apply always instead of after cliking a theme. the shift is bad"):
+    // with no theme picked it shows the colours as they are, and the eye and tick wait.
     const colours = pendingColours()
-    gradientPending.style.display = colours ? 'flex' : 'none'
+    const shown = colours || { heatCold: heatCold(), heatCool: heatCool(), heatWarm: heatWarm(), heatHot: heatHot(), heatPeak: heatPeak() }
     midSlider.style.display = gradientKind() === 'presets' ? 'none' : ''
-    if (colours) bar.style.background = `linear-gradient(90deg, ${STOPS.map(k => css(colours[k])).join(', ')})`
+    bar.style.background = `linear-gradient(90deg, ${STOPS.map(k => css(shown[k])).join(', ')})`
+    eye.disabled = !colours
+    tick.disabled = !colours
+    if (!colours && previewing()) { previewing(false); return }
     eye.classList.toggle('on', previewing())
     eye.setAttribute('aria-pressed', String(previewing()))
     window.dispatchEvent(new CustomEvent('lavalamp-preview-colours', { detail: previewing() && colours ? colours : null }))
   }
-  for (const state of [gradientKind, gradientFrom, gradientTo, gradientMid, stagedTheme, previewing]) state.subscribe(showPending)
+  for (const state of [gradientKind, gradientFrom, gradientTo, gradientMid, stagedTheme, previewing, heatCold, heatCool, heatWarm, heatHot, heatPeak]) state.subscribe(showPending)
   gradientKind.subscribe(() => { for (const b of (panel ? panel.querySelectorAll('.theme.staged') : [])) b.classList.remove('staged') })
   showPending()
 
