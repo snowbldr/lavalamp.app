@@ -709,6 +709,7 @@ export function createMusic () {
       levels.reference = reference
       levels.score = score
       levels.drop = false
+      levels.dropKind = '' // which rule called a drop: 'tempo', 'cut' (the bass back after a cut, or the kick back) or 'surge'
       // The wobble (see WOBBLE_BAND).
       {
         const a = Math.max(1, Math.floor(WOBBLE_BAND[0] / binHz))
@@ -771,9 +772,9 @@ export function createMusic () {
       }
       const dippedBefore = () => scoreHistory.some(([t, v]) => clock - t > CUT_TIME + CUT_SKIP && v < CUT_BEFORE_SCORE)
       if (clock - startedAt > SETTLE) {
-        if (levels.beat && clock - lastSwitch > TEMPO_TO && tempoSwitched()) { levels.drop = true; levels.calm = false; droppedAt = clock; lastSwitch = clock }
-        else if (levels.beat && ((cutBefore && dippedBefore()) || kickGoneFor >= KICK_GONE) && 10 * Math.log10(Math.max(1e-12, total)) > reference - CUT_LEVEL) { levels.drop = true; levels.calm = false; droppedAt = clock }
-        else if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock }
+        if (levels.beat && clock - lastSwitch > TEMPO_TO && tempoSwitched()) { levels.drop = true; levels.calm = false; droppedAt = clock; lastSwitch = clock; levels.dropKind = 'tempo' }
+        else if (levels.beat && ((cutBefore && dippedBefore()) || kickGoneFor >= KICK_GONE) && 10 * Math.log10(Math.max(1e-12, total)) > reference - CUT_LEVEL) { levels.drop = true; levels.calm = false; droppedAt = clock; levels.dropKind = 'cut' }
+        else if (levels.calm && levels.surge > DROP_SURGE && fastDb > reference - DROP_DB) { levels.drop = true; levels.calm = false; droppedAt = clock; levels.dropKind = 'surge' }
         else if (levels.calm && score > -BUSY_DB) levels.calm = false
         else if (!levels.calm && score < -CALM_DB && clock - droppedAt > DROP_HOLD) levels.calm = true
       }

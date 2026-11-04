@@ -527,6 +527,8 @@ export async function start () {
   const DROP_GAP = 6 // seconds: one drop at most this often (8 let Drugs I Like's kick coming in at 0:36.6 block its drop at 0:44)
   const DROP_SETTLE = 6 // seconds after Listen before a drop can be: the averages start from the silence before the music (the test's first kick, and the first second of Drugs I Like, read as drops)
   let lastDropAt = -1e9
+  let lastDropKind = ''
+  const SUPERSEDE = 3 // s: a cut's drop this soon after a surge's still fires
   const BUFFER = 0.35 // of the lava, in the pots and the bottom fifth of the tank
   let bufferAt = -1e9
   let lavaLow = false
@@ -698,7 +700,14 @@ export async function start () {
     // The drop is music.js's alone: a surge out of a calm part, or the bass back after a cut. The
     // first kick after two seconds without one, here before, fired in C-C's intro (10.1, 23.8 s live)
     // and missed Drugs I Like's drop by 70 ms.
-    const isDrop = m.drop && musicNow - lastDropAt > DROP_GAP && musicNow - musicLogStart > DROP_SETTLE
+    // A swell that trips the surge rule and is then cut for the real hit (Espresso: the surge at
+    // 8.03 s, the bass back after the cut at 9.65 s, the hard bass pick that starts the song)
+    // lets the hit through within SUPERSEDE of it, though DROP_GAP has not passed (Robert: "a drop
+    // in the espresso song that doesn't get picked up. at 0:09 is when there's a bass hit and the
+    // song changes"). Every drop of C-C, Drugs I Like, Bangarang, Bohemian Rhapsody and the Fifth's
+    // first movement is where it was.
+    const superseding = m.drop && m.dropKind === 'cut' && lastDropKind === 'surge' && musicNow - lastDropAt <= SUPERSEDE
+    const isDrop = m.drop && (musicNow - lastDropAt > DROP_GAP || superseding) && musicNow - musicLogStart > DROP_SETTLE
     if (m.beat) beatsHeard++
     // The lava buffer (Robert: "I think we have a lava starvation problem. We should try to keep a
     // lava buffer in the pots so that we always can fire something"). Measured on Bangarang, live:
@@ -746,6 +755,7 @@ export async function start () {
     }
     if (isDrop) {
       lastDropAt = musicNow
+      lastDropKind = m.dropKind
       dropped = true
       if (lidded) open(musicDrop() * 1.5)
       if (sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
