@@ -1,4 +1,5 @@
 import { drawCooling, drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
+import { createDye } from './dye.js'
 const CULL_MARGIN = 48 // window px past the edge a drawn disc and its blur can still reach
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
@@ -26,6 +27,7 @@ const HEAT_STEPS = 2048 // was 48, which banded the heat colours in tens of px w
 // 20 or 24 looks really good, but it makes the edges too fuzzy instead of crisp"): the shape is
 // cut from the field blurred by Smooth, the heat colour is read from the field blurred by Blend.
 const MAX_BLUR = 48
+const TRAIL_MAX_PX = 64 // lamp px: a particle drawn further than this from where it was the frame before was moved, not carried, and lays a disc
 
 const PARTICLE_VERTEX = `
 attribute vec2 aCentre;
@@ -139,6 +141,19 @@ export function createGlRenderer (canvas, look) {
   const quadBuffer = gl.createBuffer()
   gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
+  // The Dyed fluid view (dye.js): nothing allocated until it is first switched on.
+  const dye = createDye(gl, { link, quadVertex: QUAD_VERTEX, quadBuffer, stride: STRIDE })
+  // Where each particle was drawn the frame before, for the dye's strokes (dye.js STAMP_VERTEX): by the particle's id
+  // where the lamp reorders its particles (the CPU lamp's sort), by index on the GPU lamp, whose order holds. trailAt is
+  // the frame a particle was last drawn; one not drawn the frame before (born, off screen, or a picture moved or
+  // resized since) gets no stroke, and nor does one that moved more than TRAIL_MAX_PX (a reservoir particle put back).
+  let prevData = new Float32Array(0)
+  const prevBuffer = gl.createBuffer()
+  let trailX = new Float32Array(0)
+  let trailY = new Float32Array(0)
+  let trailAt = new Int32Array(0)
+  let trailFrame = 1
+  let trailView = ''
 
   // The accumulation texture and its framebuffer, resized with the canvas, and a second pair
   // the blur ping-pongs through.
@@ -173,7 +188,7 @@ export function createGlRenderer (canvas, look) {
   let lampWidth = 0 // in lamp (window) px
   let lampHeight = 0
   let scale = 1
-  const profile = { discs: 0, smooth: 0, composite: 0, overlays: 0 }
+  const profile = { discs: 0, dye: 0, smooth: 0, composite: 0, overlays: 0 }
   const now = () => (look.profile ? performance.now() : 0)
 
   function resize (newWidth, newHeight) {
@@ -240,6 +255,48 @@ export function createGlRenderer (canvas, look) {
     // every pot). The line itself is off screen now (app.js FLOOR_HIDDEN), which is what hides the
     // pots' packed rows; a pot row drawn higher and in the colour above (potCap.js) is gone with it.
     const hiddenTemp = overlays.neutral || 0
+    // params.glowBoost (0, none, as tuned): a look only brightening for a tool's glow pulse. The hot
+    // lava drawn as if its heat over neutral were 1 + glowBoost times as much, so it goes up the lamp's own heat
+    // colours toward white; with the heat colours off, every disc's colour times 1 + glowBoost. No physics. The
+    // colour times 1 + glowBoost for the hot lava was tried first: red and orange are near 1 in red already, so it
+    // barely showed. The 2D canvas renderer ignores it.
+    const boost = overlays.glowBoost > 0 ? overlays.glowBoost : 0
+    const neutral = overlays.neutral || 0
+    // params.glowReach (0 as tuned): the boost's threshold lowered below neutral, to neutral times 1 - glowReach, so a
+    // pulse brightens lava that is only warm as well (Robert: "I think bass line gets assigned lava glow, that's gonna be
+    // sick"; on a Warmth 0.7 pool 90.3% of the lava sat at 0.5 to 0.7 of neutral and 3.1% over it, so a boost of 3
+    // looked the same). The lift is the heat over the new threshold, eased in over the band's lower half (a smoothstep)
+    // so there is no edge where it starts. At 0 the threshold is neutral and the lift is the heat over neutral, as before.
+    const reach = boost && overlays.glowReach > 0 ? Math.min(1, overlays.glowReach) : 0
+    const glowFrom = neutral * (1 - reach)
+    const glowEase = reach * neutral / 2
+    const lift = held => {
+      const x = held - glowFrom
+      if (x >= glowEase) return x
+      const u = x / glowEase
+      return x * u * u * (3 - 2 * u)
+    }
+    // params.glowKnee (0 as tuned): a soft knee on the boost, for the tool (Robert, with the glow warming the lava it
+    // lights: "glow heating is awesome. but the visual effect is way too strong. when the lamp is warm it's almost all
+    // white"). The boost scales the heat over the threshold, and on a warm lamp most of the lava is over neutral, so a
+    // boost of 1 takes nearly all of it to the palette's top. With the knee, what the boost adds is compressed by the room
+    // left under white (the heat at which the palette reaches white, twice neutral): added becomes room times added over
+    // room plus added, a soft clip with the boost's own slope near the threshold that never quite reaches white, so a
+    // boost brightens the warm lava into the orange and yellow and only lava whose own heat is near white gets there.
+    // At knee 1 the whole addition is compressed, between 0 and 1 a blend of the two. The knee touches only what the
+    // boost adds, so at boost 0 the heat is drawn as it is whatever the knee (checked over 400,020 heats, four neutrals,
+    // reaches 0 to 1 and knees 0 to 1: no value differs). Measured at boost 1, reach 0.5 on a lamp 45% hot: of the lava
+    // in the tank, 22% drawn at the palette's top at knee 0 and 1.7% at knee 1 (the 1.7% that is there with no boost),
+    // within 5% of the top 26% and 9%; of the lava's pixels, white 17% and 2%.
+    const knee = boost && overlays.glowKnee > 0 ? Math.min(1, overlays.glowKnee) : 0
+    const white = 2 * neutral
+    const glowUp = held => {
+      const added = boost * lift(held)
+      if (!knee) return held + added
+      const room = white - held
+      if (room <= 0) return held + added
+      return held + added - knee * (added - room * added / (room + added))
+    }
     const yOf = i => state.y[i]
     const tempOf = heat ? i => (state.y[i] > floorY ? Math.min(state.temp[i], hiddenTemp) : state.temp[i]) : null
     // Only what can show is drawn: the pots' and bottles' reserves sit below the floor and above
@@ -252,21 +309,54 @@ export function createGlRenderer (canvas, look) {
     const cullRight = width + CULL_MARGIN * scale
     let k = 0
     let drawn = 0
+    const sweep = !!(look.dyedFluid && overlays.dyeField)
+    const ids = sweep && state.id ? state.id : null
+    let kp = 0
+    trailFrame++
+    const trailMax = (TRAIL_MAX_PX * scale) ** 2
+    if (sweep) {
+      const viewKey = `${view.k} ${view.ox} ${view.oy} ${width} ${height}`
+      if (viewKey !== trailView) { trailView = viewKey; trailFrame += 2 }
+      if (prevData.length < count * 12) prevData = new Float32Array(count * 12)
+    }
     for (let i = 0; i < count; i++) {
       const cx = (state.x[i] * view.k + view.ox) * scale
       const cy = (yOf(i) * view.k + view.oy) * scale
       if (cy < cullTop || cy > cullBottom || cx < cullTop || cx > cullRight) continue
       drawn++
+      if (sweep) {
+        const key = ids ? ids[i] : i
+        if (key >= trailAt.length) {
+          const size = Math.max(key + 1, trailAt.length * 2, 1024)
+          const at = new Int32Array(size); at.set(trailAt); trailAt = at
+          const tx = new Float32Array(size); tx.set(trailX); trailX = tx
+          const ty = new Float32Array(size); ty.set(trailY); trailY = ty
+        }
+        let px = cx
+        let py = cy
+        if (trailAt[key] === trailFrame - 1) {
+          const dx = cx - trailX[key]
+          const dy = cy - trailY[key]
+          if (dx * dx + dy * dy <= trailMax) { px = trailX[key]; py = trailY[key] }
+        }
+        trailX[key] = cx; trailY[key] = cy; trailAt[key] = trailFrame
+        for (let c = 0; c < 6; c++) { prevData[kp++] = px; prevData[kp++] = py }
+      }
       let cr = lava[0]
       let cg = lava[1]
       let cb = lava[2]
       if (heat) {
         // Held deeper instead of capped, a closed pot's lava left a black gap in the pool.
-        const temp = tempOf(i)
+        const held = tempOf(i)
+        const temp = boost && held > glowFrom ? glowUp(held) : held
         const step = Math.max(0, Math.min(top, Math.round(temp * perTemp))) * 3
         cr = heatTable[step]
         cg = heatTable[step + 1]
         cb = heatTable[step + 2]
+      } else if (boost) {
+        cr *= 1 + boost
+        cg *= 1 + boost
+        cb *= 1 + boost
       }
       // Two triangles: (-1,-1) (1,-1) (1,1) and (-1,-1) (1,1) (-1,1).
       for (const [ox, oy] of CORNERS) {
@@ -288,6 +378,11 @@ export function createGlRenderer (canvas, look) {
     gl.useProgram(particles)
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
     gl.bufferData(gl.ARRAY_BUFFER, vertexData.subarray(0, k), gl.DYNAMIC_DRAW)
+    if (sweep) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, prevBuffer)
+      gl.bufferData(gl.ARRAY_BUFFER, prevData.subarray(0, kp), gl.DYNAMIC_DRAW)
+      gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
+    }
     const bytes = STRIDE * 4
     gl.enableVertexAttribArray(pLoc.aCentre)
     gl.vertexAttribPointer(pLoc.aCentre, 2, gl.FLOAT, false, bytes, 0)
@@ -314,6 +409,7 @@ export function createGlRenderer (canvas, look) {
     gl.disableVertexAttribArray(pLoc.aCorner)
     let t1 = now(); profile.discs = t1 - t; t = t1
     gl.disable(gl.BLEND)
+    const dyeMode = look.dyedFluid && overlays.dyeField ? (look.dyeMode || 'under') : null
     gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
     // Pass 2, when look.smooth is set: blur the field, across then down. First, when the heat
     // colours are showing and Blend is wider than Smooth, the same blur at Blend's radius from
@@ -333,6 +429,7 @@ export function createGlRenderer (canvas, look) {
       gl.uniform2f(bLoc.uStep, 0, 1 / height)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
+    // Alone draws no lava, but the dye's stamp reads the blurred field (dye.js), so the blur still runs.
     if (radius >= 0.5 || separate) {
       gl.useProgram(blur)
       gl.enableVertexAttribArray(bLoc.aPosition)
@@ -343,27 +440,47 @@ export function createGlRenderer (canvas, look) {
       if (radius >= 0.5) blurInto(accum, accumTarget, radius)
     }
     t1 = now(); profile.smooth = t1 - t; t = t1
-    // Pass 3: threshold and colour, to the screen.
+    // The Dyed fluid view: advected, faded and stamped from the vertices just drawn, its colour and cover read from the
+    // field just blurred (dye.js). Off, its textures are let go and no pass runs.
+    if (dyeMode) {
+      dye.step({ width, height, lampWidth, lampHeight, scale, view, field: overlays.dyeField, dt: overlays.dyeDt || 1 / 60, fade: look.dyeFade ?? 0.5, curve: look.dyeCurve ?? 0, cut: look.dyeCut ?? 0, stamp: look.dyeStamp ?? 0.3, vertexBuffer, prevBuffer, drawn, lava: separate ? blendTarget.texture : accum })
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.viewport(0, 0, width, height)
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+    } else if (dye.allocated) dye.dispose()
+    t1 = now(); profile.dye = t1 - t; t = t1
+    // Pass 3: threshold and colour, to the screen. The dye first when it is under the lava or alone, the
+    // lava then laid over it; Alone draws no lava.
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, width, height)
-    gl.useProgram(composite)
-    gl.enableVertexAttribArray(cLoc.aPosition)
-    gl.vertexAttribPointer(cLoc.aPosition, 2, gl.FLOAT, false, 0, 0)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, accum)
-    gl.uniform1i(cLoc.uAccum, 0)
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_2D, separate ? blendTarget.texture : accum)
-    gl.uniform1i(cLoc.uBlend, 1)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.uniform2f(cLoc.uTexel, 1 / width, 1 / height)
-    gl.uniform1f(cLoc.uThreshold, (ALPHA_THRESHOLD + 0.5) / 255)
-    // About one bitmap pixel of alpha slope at a lone disc's edge, wider when the field is blurred.
-    const sizePx = Math.max(1, disc * discScale)
-    gl.uniform1f(cLoc.uSoft, Math.min(0.12, Math.max(0.004, 0.7 / sizePx)))
-    gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
-    gl.uniform1f(cLoc.uHeat, heat ? 1 : 0)
-    gl.drawArrays(gl.TRIANGLES, 0, 3)
+    if (dyeMode === 'under' || dyeMode === 'alone') {
+      dye.draw(dyeMode, width, height, look.dyeGlow ?? 1)
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer)
+      gl.enable(gl.BLEND)
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
+    }
+    if (dyeMode !== 'alone') {
+      gl.useProgram(composite)
+      gl.enableVertexAttribArray(cLoc.aPosition)
+      gl.vertexAttribPointer(cLoc.aPosition, 2, gl.FLOAT, false, 0, 0)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, accum)
+      gl.uniform1i(cLoc.uAccum, 0)
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, separate ? blendTarget.texture : accum)
+      gl.uniform1i(cLoc.uBlend, 1)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.uniform2f(cLoc.uTexel, 1 / width, 1 / height)
+      gl.uniform1f(cLoc.uThreshold, (ALPHA_THRESHOLD + 0.5) / 255)
+      // About one bitmap pixel of alpha slope at a lone disc's edge, wider when the field is blurred.
+      const sizePx = Math.max(1, disc * discScale)
+      gl.uniform1f(cLoc.uSoft, Math.min(0.12, Math.max(0.004, 0.7 / sizePx)))
+      gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
+      gl.uniform1f(cLoc.uHeat, heat ? 1 : 0)
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+    }
+    gl.disable(gl.BLEND)
+    if (dyeMode === 'over') dye.draw('over', width, height, look.dyeGlow ?? 1)
     t1 = now(); profile.composite = t1 - t; t = t1
     // The overlay canvas: only touched while a drawn-on-top view is on.
     const wantOverlay = (look.showHeater && overlays.heaterAt) || (look.showFlow && overlays.flowAt) || overlays.view

@@ -223,6 +223,11 @@ const TOUCH_MIN = 80
 const TOUCH_PUSH = 250 // px/s at the centre
 const TOUCH_SPIN = 300 // px/s at the edge of the core
 const TOUCH_HEAT = 12 // px/s of temperature per step
+// A flat touch (a touch with flat set, a tool's black hole pinch; Robert: "The pinch pulls in hard from all directions
+// with just one high circle in the center instead of on a gradient"): full weight over its radius, then a sharp edge,
+// exp(-((q - 1) / TOUCH_EDGE)^2) past it, where a touch without it falls off as exp(-q^2) from its centre.
+const TOUCH_EDGE = 0.15
+const touchWeight = (q, flat) => flat ? (q <= 1 ? 1 : Math.exp(-((q - 1) / TOUCH_EDGE) * ((q - 1) / TOUCH_EDGE))) : Math.exp(-q * q)
 // Stirring overrides inertia. Where a finger or a strong eddy is at work the carried velocity is
 // replaced by the buoyancy drift (the Wobble 0 lamp, which is where the fingers and the tornadoes
 // were tuned) and the stirring moves the lava on top of that. Without this the pool's skin fought
@@ -286,10 +291,28 @@ const DRIFT_REACH = 6
 const DRIFT_REACH_MAX = 0.5
 const DRIFT_GAIN = 2.5
 const DRIFT_VARIETY = [0.7, 1.3]
+// Effect sizes follow the lamp (Robert, 2026-11-05: "the effect size for some effects (eddies, splat, blob blast) need
+// to be relative to the size of the screen. sometimes giant eddies launch in mobile view and it's wayyyyy overkill").
+// The lamp's own lengths in px, a drifter's core (DRIFT_CORE), the splat's and the ring wave's push, width and speed
+// (SPLAT_PX, SPLAT_SPEED, PULSE_PX, PULSE_SPEED, PULSE_WIDTH) and an eddy's travel speed (params.eddySpeed), were
+// tuned on Robert's desktop window, 2560 by 1294 (decisions.md), 1318 tall here with the hidden floor. Each is times
+// effectScale: the lamp's shorter side over that window's, 1318, never over 1, so a desktop window is as tuned and a
+// phone at 390 by 844 gets 0.30 (drifter cores of 7 to 41 px for 25 to 140, a splat's ring out to 152 px for 506).
+// The shorter side, as EDDY_RADIUS and TOUCH_RADIUS already were: on a tall lamp it is the width, what an eddy has
+// to fit in. Spins and heats are not lengths and are as tuned. A tool tuned at another size gives
+// params.effectTuning, its own shorter side, and its scale is not held under 1 (the tool's lamp column, 661
+// across). Within EFFECT_SNAP of 1 is 1, so a window a few px off the tuning size is exactly as tuned.
+const EFFECT_TUNING = 1318
+const EFFECT_SNAP = 0.02
+export const effectScaleFor = (width, height, tuning) => {
+  const s = Math.min(width, height) / (tuning > 0 ? tuning : EFFECT_TUNING)
+  const k = tuning > 0 ? s : Math.min(1, s)
+  return Math.abs(k - 1) < EFFECT_SNAP ? 1 : k
+}
 
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
-//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third), elementRate, elementLifeScale, elementCore, floorHeat, floorGlow (see SPOT_BASE and ELEMENT_CORE), worldOnly (no lava: the world alone, for the GPU lamp's shell)
+//   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third), elementRate, elementLifeScale, elementCore, floorHeat, floorGlow (see SPOT_BASE and ELEMENT_CORE), minTemp (no lava cools under it, 0 as tuned), emptyBoost (how much harder a drop heats a pot not charged for it, EMPTY_BOOST as tuned; a blast's share of lift, at once or tilted, is dropPot's third argument, not a param: see dropOpts; a ring wave's speed, width, push, life and start are pulseWave's argument, not params: see pulses; a splat's legs, length, speed, life, size over 1 and turn are splat's fourth argument: see splatRequests), worldOnly (no lava: the world alone, for the GPU lamp's shell)
 export function createSimulation ({ width, height, params }) {
   const hash = new SpatialHash(width, height, Math.max(MIN_CELL, params.interactionRadius * CELL_FRACTION))
   const impulse = [0, 0]
@@ -317,7 +340,9 @@ export function createSimulation ({ width, height, params }) {
   // and nothing comes in, so it can be as hot as it likes with no early takeoff. dropPot(strength)
   // takes the lid off and blasts that pot (or the biggest cold one, if none was charged) at
   // DROP_BLAST times the top heat times strength, full on for half of DROP_LIFE and tapering over
-  // the rest. lidPot is the lidded pot's index, -1 for none, which contain honours.
+  // the rest. dropPot(strength, at, opts): at a pot by index, opts a tool's shape for the blast (a
+  // share of the lift, at once, tilted across the cup; see dropOpts), the blast as tuned without it.
+  // lidPot is the lidded pot's index, -1 for none, which contain honours.
   let chargeLevel = 0
   let chargeBig = false // the drop's pot (the fullest cold one, the whole cup), else a beat's pot (drawn as the clocks draw them, their usual core)
   // The lava in each pot, by element, as the page last counted it (the GPU lamp's lava is not here),
@@ -325,7 +350,8 @@ export function createSimulation ({ width, height, params }) {
   // biggest filled pot when we choose one to preheat for a drop. Then only if we don't have a
   // preheated pot with lava in it, and we detect a drop, then we grab the fullest one and heat it
   // aggressively"). A lidded pot under FULL_SHARE of the fullest pot's lava (and FULL_MIN particles)
-  // counts as empty, and the drop goes to the fullest, EMPTY_BOOST times hotter.
+  // counts as empty, and the drop goes to the fullest, EMPTY_BOOST times hotter (params.emptyBoost, a
+  // tool's, in its place when above 0: with no pot kept charged every drop is such a blast).
   let potFullness = null
   const FULL_SHARE = 0.25
   const FULL_MIN = 30
@@ -334,6 +360,22 @@ export function createSimulation ({ width, height, params }) {
   let lidPot = -1
   let dropRequest = 0
   let dropAt = -1 // the pot a drop asks for by index (a clap: the one holding the most lava), -1 for the usual
+  // A tool's shape for the blast (dropPot's third argument, none as tuned; Robert: "we could heat it
+  // instantly and we could do things like apply a heat gradient or a specific temperature, like a
+  // slow instant pot that launched a glob half way instead of having to blast it all the way"), the
+  // music being allowed to deviate from the lamp's physics. { lift, instant, tilt }:
+  // lift, the pot's lava heated to this share of the drop's lift and no further: the cap is neutral
+  // (gravity) plus lift times what the drop's cap (CHARGE_LIFT gravities, Lift allowing) sits over
+  // neutral, so 1 is the drop as tuned, 0 neutral, and at 0.4 the glob rises part way, cools and
+  // falls back; its pump (PLUME_LIFE) scaled down by it too when under 1.
+  // instant, the pot's lava taken to that cap at once, in one step, and nothing else heated: no
+  // heat over the mouth, no floor glow, no taper (DROP_LIFE), the element out the next step.
+  // tilt, -1 to 1, the heat across the cup's width: each particle's heat and its cap's rise over
+  // neutral times 1 + tilt times where it sits across the cup (-1 the left wall, 1 the right), so 1
+  // doubles the right side's and gives the left none, and the glob leaves leaning; the heat over the
+  // mouth and the pump's heat and push are tilted the same way (in the pot alone, the pool over the
+  // mouth went up as a round dome). A factor on the heat, so the taper (the glow) is as it was.
+  let dropOpts = null
   // The pump (Robert: "on the drop, the heat should radiate up into the lamp from the pot that
   // fires. that way it gets motion even if the pot is completely empty. it should follow a gradient
   // of some kind. one realistic version of this would be a pulse pump that shot hot fluid from the
@@ -382,14 +424,21 @@ export function createSimulation ({ width, height, params }) {
   const CHARGE_LIFT_BEAT = 1.5 // 2 until the trains (Robert: "the pots stay hot too long and they just shoot up white spheres that don't intereact with anything cause it's all hot"). A beat's pot: at 3 its lava parked in the ceiling bottles at 1200 against 850 with no lids, and the ceiling held 59% of the lava by 40 s
   const DROP_LIFE = 2 // seconds
   let eddyRequests = 0 // eddies asked for on demand (the music's beat), born at the next step if there is room
+  const shapedEddies = [] // eddies asked for with a shape (a tool's combo), born at the next step whatever the room; pinned: true holds one in place
   // The music's bass, on the eddies ("bass notes should cause a wave"). The spring that went with
   // it, the lava about every eddy lurched forward along its spin and back, is gone (Robert: "the
   // eddies doing the back and forth looks bad. let's remove that and only keep the pulse
   // version"). A hit may send a pulse: a ring from an eddy's centre (or a point above the pool) travelling
   // out at PULSE_SPEED, pushing the lava ahead of it out and the lava behind it back in, a
   // pressure wave with no net move, fading over its life.
+  // pulseWave(shape): a tool's shape for the ring, { x, y, speed, width, push, life }, any of them, none as tuned:
+  // x and y where it starts (px on this lamp; either unset, the lamp's own random start for it), speed (px/s), width
+  // (px) and push (px, how far it carries the lava at its peak) at the tuning size, times the effect scale as the
+  // constants are (effectScaleFor), and life (s). An unset field is the constant (PULSE_SPEED, PULSE_WIDTH, PULSE_PX,
+  // PULSE_LIFE), so {} or a shape equal to the constants is the ring as tuned. The lamp passes none.
   const pulses = []
   let pulseRequests = 0
+  const shapedPulses = [] // rings asked for with a shape, born at the next step
   // The music's flips (Robert: "the eddies could abruptly switch directions up to one time during
   // their life time triggered by rareish music events"): each request is a chance that every eddy
   // not yet flipped turns its spin round, at once.
@@ -408,10 +457,22 @@ export function createSimulation ({ width, height, params }) {
   const SPLAT_PX = 240
   const SPLAT_SPEED = 320
   const SPLAT_LOBES = [5, 9]
-  const splatRequests = [] // [x, y, size] where each is to start (null for a point on the pool's surface) and how big, 1 a drop's
+  // splat(x, y, size, shape): a tool's shape for the splat, { lobes, length, speed, life, size }, any of them, none as
+  // tuned: lobes, how many legs (a whole number, 1 to 32; unset, drawn from SPLAT_LOBES as the lamp's own); length (px,
+  // how far a lobe's peak throws the lava) and speed (px/s, how fast the ring travels out) at the tuning size, times the
+  // effect scale as the constants are (effectScaleFor); life (s, how long it pushes, fading over it; unset, PULSE_LIFE
+  // times the size); size, which takes the place of the third argument and may go over the plain splat's cap of 1, up
+  // to SPLAT_SIZE_MOST: a size over 1 throws the lava that many times as far (the push times the size, as under 1) and,
+  // with no life of its own, lives that many times as long (to 4.8 s at 3), so at 3 a lobe's peak throws 720 px at the
+  // tuning size. An unset field is the constant (SPLAT_PX, SPLAT_SPEED, PULSE_LIFE), so {} or a shape equal to the
+  // constants is the splat as tuned; the lamp's own draws (the legs, the start, the two angles) are made either way, so
+  // a shape changes only what it sets. The lamp passes none. Splat pull in narrows every splat's legs and lengthens its
+  // life, shaped or not (splatNarrow).
+  const SPLAT_SIZE_MOST = 3
+  const splatRequests = [] // [x, y, size, shape] where each is to start (null for a point on the pool's surface), how big (1 a drop's) and a tool's shape ({ lobes, length, speed, life, size, turn, taper }: turn, turns a second the lobe pattern makes as the splat flies, signed, none as tuned; taper 'smooth', the push easing out with no slope at the end, the straight fade as tuned)
   let time = 0
   let heaterPower = () => 1 // the heater power under a floor point, as of the last step
-  let touches = [] // { x, y, vx, vy, mode } for this step, set by the caller
+  let touches = [] // { x, y, vx, vy, mode, radius, heat, strength } for this step, set by the caller (setTouches)
   // The heating elements, laid out once: { fx, fr } as fractions of the width and shorter side,
   // plus their lit state { heat, start, life } while lit.
   const elements = []
@@ -427,6 +488,7 @@ export function createSimulation ({ width, height, params }) {
   let interactionRadiusNow = 20 // params.interactionRadius as of the last step, for the drop's lid
   let spawnAreaNow = params.spawnArea || SPAWN_AREA // floor area per settled particle, px², for the spawn slab and the reservoirs
   let meanDensity = 0 // the lava's mean density as of the last step, for the kick's surface test
+  let scaleNow = 1 // effectScaleFor the lamp as of the last step
   const eddies = []
   const drifting = []
   // No eddy for the first EDDY_FIRST seconds: the lava is still settling and the pots have not
@@ -492,11 +554,106 @@ export function createSimulation ({ width, height, params }) {
   // The exponential alone still had 4% of the spin left at death and the eddy vanished with it
   // (Robert: "the eddies need to fade out more gracefully... it should gradually dissipate in
   // strength"), so the last DRIFT_FADE_OUT of the life is a smooth taper to nothing.
+  // A tool's shaped eddy may carry its own envelope instead (spawnEddy's shape: attack, seconds to full spin, and
+  // release, seconds of a smooth taper at the end of its life, no dying away between), so a held swirl holds and
+  // then lets go gently rather than throbbing and stopping; with neither given, the drifter's envelope as tuned.
   const driftEnvelope = e => {
     const age = time - e.start
+    if (e.attack != null || e.release != null) {
+      const attack = e.attack > 0 ? e.attack : 0.5, release = Math.min(e.life, e.release > 0 ? e.release : DRIFT_FADE_OUT * e.life)
+      const left = e.life - age, u = Math.min(1, Math.max(0, left / release))
+      const target = Math.min(1, age / attack) * u * u * (3 - 2 * u)
+      // Never up faster than the attack: a heal that lengthens the life mid taper would snap the spin back to full;
+      // held once a step, so every reader in the step sees the same value.
+      if (e.envAt !== time) { const was = e.envAt == null ? 0 : e.envVal; e.envVal = Math.min(target, was + (e.envAt == null ? 1 : (time - e.envAt) / attack)); e.envAt = time }
+      return e.envVal
+    }
     const t = age / e.life
     const tail = t < 1 - DRIFT_FADE_OUT ? 1 : (() => { const u = Math.min(1, (1 - t) / DRIFT_FADE_OUT); return u * u * (3 - 2 * u) })()
     return Math.min(1, age / 0.5) * Math.exp(-age / (DRIFT_SPIN_TAU * e.life)) * tail
+  }
+  // Rim pull in (Robert, 2026-11-07, of the micro vortex: "thinking about watching a real vortex in real life, the
+  // outside of the vortex dissipates faster than the center, I assume because the same force is spread across more
+  // particles"; "all the eddies should work that way"): until then an eddy faded by one factor at every radius and kept
+  // its size. Now its reach pulls in towards its core over its life, so the rim dies first and the last thing left is a
+  // tight spin in the middle. After the start as it was (PULL_HOLD s, or a fifth of a short life), the reach is
+  // R0 (1 - p (1 - PULL_CORE) (1 - g)), g = (1 - s)^2 over the rest of the life s, p the Rim pull in knob
+  // (params.eddyPullIn, 0 the old look exactly), and the spin near the core fades slower: the envelope there is
+  // raised to 1 / (1 + PULL_SLOW p (1 - g)), its time constant 1.3 times at the default p 0.6, blending back to the
+  // envelope as it was by PULL_SPREAD cores out. Held once a step on the eddy (pullOf), and never growing back: a heal
+  // that lengthens a held eddy's life leaves its reach where it was.
+  const PULL_CORE = 0.35 // the share of the reach left at death, at Rim pull in 1
+  const PULL_SLOW = 0.5 // at Rim pull in 1 the core's spin fades 1.5 times as slowly; 1.3 at 0.6
+  const PULL_HOLD = 0.5 // s, the young eddy as it was
+  const PULL_SPREAD = 1.5 // cores, where the core's slower fade has blended back to the eddy's own
+  const PULL_DEFAULT = 0.6 // settings.js defaultEddyPullIn, for a lamp given no knob
+  const pullOf = e => {
+    if (e.pullAt === time) return e
+    const p = Math.max(0, Math.min(1, params.eddyPullIn ?? PULL_DEFAULT))
+    const age = time - e.start
+    const hold = Math.min(e.attack > 0 ? e.attack : PULL_HOLD, 0.2 * e.life)
+    const t = Math.min(1, Math.max(0, (age - hold) / Math.max(1e-6, e.life - hold)))
+    const g = Math.min(e.pullG ?? 1, (1 - t) * (1 - t))
+    e.pullG = g
+    e.pullReach = 1 - p * (1 - PULL_CORE) * (1 - g)
+    e.pullSlow = PULL_SLOW * p * (1 - g)
+    e.pullAt = time
+    return e
+  }
+  // The envelope at r px from an eddy's centre (pullOf held), core the length its slower fade is measured in. The
+  // envelope is the eddy's own this step, so its log is held with it: the flow grid asks thousands of times a step.
+  const pulledEnvelope = (e, envelope, r, core) => {
+    if (!(e.pullSlow > 0) || !(envelope > 0) || envelope >= 1) return envelope
+    const q = r / (PULL_SPREAD * core)
+    if (q > 3) return envelope // the blend under 1e-4
+    if (e.lnAt !== time) { e.lnEnv = Math.log(envelope); e.lnAt = time }
+    return Math.exp(e.lnEnv / (1 + e.pullSlow * Math.exp(-q * q)))
+  }
+  // A drifter's envelope, held once a step (the flow grid asks for it at every point).
+  const heldEnvelope = e => {
+    if (e.envHeldAt !== time) { e.envHeld = driftEnvelope(e); e.envHeldAt = time }
+    return e.envHeld
+  }
+  // A drifter's speed at r px from its centre: rising linearly to the peak at the core's edge, then
+  // 2 r rc / (r^2 + rc^2), one over distance in the tail, inside a Gaussian cutoff at its reach, pulled in.
+  const driftSpeed = (e, r, strength) => {
+    pullOf(e)
+    const reach = e.radius * e.pullReach
+    const q = r / e.core
+    return e.gain * strength * pulledEnvelope(e, heldEnvelope(e), r, e.core) * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (reach * reach))
+  }
+  // An in place eddy's (a Gaussian, r e^(-r^2) of its radius) speed factor at a point, pulled in the same way; its
+  // core the radius over root 2, where its speed peaks. Returns f, the velocity being f (-dy, dx) / reach.
+  const eddyFactor = (e, dx, dy, strength) => {
+    pullOf(e)
+    const reach = e.radius * e.pullReach
+    const d2 = dx * dx + dy * dy
+    const envelope = pulledEnvelope(e, Math.sin(Math.PI * (time - e.start) / e.life), Math.sqrt(d2), e.radius / Math.SQRT2)
+    return e.spin * strength / EDDY_PEAK * envelope * Math.exp(-d2 / (reach * reach)) / reach
+  }
+  // A splat's pull in (Robert: "the splats would be a lot nicer if they shrank in like that too, but probably much
+  // faster"). Tried first as the ring pulled back towards its centre, and it rounded the lava into balls (Robert: "now
+  // we're getting roughly rounded blobs which is not great ... instead of getting weaker, I think we should keep the
+  // strength but just shrink the expanding blobs ... we'll be forming spikes instead of an asterisk type shape"). Now
+  // the ring travels and pushes as it always did, and each lobe narrows round the circle as the splat ages: its push
+  // times ((1 + cos(lobes th + a)) / 2)^m, m = SPLAT_NARROW p s^2 over its life s, p the Splat pull in knob
+  // (params.splatPullIn, 0 the old look exactly). The window is 1 on a lobe's centre line, so every lobe's peak keeps
+  // its strength whatever the finer ripple over it, and 0 midway between lobes, so the 0.35 floor that pushed
+  // everywhere round the circle (and rounded the lava off) narrows away with the lobes. A power of the whole shape,
+  // normalised to its top, would weaken the lobes the ripple leaves lower (their peaks run 0.9 to 1.6) and lose legs
+  // rather than narrow them. Squared in time so the young splat is as wide as before and still cuts into the middle of
+  // the lava, narrowing over the second half: narrowed straight away (s^1) the lava between the lobes was never pushed
+  // and was left as a round core, 72% of the lava in one piece against 37% (a floating disc of lava, eight seeds). At
+  // the default 0.6 a lobe's half width at its end is under a quarter of its width at birth. The splat lives
+  // SPLAT_LONGER p longer, for the spikes' length (Robert: "We may need
+  // to make them a bit longer to account for the shrinking").
+  const SPLAT_PULL_DEFAULT = 0.6 // settings.js defaultSplatPullIn
+  const SPLAT_NARROW = 60
+  const SPLAT_LONGER = 0.25 // 1.15 times the life at the default
+  const splatPull = () => Math.max(0, Math.min(1, params.splatPullIn ?? SPLAT_PULL_DEFAULT))
+  const splatNarrow = (age, life) => {
+    const s = Math.min(1, age / life)
+    return SPLAT_NARROW * splatPull() * s * s
   }
   // The eddies' push fades with depth, so they skim the pool rather than squash it.
   // Measured on seed 787847212 after the start delay: the first eddy still dented the pool 54 px
@@ -597,6 +754,7 @@ export function createSimulation ({ width, height, params }) {
   function stirEddies (dt, turbulence, drifters) {
     time += dt
     startEase = Math.min(1, time)
+    scaleNow = effectScaleFor(width, height, params.effectTuning)
     const bornEddy = () => {
       const radius = randomRange(...EDDY_RADIUS) * Math.min(width, height)
       // These too are born on an edge and travel inward, slowing as the drifters do (Robert,
@@ -609,7 +767,7 @@ export function createSimulation ({ width, height, params }) {
       eddies.push({
         x: side === 1 ? width : side === 3 ? 0 : along * width,
         y,
-        speed: eddyLaunch(y, Math.sin(heading), (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY), life),
+        speed: eddyLaunch(y, Math.sin(heading), (params.eddySpeed ?? 120) * scaleNow * randomRange(...DRIFT_VARIETY), life),
         hx: Math.cos(heading),
         hy: Math.sin(heading),
         radius,
@@ -619,9 +777,9 @@ export function createSimulation ({ width, height, params }) {
       })
     }
     const bornDrifter = () => {
-      const core = randomRange(...DRIFT_CORE)
+      const core = randomRange(...DRIFT_CORE) * scaleNow
       const radius = Math.min(DRIFT_REACH * core, DRIFT_REACH_MAX * Math.min(width, height))
-      let speed = (params.eddySpeed ?? 120) * randomRange(...DRIFT_VARIETY)
+      let speed = (params.eddySpeed ?? 120) * scaleNow * randomRange(...DRIFT_VARIETY)
       // Born on the top or a side, never the floor where the lava sits (Robert: "eddies should
       // not be allowed to spawn on the bottom edge where the lava is"), heading inward within 60
       // degrees of straight in.
@@ -669,20 +827,46 @@ export function createSimulation ({ width, height, params }) {
       eddyRequests--
       if (drifting.length + eddies.length < Math.max(1, drifters) + 2) bornDrifter()
     }
-    while (pulseRequests > 0) {
-      pulseRequests--
-      const from = drifting.length ? drifting[Math.floor(random() * drifting.length)] : null
-      pulses.push({ x: from ? from.x : random() * width, y: from ? from.y : random() * eddyFloorY(), start: time })
+    while (shapedEddies.length) { bornDrifter(); Object.assign(drifting[drifting.length - 1], shapedEddies.shift(), { shaped: true }) }
+    while (pulseRequests > 0 || shapedPulses.length) {
+      const shape = pulseRequests > 0 ? null : shapedPulses.shift()
+      if (!shape) pulseRequests--
+      const sx = shape && Number.isFinite(shape.x) ? shape.x : null
+      const sy = shape && Number.isFinite(shape.y) ? shape.y : null
+      const from = sx == null || sy == null ? (drifting.length ? drifting[Math.floor(random() * drifting.length)] : null) : null
+      const w = { x: sx != null ? sx : from ? from.x : random() * width, y: sy != null ? sy : from ? from.y : random() * eddyFloorY(), start: time, k: scaleNow }
+      if (shape) {
+        if (shape.speed > 0) w.speed = shape.speed
+        if (shape.width > 0) w.width = shape.width
+        if (Number.isFinite(shape.push)) w.push = shape.push
+        if (shape.life > 0) w.life = shape.life
+      }
+      pulses.push(w)
     }
     while (splatRequests.length) {
       const at = splatRequests.shift()
       const lobes = Math.round(randomRange(SPLAT_LOBES[0], SPLAT_LOBES[1]))
       // From a point on the lava's surface (the page finds it from the particles; the estimate here,
       // poolSurface, sits deep in warm lava, and from the open tank it only reached the pool faded).
-      pulses.push({ x: at && at[0] != null ? at[0] : randomRange(0.15, 0.85) * width, y: at && at[1] != null ? at[1] : poolSurface(), start: time, splat: { lobes, a: random() * 2 * Math.PI, b: random() * 2 * Math.PI, size: at && at[2] > 0 ? Math.min(1, at[2]) : 1 } })
+      const w = { x: at && at[0] != null ? at[0] : randomRange(0.15, 0.85) * width, y: at && at[1] != null ? at[1] : poolSurface(), start: time, splat: { lobes, a: random() * 2 * Math.PI, b: random() * 2 * Math.PI, size: at && at[2] > 0 ? Math.min(1, at[2]) : 1 }, k: scaleNow }
+      // A tool's shape (see splatRequests): its own legs, throw, speed, life, size and turn, each unset the constant.
+      const shape = at && at[3]
+      if (shape) {
+        const s = w.splat
+        if (Number.isFinite(shape.lobes) && shape.lobes > 0) s.lobes = Math.max(1, Math.min(32, Math.round(shape.lobes)))
+        if (shape.size > 0) s.size = Math.min(SPLAT_SIZE_MOST, shape.size)
+        if (shape.length > 0) s.length = shape.length
+        if (shape.speed > 0) s.speed = shape.speed
+        if (shape.life > 0) s.life = shape.life
+        if (Number.isFinite(shape.turn) && shape.turn !== 0) s.turn = Math.max(-4, Math.min(4, shape.turn)) // turns a second the lobes make as they fly, signed; unset, none
+        if (shape.taper === 'smooth') s.taper = 'smooth' // the push eases out to nothing with no slope at the end, in place of the straight fade; unset, the straight fade as tuned
+        if (s.life || s.size > 1) w.life = s.life || PULSE_LIFE * s.size // its removal, past PULSE_LIFE when it lives longer
+      }
+      pulses.push(w)
     }
-    for (let k = pulses.length - 1; k >= 0; k--) if (time - pulses[k].start > PULSE_LIFE) pulses.splice(k, 1)
-    if (alive < drifters && time >= nextDrifter) {
+    for (let k = pulses.length - 1; k >= 0; k--) if (time - pulses[k].start > (pulses[k].life || PULSE_LIFE) * (pulses[k].splat ? 1 + SPLAT_LONGER : 1)) pulses.splice(k, 1)
+    // params.ownEddies false: none of the lamp's own (a tool's still lamp, the music's eddies kept).
+    if (alive < drifters && time >= nextDrifter && params.ownEddies !== false) {
       const missing = drifters - alive
       const burst = random() < DRIFT_BURST_ALL ? missing : 1 + Math.floor(random() * random() * missing)
       for (let b = 0; b < burst; b++) { if (random() < 0.5) bornDrifter(); else bornEddy() }
@@ -695,6 +879,7 @@ export function createSimulation ({ width, height, params }) {
         if (nextDrifter < time) nextDrifter = time + driftGap()
         continue
       }
+      if (e.pinned) continue // a tool's roller, held where it was put (not carried by the others either)
       const pace = travelPace(e, time - e.start)
       eddyVelocity(e.x, e.y, Math.abs(turbulence), carried, e)
       e.vx = pace * e.hx + DRIFT_ADVECT * carried[0]
@@ -706,7 +891,11 @@ export function createSimulation ({ width, height, params }) {
       const floorY = Math.min(height - half, eddyFloorY())
       if (e.y < half) { e.y = half; e.hy = Math.abs(e.hy) } else if (e.y > floorY) { e.y = floorY; e.hy = -0.3 * Math.abs(e.hy) }
     }
-    while (drifting.length + eddies.length > drifters) { if (drifting.length) drifting.pop(); else eddies.pop() }
+    // Over the Eddies knob, the newest go; a shaped eddy is not counted and is kept.
+    let over = drifting.length + eddies.length - drifters
+    for (const e of drifting) if (e.shaped) over--
+    for (let k = drifting.length - 1; k >= 0 && over > 0; k--) if (!drifting[k].shaped) { drifting.splice(k, 1); over-- }
+    while (over-- > 0 && eddies.length) eddies.pop()
     for (let k = eddies.length - 1; k >= 0; k--) {
       const e = eddies[k]
       if (time - e.start > e.life) { eddies.splice(k, 1); continue }
@@ -727,10 +916,9 @@ export function createSimulation ({ width, height, params }) {
     if (strength === 0) return
     for (let k = 0; k < eddies.length; k++) {
       const e = eddies[k]
-      const dx = (px - e.x) / e.radius
-      const dy = (py - e.y) / e.radius
-      const envelope = Math.sin(Math.PI * (time - e.start) / e.life)
-      const f = e.spin * strength / EDDY_PEAK * envelope * Math.exp(-(dx * dx + dy * dy))
+      const dx = px - e.x
+      const dy = py - e.y
+      const f = eddyFactor(e, dx, dy, strength)
       out[0] += -dy * f
       out[1] += dx * f
     }
@@ -741,11 +929,7 @@ export function createSimulation ({ width, height, params }) {
       const dy = py - e.y
       const r = Math.hypot(dx, dy)
       if (r === 0) continue
-      const envelope = driftEnvelope(e)
-      // Speed: rising linearly to the peak at the core's edge, then 2 r rc / (r^2 + rc^2),
-      // which is one over distance in the tail, inside a Gaussian cutoff at the reach.
-      const q = r / e.core
-      const speed = e.gain * strength * envelope * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
+      const speed = driftSpeed(e, r, strength)
       out[0] += -dy / r * speed * e.spin
       out[1] += dx / r * speed * e.spin
     }
@@ -758,25 +942,40 @@ export function createSimulation ({ width, height, params }) {
       const r = Math.hypot(dx, dy)
       if (r === 0) continue
       const age = time - w.start
-      const speed = w.splat ? SPLAT_SPEED : PULSE_SPEED
-      const u = (r - speed * age) / PULSE_WIDTH
+      // Its lengths and speeds at the effect scale it was born with (effectScaleFor).
+      const ks = w.k || 1
+      // A ring's own speed and width when a tool shaped it (pulseWave), else the constants.
+      const speed = (w.splat ? w.splat.speed || SPLAT_SPEED : w.speed || PULSE_SPEED) * ks
+      const ringWidth = (w.width || PULSE_WIDTH) * ks
+      const u = (r - speed * age) / ringWidth
       if (u * u > 9) continue
       // A small splat (a hi-hat's) carries the lava as far as its size and lives as long: a quarter
-      // of a drop's goes 60 px and is gone in 0.4 s.
+      // of a drop's goes 60 px and is gone in 0.4 s. A shaped splat's own life when a tool gave one, and a
+      // shaped ring's (pulseWave): its own life was read by its fade but the ring stopped here at PULSE_LIFE.
       const size = w.splat ? w.splat.size : 1
-      if (age > PULSE_LIFE * size) continue
+      const splatLife = w.splat ? (w.splat.life || PULSE_LIFE * size) * (1 + SPLAT_LONGER * splatPull()) : 0 // a little longer under Splat pull in (splatNarrow)
+      if (age > (w.splat ? splatLife : w.life || PULSE_LIFE)) continue
       // The ring's speed: the derivative of a Gaussian, out ahead of the ring and in behind it; a
       // splat's shaped by its lobes round the circle.
       let shape = 1
       if (w.splat) {
-        const th = Math.atan2(dy, dx)
-        shape = Math.max(0, 0.35 + 0.9 * Math.cos(w.splat.lobes * th + w.splat.a) + 0.35 * Math.cos((w.splat.lobes + 3) * th + w.splat.b))
+        // A shaped splat's lobes turn as they fly, turn turns a second (a tool's; none as tuned), so the legs sweep round.
+        const th = Math.atan2(dy, dx) + (w.splat.turn ? w.splat.turn * 2 * Math.PI * age : 0)
+        const c = Math.cos(w.splat.lobes * th + w.splat.a)
+        shape = Math.max(0, 0.35 + 0.9 * c + 0.35 * Math.cos((w.splat.lobes + 3) * th + w.splat.b))
+        // Splat pull in: the lobes narrow to spikes as it ages (splatNarrow).
+        const m = splatNarrow(age, splatLife)
+        if (m > 0 && shape > 0) shape *= Math.pow(0.5 + 0.5 * c, m)
       }
       // A pulse pushes out ahead and back in behind, no net move; a splat only out, so the lava it
-      // shoots along a lobe stays thrown, SPLAT_PX at the peak of a lobe.
+      // shoots along a lobe stays thrown, SPLAT_PX at the peak of a lobe (a shaped splat's own length).
+      // The splat's fade over its life: straight to nothing as tuned, or, for a tool's shape asking for a smooth taper, a
+      // smoothstep that lands with no slope, so the push dies away rather than snapping off.
+      const left = 1 - age / splatLife
+      const fade = w.splat && w.splat.taper === 'smooth' ? left * left * (3 - 2 * left) : left
       const v = w.splat
-        ? Math.exp(-u * u) * SPLAT_PX * size * speed / (PULSE_WIDTH * 1.772) * (1 - age / (PULSE_LIFE * size)) * shape
-        : -u * Math.exp(-u * u) * PULSE_PX * speed / PULSE_WIDTH * 2.33 * (1 - age / PULSE_LIFE)
+        ? Math.exp(-u * u) * (w.splat.length || SPLAT_PX) * ks * size * speed / (ringWidth * 1.772) * fade * shape
+        : -u * Math.exp(-u * u) * (w.push != null ? w.push : PULSE_PX) * ks * speed / ringWidth * 2.33 * (1 - age / (w.life || PULSE_LIFE))
       if (w.splat) { splatX += dx / r * v; splatY += dy / r * v } else { out[0] += dx / r * v; out[1] += dy / r * v }
     }
     const fade = depthFade(py)
@@ -820,10 +1019,21 @@ export function createSimulation ({ width, height, params }) {
     impulse[1] += fy
   }
 
-  // The fingers on the lamp for the next step: [{ x, y, vx, vy, mode }], mode one of
-  // 'push', 'pull', 'spin', 'heat', 'cool'.
+  // The fingers on the lamp for the next step: [{ x, y, vx, vy, mode, radius, heat, strength, flat }], mode
+  // one of 'push', 'pull', 'spin', 'heat', 'cool'. radius (px), heat (per step) and strength are a
+  // touch's own, each optional: a touch without them takes the lamp's params (touchRadius, touchHeat,
+  // touchStrength) as every touch did, so the lamp's own finger is unchanged. flat, a flat touch (TOUCH_EDGE). They are for a tool
+  // driving several touches of different kinds in one frame (a wide push front with no heat beside
+  // tiny hot glints), which with one radius and heat for all had to take turns frame by frame, and
+  // the pushing stuttered (Robert: "flow wave now has a jitter that's awful. it needs to be super
+  // smooth").
   function setTouches (list) {
     touches = list
+  }
+
+  // The lamp's touch radius for a touch without its own, px.
+  function lampTouchRadius () {
+    return touchRadiusNow > 0 ? touchRadiusNow : Math.max(TOUCH_MIN, TOUCH_RADIUS * Math.min(width, height))
   }
 
   // Velocity (into `out`) and temperature change (returned) from the fingers at a point.
@@ -831,26 +1041,29 @@ export function createSimulation ({ width, height, params }) {
     out[0] = 0
     out[1] = 0
     let heat = 0
-    const radius = touchRadiusNow > 0 ? touchRadiusNow : Math.max(TOUCH_MIN, TOUCH_RADIUS * Math.min(width, height))
+    const lampRadius = lampTouchRadius()
     for (let k = 0; k < touches.length; k++) {
       const t = touches[k]
+      const radius = t.radius > 0 ? t.radius : lampRadius
+      const strength = t.strength != null ? t.strength : touchStrengthNow
+      const touchHeat = t.heat != null ? t.heat : touchHeatNow
       const dx = px - t.x
       const dy = py - t.y
       const r = Math.hypot(dx, dy)
       const q = r / radius
       if (q > 2.5) continue
-      const w = Math.exp(-q * q)
+      const w = touchWeight(q, t.flat)
       switch (t.mode) {
         case 'push': {
           const ux = r > 0 ? dx / r : 0
           const uy = r > 0 ? dy / r : 0
-          out[0] += (TOUCH_PUSH * touchStrengthNow * ux + t.vx) * w
-          out[1] += (TOUCH_PUSH * touchStrengthNow * uy + t.vy) * w
+          out[0] += (TOUCH_PUSH * strength * ux + t.vx) * w
+          out[1] += (TOUCH_PUSH * strength * uy + t.vy) * w
           break
         }
         case 'pull': {
           // Toward the finger, never past it.
-          const speed = Math.min(TOUCH_PUSH * touchStrengthNow * w, r / dt)
+          const speed = Math.min(TOUCH_PUSH * strength * w, r / dt)
           if (r > 0) {
             out[0] += -dx / r * speed + t.vx * w
             out[1] += -dy / r * speed + t.vy * w
@@ -860,7 +1073,7 @@ export function createSimulation ({ width, height, params }) {
         case 'spin': {
           const core = radius * 0.5
           const c = r / core
-          const speed = TOUCH_SPIN * touchStrengthNow * 2 * c / (1 + c * c) * Math.exp(-(q * q) / 4)
+          const speed = TOUCH_SPIN * strength * 2 * c / (1 + c * c) * Math.exp(-(q * q) / 4)
           if (r > 0) {
             out[0] += -dy / r * speed + t.vx * w
             out[1] += dx / r * speed + t.vy * w
@@ -868,10 +1081,10 @@ export function createSimulation ({ width, height, params }) {
           break
         }
         case 'heat':
-          heat += touchHeatNow * touchStrengthNow * w
+          heat += touchHeat * strength * w
           break
         case 'cool':
-          heat -= touchHeatNow * touchStrengthNow * w
+          heat -= touchHeat * strength * w
           break
       }
     }
@@ -887,8 +1100,8 @@ export function createSimulation ({ width, height, params }) {
   function overrideActive () {
     const strength = Math.abs(params.turbulence || 0)
     if (strength === 0) return false
-    for (const e of eddies) if (overrideGate(strength * Math.sin(Math.PI * (time - e.start) / e.life)) > 0) return true
-    for (const e of drifting) { if (overrideGate(e.gain * strength * driftEnvelope(e)) > 0) return true }
+    for (const e of eddies) if (overrideGate(strength * pulledEnvelope(pullOf(e), Math.sin(Math.PI * (time - e.start) / e.life), 0, 1)) > 0) return true
+    for (const e of drifting) { if (overrideGate(e.gain * strength * pulledEnvelope(pullOf(e), heldEnvelope(e), 0, 1)) > 0) return true }
     return false
   }
 
@@ -899,25 +1112,20 @@ export function createSimulation ({ width, height, params }) {
     let fade = 0
     for (let k = 0; k < eddies.length && fade < 1; k++) {
       const e = eddies[k]
-      const dx = (px - e.x) / e.radius
-      const dy = (py - e.y) / e.radius
-      const envelope = Math.sin(Math.PI * (time - e.start) / e.life)
-      const peak = strength * envelope
+      const peak = strength * pulledEnvelope(pullOf(e), Math.sin(Math.PI * (time - e.start) / e.life), 0, 1)
       const gate = overrideGate(peak)
       if (gate === 0) continue
-      const rho = Math.sqrt(dx * dx + dy * dy)
-      const speed = peak / EDDY_PEAK * rho * Math.exp(-rho * rho)
+      const dx = px - e.x
+      const dy = py - e.y
+      const speed = Math.abs(eddyFactor(e, dx, dy, strength)) * Math.sqrt(dx * dx + dy * dy)
       fade = Math.max(fade, gate * Math.min(1, speed / STIR_OVERRIDE.speed))
     }
     for (let k = 0; k < drifting.length && fade < 1; k++) {
       const e = drifting[k]
-      const envelope = driftEnvelope(e)
-      const peak = e.gain * strength * envelope
+      const peak = e.gain * strength * pulledEnvelope(pullOf(e), heldEnvelope(e), 0, 1)
       const gate = overrideGate(peak)
       if (gate === 0) continue
-      const r = Math.hypot(px - e.x, py - e.y)
-      const q = r / e.core
-      const speed = peak * 2 * q / (1 + q * q) * Math.exp(-(r * r) / (e.radius * e.radius))
+      const speed = driftSpeed(e, Math.hypot(px - e.x, py - e.y), strength)
       fade = Math.max(fade, gate * Math.min(1, speed / STIR_OVERRIDE.speed))
     }
     return fade
@@ -928,12 +1136,12 @@ export function createSimulation ({ width, height, params }) {
   function stirFree (px, py) {
     let fade = overrideAt(px, py)
     if (touches.length && fade < 1) {
-      const radius = touchRadiusNow > 0 ? touchRadiusNow : Math.max(TOUCH_MIN, TOUCH_RADIUS * Math.min(width, height))
+      const lampRadius = lampTouchRadius()
       for (let k = 0; k < touches.length; k++) {
         const t = touches[k]
         if (t.mode === 'heat' || t.mode === 'cool') continue
-        const q = Math.hypot(px - t.x, py - t.y) / radius
-        fade = Math.max(fade, Math.min(1, STIR_OVERRIDE.finger * Math.exp(-q * q)))
+        const q = Math.hypot(px - t.x, py - t.y) / (t.radius > 0 ? t.radius : lampRadius)
+        fade = Math.max(fade, Math.min(1, STIR_OVERRIDE.finger * touchWeight(q, t.flat)))
       }
     }
     return fade
@@ -1040,7 +1248,7 @@ export function createSimulation ({ width, height, params }) {
   }
 
   function step (dt) {
-    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchStrength = 1, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1], elementRate = ELEMENT_RATE, elementLifeScale = ELEMENT_LIFE_SCALE, elementCore = ELEMENT_CORE, floorHeat = SPOT_BASE, floorGlow = SPOT_GLOW, liftCap = LIFT_CAP } = params
+    const { particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir = 0, conduction = CONDUCTION, turbulence = 0, drifters = 0, heatSpots = 0, cupDepth = 0, wobble = 0, wobbleKick = WOBBLE_KICK, wobbleMax = WOBBLE_MAX, heater = true, touchHeat = TOUCH_HEAT, touchStrength = 1, touchRadius = 0, settle = 1, viscosity: sigma = 0, reach: reachRadii = RELAX_REACH, wallPush = 0, kickBelow = 0, share = 0.1, elementHeat: elementHeatTop = ELEMENT_HEAT[1], elementLife: elementLifeTop = ELEMENT_LIFE[1], elementRate = ELEMENT_RATE, elementLifeScale = ELEMENT_LIFE_SCALE, elementCore = ELEMENT_CORE, floorHeat = SPOT_BASE, floorGlow = SPOT_GLOW, liftCap = LIFT_CAP, minTemp = 0 } = params
     cupDepthNow = cupDepth
     touchHeatNow = touchHeat
     touchStrengthNow = touchStrength
@@ -1090,6 +1298,8 @@ export function createSimulation ({ width, height, params }) {
       for (const el of elements) weight += el.weight
       // Kick off: the first time the warm-up is done, the heaviest element (small, near the
       // middle) lights at once, so the lamp never waits on the clocks for its first glob.
+      // params.kickOff false: no first glob (a tool's still lamp, its heater kept for the charged pot).
+      if (!kicked && params.kickOff === false) kicked = true
       if (!kicked) {
         kicked = true
         let best = elements[0]
@@ -1108,6 +1318,12 @@ export function createSimulation ({ width, height, params }) {
         // first wait is a random fraction of the usual one, as if the lamp had been running: with
         // every clock starting full the first lighting was the shortest of a dozen long waits
         // ("still taking forever before the first heater fires").
+        // No rate, no clock: a lighting the clocks drew before the rate went to 0 (a music theme's still lamp) is let go
+        // rather than kept, so no pot lights late on an old schedule (Robert: "I see pots firing in silence on the live
+        // lamp in music mode"; "it did eventually stop... maybe it was super delayed reaction or something?": measured,
+        // lightings 33 and 43 s after the last hit, drawn by the plain lamp before Music went on). A fresh wait is drawn
+        // when the rate comes back. The lamp as tuned never has a rate of 0, so it lights as before.
+        if (!(elementRate > 0)) { el.next = 0; continue }
         if (el.next === 0) {
           const wait = heatSpots / elementRate * weight / el.weight
           el.next = heaterTime + wait * (el.fresh ? randomRange(0, 1) : randomRange(0.5, 1.5))
@@ -1184,32 +1400,42 @@ export function createSimulation ({ width, height, params }) {
         if (!wanted && potFullness) {
           let fullest = null
           for (const el of elements) if (fullOf(el) > 0 && (!fullest || fullOf(el) > fullOf(fullest))) fullest = el
-          if (fullest && (!charged || fullOf(charged) < Math.max(FULL_MIN, FULL_SHARE * fullOf(fullest)))) { wanted = fullest; if (fullest !== charged) boost = EMPTY_BOOST }
+          if (fullest && (!charged || fullOf(charged) < Math.max(FULL_MIN, FULL_SHARE * fullOf(fullest)))) { wanted = fullest; if (fullest !== charged) boost = params.emptyBoost > 0 ? params.emptyBoost : EMPTY_BOOST }
         }
-        if (wanted && charged && wanted !== charged) { charged.mode = null; charged.big = false; charged.heat = 0; charged.next = 0; charged = null }
+        // params.keepCharged: a pot asked for by name is blasted and the charged one goes on charging
+        // under its lid (a tool's: weak blasts on every beat no longer let the drop's pot go; none as tuned).
+        const keep = params.keepCharged && wanted && charged && wanted !== charged
+        if (wanted && charged && wanted !== charged && !keep) { charged.mode = null; charged.big = false; charged.heat = 0; charged.next = 0; charged = null }
         const el = wanted || charged || biggestCold()
         if (el) {
           // A pot not charged beforehand (a clap, or a drop with nothing closed) is blasted across
           // its whole cup, as the drop's charged one is.
-          if (!charged) { el.big = true; el.coreFraction = el.cupHalf }
+          if (!charged || keep) { el.big = true; el.coreFraction = el.cupHalf }
           el.mode = 'blast'
           el.heat = elementHeatTop * DROP_BLAST * dropRequest * boost
           el.start = heaterTime
           el.life = DROP_LIFE
           if (!el.big) el.life = DROP_LIFE / 2
           el.next = 0
+          // A tool's shape for it (dropOpts): a share of the lift, at once, tilted.
+          const o = dropOpts || {}
+          el.lift = Number.isFinite(o.lift) ? Math.max(0, o.lift) : null
+          el.tilt = Number.isFinite(o.tilt) ? Math.max(-1, Math.min(1, o.tilt)) : 0
+          el.potOnly = !!o.instant
+          if (el.potOnly) { el.heat = maxTemp; el.life = 1e-9 } // reaches its cap this step, and is out the next
           // The pump: heat and a push up into the tank over the pot (see PLUME_LIFE).
-          plume = { x: el.fx * width, width: Math.max(PLUME_WIDTH_MIN * width, (el.cupHalf || 0.05) * width * 1.5), start: heaterTime, strength: dropRequest }
+          plume = { x: el.fx * width, width: Math.max(PLUME_WIDTH_MIN * width, (el.cupHalf || 0.05) * width * 1.5), start: heaterTime, strength: dropRequest * (el.lift !== null ? Math.min(1, el.lift) : 1), tilt: el.tilt }
         }
-        charged = null
-        lidPot = -1
+        if (!keep) { charged = null; lidPot = -1 }
         dropRequest = 0
         dropAt = -1
+        dropOpts = null
       }
     } else {
       lightRequests = 0
       dropRequest = 0
       dropAt = -1
+      dropOpts = null
       charged = null
       lidPot = -1
       for (const el of elements) {
@@ -1225,6 +1451,7 @@ export function createSimulation ({ width, height, params }) {
       el.radius = el.fr * shorter
       el.halfWidth = ELEMENTS_ARE_CUPS ? el.coreFraction * width : el.radius * ELEMENT_ASPECT
       el.capTemp = el.mode === 'charge' || el.mode === 'blast' ? Math.min(maxTemp, gravity * Math.min(el.big ? CHARGE_LIFT : CHARGE_LIFT_BEAT, 1 + liftCap)) : 0
+      if (el.mode === 'blast' && el.lift !== null && el.lift !== undefined) el.capTemp = Math.min(maxTemp, gravity * (1 + el.lift * (Math.min(el.big ? CHARGE_LIFT : CHARGE_LIFT_BEAT, 1 + liftCap) - 1))) // a tool's share of the lift (dropOpts)
       if (el.mode === 'charge') el.glow = el.heat > 0 ? 1 : 0
       else if (el.mode === 'blast') { const t = (heaterTime - el.start) / el.life; el.glow = el.heat > 0 ? (t < 0.5 ? 1 : Math.max(0, 2 * (1 - t))) : 0 }
       else el.glow = el.heat > 0 ? Math.sin(Math.PI * (heaterTime - el.start) / el.life) : 0
@@ -1238,7 +1465,7 @@ export function createSimulation ({ width, height, params }) {
         for (const el of elements) {
           // A lidded pot heats only its own lava: its glow on the floor above warmed the pool's
           // lava over it into a white column before any drop.
-          if (el.glow <= 0 || el.mode === 'charge') continue
+          if (el.glow <= 0 || el.mode === 'charge' && !(params.lidFlap && params.lidFlap.side) || el.mode === 'blast' && el.potOnly) continue
           const d = (x - el.x) / el.halfWidth
           power += floorGlow * el.glow * Math.exp(-d * d)
         }
@@ -1263,10 +1490,11 @@ export function createSimulation ({ width, height, params }) {
       let heat = 0
       const dy = height - py
       for (const el of elements) {
-        if (el.glow <= 0 || el.mode === 'charge') continue // a lidded pot heats only its own lava
+        if (el.glow <= 0 || el.mode === 'charge' && !(params.lidFlap && params.lidFlap.side)) continue // a lidded pot heats only its own lava (with its flap open, as an open one)
+        if (el.mode === 'blast' && el.potOnly) continue // an instant blast heats only its own pot's lava (dropOpts)
         const dx = (px - el.x) * el.radius / el.halfWidth
         const d2 = (dx * dx + dy * dy) / (el.radius * el.radius)
-        if (d2 < 4) heat += el.heat * el.glow * Math.exp(-d2)
+        if (d2 < 4) heat += el.heat * el.glow * Math.exp(-d2) * (el.mode === 'blast' && el.tilt ? 1 + el.tilt * Math.max(-1, Math.min(1, (px - el.x) / el.halfWidth)) : 1) // a tool's tilt over the mouth too (dropOpts)
       }
       return heat
     }
@@ -1293,10 +1521,20 @@ export function createSimulation ({ width, height, params }) {
     const cell = Math.max(MIN_CELL, interactionRadius * CELL_FRACTION)
     if (hash.cellSize !== cell) hash.resize(width, height, cell)
     for (let i = 0; i < alive; i++) {
-      temp[i] = nextTemperature(temp[i], y[i], height, maxTemp, particleSize, heater ? powerAt(x[i]) : 0, HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height)
+      temp[i] = Math.max(minTemp, nextTemperature(temp[i], y[i], height, maxTemp, particleSize, heater ? powerAt(x[i]) : 0, HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height))
       if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || ELEMENTS_ARE_CUPS || y[i] <= height)) {
+        const tilted = ELEMENTS_ARE_CUPS && state.home[i] >= 0 ? elements[state.home[i]] : null
+        if (tilted && tilted.mode === 'blast' && (tilted.tilt || tilted.potOnly)) {
+          // A tool's tilted or instant blast (dropOpts): the heat and the cap's rise over neutral by where it sits
+          // across the cup; an instant one's cap wherever its lava sits, as the GPU lamp's pot lava is capped.
+          const f = 1 + tilted.tilt * Math.max(-1, Math.min(1, (x[i] - tilted.x) / tilted.halfWidth))
+          const heat = tilted.glow > 0 ? tilted.heat * tilted.glow * f : 0
+          const cap = (y[i] > height || tilted.potOnly) && tilted.capTemp > 0 ? Math.min(maxTemp, gravity + (tilted.capTemp - gravity) * f) : maxTemp
+          if (heat > 0) temp[i] = Math.max(temp[i], Math.min(cap, temp[i] + heat))
+        } else {
         const heat = elementHeat(x[i], y[i], state.home[i])
         if (heat > 0) temp[i] = Math.max(temp[i], Math.min(state.home[i] >= 0 && y[i] > height && state.home[i] >= 0 && elements[state.home[i]] && elements[state.home[i]].capTemp > 0 ? elements[state.home[i]].capTemp : maxTemp, temp[i] + heat))
+        }
       }
       if (touching) {
         const heat = touchAt(x[i], y[i], dt, maxTemp, finger)
@@ -1539,7 +1777,8 @@ export function createSimulation ({ width, height, params }) {
     if (cupDepthNow > 0) {
       // The drop's lid: lava of the lidded pot that reaches the mouth's line is held under it.
       // A home is an index into its own row, so only one just above the floor's line counts.
-      if (lidPot >= 0 && state.home[i] === lidPot && y[i] <= height && y[i] > height - 4 * interactionRadiusNow) { y[i] = height + LID_DEPTH + (Math.imul(i, 2654435761) >>> 29) * 0.857; if (vy[i] < 0) vy[i] = 0 } // each a different depth under the line: at one depth they stacked in rows and left in stripes
+      // params.lidFlap { edge, side }: the lid opened as a flap valve, from one side (a tool's; none as tuned).
+      if (lidPot >= 0 && state.home[i] === lidPot && y[i] <= height && y[i] > height - 4 * interactionRadiusNow && !(params.lidFlap && params.lidFlap.side && (x[i] - params.lidFlap.edge) * params.lidFlap.side > 0)) { y[i] = height + LID_DEPTH + (Math.imul(i, 2654435761) >>> 29) * 0.857; if (vy[i] < 0) vy[i] = 0 } // each a different depth under the line: at one depth they stacked in rows and left in stripes
       if (y[i] > height) containIn(floorBottleList(), i)
       else if (y[i] < CUP_LIP * Math.min(width, height)) containIn(ceilingBottleList(), i)
       else state.home[i] = -1
@@ -1562,6 +1801,10 @@ export function createSimulation ({ width, height, params }) {
     const draw = () => {
       let w = (CUP_WIDTH[0] + randomNormal() * CUP_WIDTH[1]) * shorter
       w = Math.max(CUP_WIDTH_RANGE[0] * shorter, Math.min(CUP_WIDTH_RANGE[1] * shorter, w))
+      // params.cupMix { share, small: [a, b], big: [a, b] } (of the shorter side): the floor's pots
+      // drawn as many small ones and a few big (a tool's; none as tuned).
+      const mix = into === floorCups && params.cupMix
+      if (mix) w = randomRange(...(random() < mix.share ? mix.small : mix.big)) * shorter
       const shape = drawShape()
       const mouthHalf = BOTTLE_MOUTH * Math.min(w / 2, w / 2 * bulbShare)
       return { w, shape, reach: mouthHalf * (1 + BOTTLE_ROUND) + 2 }
@@ -1862,20 +2105,26 @@ export function createSimulation ({ width, height, params }) {
     setTouches,
     // Light a pot at the next step, as its clock would have (the music's beat).
     lightElement () { lightRequests++ },
-    spawnEddy () { eddyRequests++ },
+    // A shape ({ x, y, hx, hy, speed, radius, spin, life, attack, release }, any of them; attack and release its own
+    // spin envelope, see driftEnvelope) is for a tool's
+    // moves: that eddy is made as given, whatever the room. The lamp passes none.
+    spawnEddy (shape) { if (shape) shapedEddies.push(shape); else eddyRequests++ },
     // Music on: the warm up is over at once, the heat front done and the first eddy free to come,
     // so the lamp answers the music from its first beat (Robert: "the warm up should not apply
     // when music mode is started... it should stop immediately if music mode is turned on and
     // immediately start reacting to the music").
     endWarmup () { heaterTime = Math.max(heaterTime, WARMUP); nextDrifter = Math.min(nextDrifter, time) },
-    pulseWave () { pulseRequests++ },
-    splat (x, y, size) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y, size] : [null, null, size]) },
+    pulseWave (shape) { if (shape) shapedPulses.push(shape); else pulseRequests++ }, // shape a tool's { x, y, speed, width, push, life }, see pulses
+    splat (x, y, size, shape) { splatRequests.push(Number.isFinite(x) && Number.isFinite(y) ? [x, y, size, shape] : [null, null, size, shape]) }, // shape a tool's { lobes, length, speed, life, size, turn, taper }, see splatRequests
     flipEddies (chance = 1) { flipRequests.push(chance) },
     chargePot (level, big, fullness) { if (level != null) { chargeLevel = Math.max(0, level || 0); chargeBig = !!big } if (fullness) potFullness = fullness }, // a null level only counts the pots
-    dropPot (strength, at) { dropRequest = Math.max(dropRequest, strength || 0); if (at >= 0) dropAt = at },
+    dropPot (strength, at, opts) { if ((strength || 0) >= dropRequest) dropOpts = opts || null; dropRequest = Math.max(dropRequest, strength || 0); if (at >= 0) dropAt = at }, // opts a tool's { lift, instant, tilt }, see dropOpts
     ventPot (seconds, smallOnly) { ventRequest = Math.max(ventRequest, seconds || 0); ventSmallOnly = !!smallOnly },
     retirePot () { retireRequest = true },
     get lid () { return lidPot },
+    get eddies () { return eddies }, // the eddies turning now, for tools that draw them
+    get drifting () { return drifting }, // the drifting eddies, the music's among them (spawnEddy makes one)
+    get effectScale () { return scaleNow }, // the lamp's effect lengths against the size they were tuned at (effectScaleFor)
     // The pump now: { x, width, reach, heat, push }, or null.
     get plume () {
       if (!plume) return null
@@ -1883,7 +2132,7 @@ export function createSimulation ({ width, height, params }) {
       if (age > PLUME_LIFE) { plume = null; return null }
       const env = age < PLUME_RISE ? age / PLUME_RISE : age < PLUME_HOLD ? 1 : 1 - (age - PLUME_HOLD) / (PLUME_LIFE - PLUME_HOLD)
       const s = Math.min(2, plume.strength) * env
-      return { x: plume.x, width: plume.width, reach: PLUME_REACH * height, heat: PLUME_HEAT * s, push: PLUME_PUSH * s }
+      return { x: plume.x, width: plume.width, reach: PLUME_REACH * height, heat: PLUME_HEAT * s, push: PLUME_PUSH * s, tilt: plume.tilt || 0 }
     },
     transform,
     flowAt,

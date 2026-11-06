@@ -3,9 +3,11 @@
 Because lavalamps are cool.
 
 A particle fluid simulation dressed up as a lava lamp. No build step, no dependencies to install:
-open `index.html` from any static server and it runs.
+open `index.html` from any static server and it runs. The local one, with caching off:
 
-    python3 -m http.server 8000
+    cd scripts/server && npm install && cd ../..
+    node scripts/server/serve.mjs            # http://localhost:8765
+    node scripts/server/serve.mjs --https    # the LAN over https, for phones, port 8443
 
 ### How it works
 

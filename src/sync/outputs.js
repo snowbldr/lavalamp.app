@@ -1,0 +1,1 @@
+const u=()=>{const e=new Map;return{on:(t,o)=>(e.has(t)||e.set(t,new Set),e.get(t).add(o),()=>e.get(t).delete(o)),emit:(t,o)=>{for(const r of e.get(t)||[])try{r(o)}catch(s){console.error(s)}}}};export{u as createOutputs};

@@ -1,0 +1,1341 @@
+{
+  "format": "lavalamp music theme",
+  "version": 1,
+  "id": "live",
+  "name": "Vibes",
+  "description": "Robert's tuned set, the show he called ready to go live. Robert: \"Pull the current settings one last time and let's get it ready to go live as the live music sync.\" The music themes are his idea: \"we have music themes like the color themes\".",
+  "layers": {
+    "sparkle": {
+      "by": "Hit strength",
+      "on": true,
+      "countMin": 1,
+      "countMax": 3,
+      "size": 2.5,
+      "heat": 8600,
+      "seconds": 0.025,
+      "lanes": "All sound lanes",
+      "least": 0,
+      "balance": 0.38,
+      "warmFrom": 0.1,
+      "follow": true,
+      "coldness": 12800,
+      "byTemp": true,
+      "bands": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "coldSize": 2,
+      "coldShape": "Points",
+      "stampSize": 20
+    },
+    "glow": {
+      "on": true,
+      "sources": {
+        "Loudness": false,
+        "Level": false,
+        "Punch": true,
+        "Range": true,
+        "Relative": false,
+        "Ticks": true
+      },
+      "join": "Average",
+      "amountMin": 0.15,
+      "amountMax": 0.89,
+      "reachMin": 0,
+      "reachMax": 0.4,
+      "attack": 0.19,
+      "release": 0.01,
+      "tickAdd": 0.07,
+      "tickHold": 0.03,
+      "tickFade": 0.1,
+      "tickLanes": "All sound lanes",
+      "heats": true,
+      "heatRate": 250,
+      "heatSpots": 3,
+      "heatCap": 1.1,
+      "brightest": 0.75,
+      "dimWarm": 1,
+      "knee": 0.81,
+      "bands": [
+        7,
+        5,
+        5,
+        12,
+        12,
+        12,
+        12,
+        0,
+        0,
+        0
+      ]
+    },
+    "bigMoments": {
+      "follow": true,
+      "balance": 0,
+      "contrastLeast": 0.6,
+      "contrastMost": 1.6,
+      "coldBlast": 2,
+      "coldFlow": 0.3
+    },
+    "balance": {
+      "on": true,
+      "hot": 0.3,
+      "up": 0.35,
+      "easeFrom": 0.4
+    },
+    "lookahead": {
+      "mode": "off",
+      "lanes": {
+        "beat": true,
+        "hat": true,
+        "drumHit": true,
+        "bassNote": true,
+        "leadNote": true
+      }
+    }
+  },
+  "song": {
+    "eddyLife": 0.5,
+    "hitStrength": 1
+  },
+  "still": {
+    "on": true,
+    "warmth": 0.3,
+    "minHeat": 0,
+    "coldPotHeat": 1.5
+  },
+  "knobs": {},
+  "lanes": {
+    "beat": [
+      {
+        "id": "mw30hspk51",
+        "type": "pool:Kick",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 2,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "bassNote": [
+      {
+        "id": "mw481ueh75",
+        "type": "pool:Bass Note",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "drumHit": [
+      {
+        "id": "mw313lsc41",
+        "type": "pool:Accent",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": true,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "hat": [
+      {
+        "id": "mw31f9vb37",
+        "type": "pool:Minor rhythmic",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 2,
+          "bars": false,
+          "least": 1.2,
+          "calm": "skip",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "clap": [
+      {
+        "id": "mw30hspk50",
+        "type": "pool:Minor rhythmic",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 2,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "impact": [
+      {
+        "id": "mw30hspk55",
+        "type": "pool:Accent",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "boom": [
+      {
+        "id": "mw30hspk49",
+        "type": "pool:Minor rhythmic, warm",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "wobbleNote": [
+      {
+        "id": "mw30hspk53",
+        "type": "pool:Swell",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 2,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "stab": [
+      {
+        "id": "mw30hspk54",
+        "type": "pool:Accent",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "leadNote": [
+      {
+        "id": "mw313lsc43",
+        "type": "pool:Phrase",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 2,
+          "bars": false,
+          "least": 1,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "drop": [
+      {
+        "id": "mw30hspk48",
+        "type": "pool:Big moment",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      },
+      {
+        "id": "mw480yei143",
+        "type": "scene",
+        "on": true,
+        "p": {
+          "scene": "Drop",
+          "blend": 0.3,
+          "hold": 0,
+          "back": "Base",
+          "labels": {}
+        },
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        },
+        "custom": {
+          "scene": "Drop",
+          "blend": 0.3,
+          "hold": 0,
+          "back": "Base",
+          "labels": {}
+        }
+      }
+    ],
+    "rollEnd": [
+      {
+        "id": "mw30hspk59",
+        "type": "pool:Big moment",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      },
+      {
+        "id": "mw480yei144",
+        "type": "scene",
+        "on": true,
+        "p": {
+          "scene": "Build",
+          "blend": 1.5,
+          "hold": 0,
+          "back": "Base",
+          "labels": {}
+        },
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        },
+        "custom": {
+          "scene": "Build",
+          "blend": 1.5,
+          "hold": 0,
+          "back": "Base",
+          "labels": {}
+        }
+      }
+    ],
+    "calm": [
+      {
+        "id": "mw480yeh142",
+        "type": "pool:Cool",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      },
+      {
+        "id": "mw480yei145",
+        "type": "scene",
+        "on": true,
+        "p": {
+          "scene": "Breakdown",
+          "blend": 1.5,
+          "hold": 0,
+          "back": "Base",
+          "labels": {}
+        },
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        },
+        "custom": {
+          "scene": "Breakdown",
+          "blend": 1.5,
+          "hold": 0,
+          "back": "Base",
+          "labels": {}
+        }
+      }
+    ],
+    "key": [
+      {
+        "id": "mw30hspk62",
+        "type": "pool:Phrase",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "half": [
+      {
+        "id": "mw30hspk60",
+        "type": "flip",
+        "on": true,
+        "p": {
+          "chance": 0.5
+        },
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "double": [
+      {
+        "id": "mw313lsc46",
+        "type": "flip",
+        "on": true,
+        "p": {
+          "chance": 0.5
+        },
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "soloStart": [
+      {
+        "id": "mw30hspk57",
+        "type": "pool:Big moment",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ],
+    "fill": [
+      {
+        "id": "mw481ueh76",
+        "type": "pool:Big moment",
+        "on": true,
+        "p": {},
+        "when": {
+          "nth": 1,
+          "bars": false,
+          "least": 0,
+          "calm": "any",
+          "delay": 0,
+          "timing": "as heard",
+          "lead": 0.1
+        }
+      }
+    ]
+  },
+  "types": [
+    {
+      "name": "Minor rhythmic",
+      "members": [
+        {
+          "kind": "smallPot",
+          "weight": 1,
+          "settings": {
+            "strength": 0.2
+          }
+        },
+        {
+          "kind": "sparkle",
+          "weight": 4
+        },
+        {
+          "kind": "combo:minor-fizz.js",
+          "weight": 4
+        },
+        {
+          "kind": "combo:minor-cold-drip.js",
+          "weight": 4
+        },
+        {
+          "kind": "combo:firefly.js",
+          "weight": 4
+        },
+        {
+          "kind": "combo:accent-glint-zip.js",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "name": "Minor rhythmic, warm",
+      "members": [
+        {
+          "kind": "simmer",
+          "weight": 1,
+          "settings": {
+            "fires": 10,
+            "heatMin": 0.01,
+            "heatMax": 0.04,
+            "pots": "small"
+          }
+        },
+        {
+          "kind": "glow",
+          "weight": 1
+        },
+        {
+          "kind": "sparkle",
+          "weight": 1
+        },
+        {
+          "kind": "light",
+          "weight": 1
+        },
+        {
+          "kind": "combo:minor-blob-twinkle.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:accent-crash-shimmer.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:firefly.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:accent-glint-ring.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:swell-glitter-swell.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:minor-walking-glint.js",
+          "weight": 1
+        },
+        {
+          "kind": "wave",
+          "weight": 1
+        },
+        {
+          "kind": "combo:swell-parting-glow.js",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "name": "Accent",
+      "members": [
+        {
+          "kind": "splat",
+          "weight": 1,
+          "settings": {
+            "size": 1.2
+          }
+        },
+        {
+          "kind": "smallPot",
+          "weight": 4
+        },
+        {
+          "kind": "burst",
+          "weight": 2
+        },
+        {
+          "kind": "combo:accent-shove.js",
+          "weight": 4
+        },
+        {
+          "kind": "combo:accent-surface-curl.js",
+          "weight": 4
+        },
+        {
+          "kind": "train",
+          "weight": 4
+        },
+        {
+          "kind": "ring",
+          "weight": 4
+        },
+        {
+          "kind": "micro",
+          "weight": 4
+        },
+        {
+          "kind": "combo:pinch-burst.js",
+          "weight": 2
+        }
+      ]
+    },
+    {
+      "name": "Swell",
+      "members": [
+        {
+          "kind": "simmer",
+          "weight": 3,
+          "settings": {
+            "fires": 8,
+            "pots": "small"
+          }
+        },
+        {
+          "kind": "sway",
+          "weight": 1
+        },
+        {
+          "kind": "eddy",
+          "weight": 3,
+          "settings": {
+            "from": "lava",
+            "spin": 1.5,
+            "core": 50,
+            "life": 5,
+            "speed": 60
+          }
+        },
+        {
+          "kind": "pot",
+          "weight": 1,
+          "settings": {
+            "strength": 0.25
+          }
+        },
+        {
+          "kind": "combo:flow-wave.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:swell-slow-turn.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:swell-lava-curl.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:swell-spiral-glow.js",
+          "weight": 1
+        },
+        {
+          "kind": "bigPot",
+          "weight": 1
+        },
+        {
+          "kind": "combo:accent-glint-zip.js",
+          "weight": 1
+        },
+        {
+          "kind": "wave",
+          "weight": 1
+        },
+        {
+          "kind": "flap",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "name": "Phrase",
+      "members": [
+        {
+          "kind": "simmer",
+          "weight": 2,
+          "settings": {
+            "fires": 4,
+            "heatMin": 0.05,
+            "heatMax": 0.15,
+            "release": 1,
+            "pots": "small"
+          }
+        },
+        {
+          "kind": "flap",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "name": "Cool",
+      "members": [
+        {
+          "kind": "coldBurst",
+          "weight": 1
+        },
+        {
+          "kind": "coldSpot",
+          "weight": 1
+        },
+        {
+          "kind": "combo:minor-cold-drip.js",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "name": "Big moment",
+      "members": [
+        {
+          "kind": "combo:center-glob-eddies.js",
+          "weight": 2
+        },
+        {
+          "kind": "combo:pot-wave-left.js",
+          "weight": 2,
+          "settings": {
+            "strength": 0.5
+          }
+        },
+        {
+          "kind": "combo:pot-wave-right.js",
+          "weight": 2,
+          "settings": {
+            "strength": 0.5
+          }
+        },
+        {
+          "kind": "combo:zigzag-rollers.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:big-lift.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:big-heat-sweep.js",
+          "weight": 2
+        },
+        {
+          "kind": "combo:pinch-burst.js",
+          "weight": 3
+        },
+        {
+          "kind": "combo:big-twin-towers.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:big-twin-zigzag.js",
+          "weight": 1
+        },
+        {
+          "kind": "combo:fill-burst.js",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "name": "Kick",
+      "members": [
+        {
+          "kind": "pot",
+          "weight": 2
+        },
+        {
+          "kind": "eddy",
+          "weight": 1
+        }
+      ]
+    },
+    {
+      "name": "Bass Note",
+      "members": [
+        {
+          "kind": "micro",
+          "weight": 1
+        }
+      ]
+    }
+  ],
+  "library": {
+    "bigPot": {
+      "strength": 2
+    },
+    "light": {},
+    "pot": {
+      "pot": "random",
+      "strength": 0.5,
+      "strengthMax": 1.3,
+      "by": "Hit strength",
+      "liftMin": 0.4,
+      "liftMax": 0.8,
+      "instant": false,
+      "tiltMin": 0,
+      "tiltMax": 0,
+      "variance": 0.9
+    },
+    "combo:pot-wave-right.js": {
+      "gap": 0.12,
+      "perBeat": "4",
+      "strength": 1.2,
+      "every": 1,
+      "smallOnly": 0
+    },
+    "combo:pot-wave-left.js": {
+      "gap": 0.12,
+      "perBeat": "4",
+      "strength": 1.2,
+      "every": 1,
+      "smallOnly": 0
+    },
+    "simmer": {
+      "fires": 16,
+      "heatMin": 0.01,
+      "heatMax": 0.03,
+      "release": 1.5,
+      "pots": "any"
+    },
+    "smallPot": {
+      "strength": 1
+    },
+    "train": {
+      "globs": 4,
+      "gap": 0.25,
+      "perBeat": "4",
+      "strength": 0.3,
+      "step": 2,
+      "way": "random",
+      "pots": "small"
+    },
+    "eddy": {
+      "from": "edge",
+      "spin": 0.75,
+      "spinMax": 1.25,
+      "turn": "random",
+      "core": 35,
+      "coreMax": 75,
+      "speed": 10,
+      "speedMax": 90,
+      "life": 3,
+      "lifeMax": 6,
+      "by": "Speed",
+      "speedBy": "Same as By",
+      "variance": 1,
+      "pinned": false,
+      "most": 2,
+      "lifeCap": 10
+    },
+    "flip": {
+      "chance": 0.5
+    },
+    "combo:flow-wave.js": {
+      "beats": 2,
+      "duration": 1.4,
+      "push": 240,
+      "width": 70,
+      "span": 0.85,
+      "wiggle": 145,
+      "swing": "per beat",
+      "onBeat": "on",
+      "sway": 0.85,
+      "swell": 1,
+      "lines": 4,
+      "way": "random",
+      "most": 2
+    },
+    "heldEddy": {
+      "from": "lava",
+      "spin": 1.5,
+      "core": 50,
+      "speed": 20,
+      "turn": "random",
+      "attack": 0.3,
+      "release": 0.5
+    },
+    "heldPush": {
+      "where": "surface",
+      "push": 220,
+      "strength": 0.6,
+      "size": 60,
+      "bend": 0.1,
+      "flat": "up"
+    },
+    "combo:swell-lava-curl.js": {
+      "spin": 0.6,
+      "core": 30,
+      "down": 0,
+      "life": 16,
+      "way": "random",
+      "fade": 0.5
+    },
+    "micro": {
+      "where": "surface",
+      "coreMin": 12,
+      "coreMax": 20,
+      "spinMin": 1,
+      "spinMax": 2.5,
+      "lifeMin": 1.5,
+      "lifeMax": 2.8,
+      "speed": 45,
+      "lock": 6
+    },
+    "combo:accent-shove.js": {
+      "size": 40,
+      "strength": 0.6,
+      "speed": 300,
+      "seconds": 0.15,
+      "spread": 0.25
+    },
+    "combo:swell-slow-turn.js": {
+      "spin": 0.4,
+      "core": 120,
+      "height": 0.5,
+      "life": 20
+    },
+    "combo:accent-surface-curl.js": {
+      "size": 40,
+      "strength": 1,
+      "seconds": 0.3,
+      "spread": 0.25,
+      "least": 40,
+      "fade": 0.6
+    },
+    "sway": {
+      "spin": 0.25,
+      "core": 9,
+      "life": 0.2,
+      "blobsMin": 1,
+      "blobsMax": 4,
+      "by": "Hit strength",
+      "least": 330,
+      "lock": 6,
+      "fade": 0.8,
+      "blobs": 3
+    },
+    "combo:minor-blob-twinkle.js": {
+      "of": 4,
+      "least": 20,
+      "size": 6,
+      "heat": 1500,
+      "seconds": 0.03
+    },
+    "combo:accent-crash-shimmer.js": {
+      "countMin": 6,
+      "countMax": 10,
+      "size": 6,
+      "heat": 1800,
+      "seconds": 0.03
+    },
+    "combo:firefly.js": {
+      "speed": 140,
+      "orbit": 13,
+      "loops": 1.5,
+      "rate": 38,
+      "life": 12,
+      "most": 6,
+      "size": 2,
+      "heat": 1500,
+      "seconds": 0.032,
+      "dragon": 2,
+      "dwell": 4,
+      "leaveAt": 0.4,
+      "margin": 2,
+      "sizeWeight": 1.5,
+      "pairPull": 0.5,
+      "iceFly": true,
+      "coldAt": 0.05,
+      "hotAt": 0.4,
+      "both": true,
+      "bothChance": 0.5
+    },
+    "combo:minor-fizz.js": {
+      "countMin": 4,
+      "countMax": 8,
+      "spread": 36,
+      "size": 5,
+      "heat": 2900,
+      "seconds": 0.03
+    },
+    "combo:accent-glint-ring.js": {
+      "glints": 8,
+      "ringMin": 11,
+      "ringMax": 29,
+      "size": 2,
+      "heat": 2000,
+      "least": 260
+    },
+    "combo:accent-glint-zip.js": {
+      "glints": 10,
+      "seconds": 0.3,
+      "size": 3,
+      "heat": 2330
+    },
+    "combo:swell-glitter-swell.js": {
+      "most": 6,
+      "fires": 20,
+      "heat": 1500,
+      "size": 6,
+      "gap": 2.5
+    },
+    "glow": {
+      "boost": 0.8,
+      "seconds": 0.35,
+      "reach": 0,
+      "heats": false,
+      "heatRate": 600,
+      "spots": 4,
+      "heatCap": 1.6
+    },
+    "heldGlow": {
+      "boost": 0.9,
+      "rise": 0.6,
+      "fade": 0.5,
+      "reach": 0.2,
+      "byLevel": true
+    },
+    "combo:swell-parting-glow.js": {
+      "fires": 24,
+      "widest": 130,
+      "heat": 500,
+      "size": 14,
+      "gap": 2.5
+    },
+    "sparkle": {
+      "countMin": 1,
+      "countMax": 5,
+      "size": 6,
+      "heat": 2000,
+      "seconds": 0.03
+    },
+    "combo:swell-spiral-glow.js": {
+      "turns": 1.75,
+      "ring": 24,
+      "glints": 22,
+      "draw": 1,
+      "rest": 1,
+      "size": 3,
+      "heat": 1090,
+      "seconds": 0.03,
+      "least": 1330
+    },
+    "combo:minor-walking-glint.js": {
+      "stepMin": 0.04,
+      "stepMax": 0.3,
+      "size": 5,
+      "heat": 2000,
+      "seconds": 0.142
+    },
+    "burst": {
+      "target": "nearest the middle",
+      "size": 0.1,
+      "sizeMax": 0.5,
+      "by": "Hit strength",
+      "legsMin": 5,
+      "legsMax": 12,
+      "lengthMin": 0.2,
+      "lengthMax": 0.45,
+      "lifeMin": 0.6,
+      "lifeMax": 1,
+      "variance": 0.7,
+      "taper": "smooth",
+      "least": 310
+    },
+    "flap": {
+      "hinge": "left",
+      "open": 0.6,
+      "widest": 0.85,
+      "hold": 2.5,
+      "close": 0.5,
+      "steer": 1.2
+    },
+    "ring": {
+      "where": "random",
+      "speed": 280,
+      "width": 19,
+      "push": 11,
+      "life": 0.6
+    },
+    "splat": {
+      "where": "random",
+      "size": 0.45,
+      "sizeMax": 0.9,
+      "by": "Hit strength",
+      "legsMin": 5,
+      "legsMax": 10,
+      "lengthMin": 1.75,
+      "lengthMax": 2,
+      "lifeMin": 0.3,
+      "lifeMax": 0.5,
+      "variance": 0.5,
+      "taper": "smooth",
+      "turnMin": 0,
+      "turnMax": 0.9
+    },
+    "wave": {
+      "seconds": 2
+    },
+    "coldBurst": {
+      "where": "mouth",
+      "heat": 60,
+      "size": 40,
+      "seconds": 0.4
+    },
+    "combo:minor-cold-drip.js": {
+      "of": 4,
+      "least": 20,
+      "size": 4,
+      "cold": 4000,
+      "seconds": 0.08
+    },
+    "coldSpot": {
+      "heat": 100,
+      "size": 25,
+      "seconds": 0.4,
+      "least": 80
+    },
+    "combo:big-lift.js": {
+      "blast": 0.7,
+      "spin": 5.6,
+      "core": 32,
+      "life": 6,
+      "spread": 0.1
+    },
+    "combo:center-glob-eddies.js": {
+      "blast": 0.8,
+      "spin": 2.2,
+      "speed": 230,
+      "size": 0.19,
+      "above": 0
+    },
+    "combo:fill-burst.js": {
+      "blobs": 4,
+      "perBeat": "4",
+      "gap": 0.12,
+      "size": 0.6,
+      "least": 40,
+      "glints": 3,
+      "heat": 2000,
+      "potStrength": 1
+    },
+    "combo:big-heat-sweep.js": {
+      "heat": 500,
+      "size": 25,
+      "beats": 4,
+      "seconds": 1.6,
+      "spread": 0.2
+    },
+    "combo:big-twin-towers.js": {
+      "blast": 0.7,
+      "spin": 0.9,
+      "core": 30,
+      "perBeat": "2",
+      "gap": 0.35,
+      "life": 6,
+      "spread": 0.25
+    },
+    "combo:big-twin-zigzag.js": {
+      "spin": 0.5,
+      "blast": 1.6,
+      "stages": 3,
+      "leg": 0.12,
+      "size": 0.035,
+      "perBeat": "2",
+      "gap": 0.35,
+      "spread": 0.2,
+      "life": 8
+    },
+    "combo:zigzag-rollers.js": {
+      "spin": 0.5,
+      "blast": 0.8,
+      "stages": 3,
+      "leg": 0.2,
+      "size": 0.055,
+      "stagger": 0.35,
+      "perBeat": "4",
+      "life": 9
+    },
+    "scene": {
+      "scene": "Base",
+      "blend": 1.5,
+      "hold": 0,
+      "back": "Base",
+      "labels": {}
+    },
+    "combo:pinch-burst.js": {
+      "aim": "pool",
+      "size": 120,
+      "pull": 2,
+      "beats": 2,
+      "held": 1,
+      "burst": 3,
+      "depth": 0.4,
+      "burstSize": 1.2,
+      "burstS": 0.3,
+      "spread": 0.5
+    }
+  },
+  "scenes": {
+    "on": true,
+    "list": [
+      {
+        "id": "quiet",
+        "name": "Quiet",
+        "values": {
+          "glint.countMax": {
+            "mul": 0.5
+          },
+          "glow.amountMax": {
+            "mul": 0.5
+          },
+          "glow.reachMax": {
+            "mul": 0.5
+          },
+          "song.eddyLife": {
+            "mul": 0.7
+          },
+          "balance.hot": {
+            "mul": 0.85
+          },
+          "glow.heatRate": {
+            "mul": 0.5
+          }
+        }
+      },
+      {
+        "id": "build",
+        "name": "Build",
+        "values": {
+          "glow.amountMax": {
+            "mul": 0.8
+          },
+          "glow.reachMax": {
+            "mul": 0.8
+          },
+          "glow.tickHold": {
+            "mul": 1.5
+          },
+          "song.eddyLife": {
+            "mul": 1.1
+          }
+        }
+      },
+      {
+        "id": "drop",
+        "name": "Drop",
+        "values": {
+          "glint.countMax": {
+            "mul": 1.5
+          },
+          "glint.size": {
+            "mul": 1.25
+          },
+          "glow.amountMax": {
+            "mul": 1.25
+          },
+          "glow.reachMax": {
+            "mul": 1.5
+          },
+          "song.eddyLife": {
+            "mul": 1.3
+          },
+          "balance.hot": {
+            "mul": 1.15
+          },
+          "balance.up": {
+            "mul": 1.15
+          },
+          "glow.heatRate": {
+            "mul": 1.3
+          }
+        }
+      },
+      {
+        "id": "breakdown",
+        "name": "Breakdown",
+        "values": {
+          "glint.countMin": 1,
+          "glint.countMax": 1,
+          "glow.amountMax": {
+            "mul": 0.35
+          },
+          "glow.reachMax": {
+            "mul": 0.5
+          },
+          "song.eddyLife": {
+            "mul": 0.6
+          },
+          "glint.lanes": "Rhythm only",
+          "glow.heatRate": {
+            "mul": 0.3
+          }
+        }
+      }
+    ]
+  }
+}

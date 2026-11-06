@@ -1,4 +1,5 @@
 import { createSections } from './sections.js'
+import { createEnvelope, createWaits, hitIn, tailOf } from './shape.js'
 // The lamp listening to music (Robert: "one thing I would love is a music sync"). Nothing is
 // sent anywhere: the browser's own microphone, or on a desktop a tab's audio, goes into a Web
 // Audio AnalyserNode, and once a frame the lamp reads three band energies, a loudness and a
@@ -22,6 +23,79 @@ import { createSections } from './sections.js'
 // Cost: one getByteFrequencyData a frame over 512 bins and a few sums. Measured on the GPU lamp
 // at the defaults (see docs/decisions.md): well under a tenth of a millisecond a frame.
 export const SOURCES = ['mic', 'system']
+const QUIET_WAIT = 400 // ms a start with no click waits for the audio to be allowed to run (see open)
+// The attack of a beat (an option, off as tuned; a tool turns it on): a hit's bass rises ATTACK_RISE
+// times over its level just before, reaching 90% of its peak within ATTACK_MS of 10%. Robert's bass hits on
+// his tap along (18 of them, a 5 ms RMS of 40 to 150 Hz): attack 8 to 31 ms, median 14; 4.2 to 22.4 times,
+// median 14 (Robert: "it's got this very similar small wave to big wave rise over a similar amount of time.
+// we could just look for anything liek that within a range, attack I guess, and use that as part of the
+// trigger signal"; "let's add the attack. I do see occasional extra fires"). The spectrum is read every
+// 17 ms, longer than the attack, so the shape is read from the bass's own waveform, the analyser's last
+// 2048 samples band passed to the beat's range, in 1 ms steps; a beat fires only with an attack seen in its
+// frame or the one before.
+const ATTACK_RISE = 4
+const ATTACK_MS = [6, 35]
+const ATTACK_FRAMES = 2
+// A window's shape: { rise, attack } (attack in ms, Infinity when no rise from low starts in it).
+export function shapeOf (samples, rate) {
+  const step = Math.max(1, Math.round(rate / 1000)), n = Math.floor(samples.length / step)
+  const env = new Float32Array(n)
+  for (let k = 0; k < n; k++) { let q = 0; for (let i = k * step; i < (k + 1) * step; i++) q += samples[i] * samples[i]; env[k] = Math.sqrt(q / step) }
+  let kp = Math.max(0, n - 20)
+  for (let k = n - 20; k < n; k++) if (k >= 0 && env[k] > env[kp]) kp = k
+  let floor = Infinity
+  for (let k = Math.max(0, kp - 30); k < kp; k++) floor = Math.min(floor, env[k])
+  if (!(floor < Infinity)) return { rise: 0, attack: Infinity }
+  const peak = env[kp], rise = peak / Math.max(1e-6, floor)
+  let a10 = -1
+  for (let k = kp; k >= Math.max(0, kp - 30); k--) if (env[k] < floor + 0.1 * (peak - floor)) { a10 = k; break }
+  if (a10 < 0) return { rise, attack: Infinity }
+  let a90 = kp
+  for (let k = a10; k <= kp; k++) if (env[k] >= floor + 0.9 * (peak - floor)) { a90 = k; break }
+  return { rise, attack: a90 - a10 }
+}
+// The shapes of the other triggers (shape.js; options, each off as tuned; a tool turns them on;
+// Robert: "impelemnt the shape for all of those triggers"). Each band keeps its envelope, the 1 ms RMS of its
+// waveform from frame to frame: bass (the beat's range), mids (BEAT_MIDS), kick (the kick's range) and broad
+// (the whole waveform). A tool's scan gives each frame its new milliseconds of each with its bytes
+// (frame.bins.shapes, read with the same createEnvelope), so the scan, a replay of its frames and the live
+// input judge the same envelope. Live, a band's analyser is made and read only while a shape wants it.
+export const SHAPE_TRIGGERS = ['beat', 'hat', 'clap', 'boom', 'drumHit', 'impact', 'stab', 'wobbleNote']
+export const shapeBands = ranges => ({ bass: ranges.beat, mids: BEAT_MIDS, kick: ranges.kick, broad: null })
+const SHAPE_BANDS_OF = { bass: [], mids: ['drumHit', 'stab'], kick: ['hat', 'clap', 'impact'], broad: [] } // the bands each shape reads (the beat reads its own, timeAnalyser)
+export { createEnvelope, hitIn, tailOf } from './shape.js'
+// Measured in the tool's scans of its clip library's songs, a shape against the trigger as it is. With no
+// hand marked hats, a hat's worth was read from the beat: how closely the hats' envelope peaks sit on a
+// sixteenth of the beats around them (the vector strength, 1 all on the grid, 0 none).
+// The hat: the kick band rising HAT_RISE times over its lowest in the 30 ms before its peak, and gone under
+// HAT_TAIL of it 15 to 30 ms after (it waits for that, at most a frame or two). Hats kept and their vector
+// strength, as is and with the shape: C-C 433 at 0.47, 201 at 0.87; Bangarang 204 at 0.40, 96 at 0.54;
+// Bohemian 669 at 0.14, 29 at 0.78; Drugs I Like 591 at 0.58, 294 at 0.63; Espresso 349 at 0.55, 193 at 0.71;
+// Killing in the Name 557 at 0.25, 192 at 0.30; Sandman 574 at 0.26, 355 at 0.30; Beethoven's first
+// movement, with no hat in it, 747 to 1. Robert asked for an attack of 1 to 3 ms; by the grid the attack told
+// nothing (hats of 3 ms or less sat no closer to it than those of 7 to 12) and is not tested.
+const HAT_RISE = 8
+const HAT_TAIL = 0.5
+// The clap: a snap's spike in the kick band, its attack CLAP_ATTACK ms or less, rising CLAP_SPIKE times, and
+// under CLAP_TAIL of its peak 15 to 40 ms after. Robert's snaps (snaps.m4a, 4.8 to 21 s, 23): one spike each,
+// 1 to 3 ms up, 430 to 2970 times, 1 to 5% left; not the two or three spikes of a hand clap, so a tail is
+// tested, not a count. The false claps: Bangarang 1.15 (11 ms, 31% left), Bohemian 2.12 and 324.78 (4 and
+// 2 times), Killing in the Name 0.52 (20 ms, 25% left).
+const CLAP_ATTACK = 5
+const CLAP_SPIKE = 10
+const CLAP_TAIL = 0.15
+// The boom, the stab and the wobble have shapes to try, off in the tool too, as none helped. The boom: the
+// sub's rise to its peak (10 to 90%, in power) at least BOOM_SWELL ms, a swell, not a kick. On C-C the
+// bwongs at 3:02 to 3:15 rise 9 to 39 dB in 33 to 401 ms out of a sub that is sounding, the kicks at 1:40 to
+// 1:46 10 to 13 dB in 33 to 50; Espresso's marked boom at 9.73 rises in 33 ms (lost) and C-C's false one
+// at 93.48 in 134 (kept). The stab: an attack in the mids of STAB_ATTACK ms or less; Bohemian's three
+// stabs 4 to 10 ms, Killing in the Name's three others 1 to 5, so it holds them all. The wobble note: the
+// wobble band's level over the last WOBBLE_WINDOW repeating at 2 to 8 times a second, its autocorrelation at
+// a lag of 7 to 30 frames WOBBLE_PERIODIC or more; Bangarang's wobble at 1:16 to 1:30 (30 notes) is
+// mostly under 0.5 and Drugs I Like's notes over 0.8 (25 of 41), over 1.5 s or by its brightness alike.
+const BOOM_SWELL = 50
+const STAB_ATTACK = 12
+const WOBBLE_PERIODIC = 0.5
 const FFT = 2048 // 1024 bins; at 48 kHz a bin is 23 Hz (at 47 the beat range, 40 to 150 Hz, was three bins)
 const ATTACK = 0.08 // seconds to rise
 const RELEASE = 0.3 // seconds to fall
@@ -39,6 +113,99 @@ const BEAT_POWER_RISE = 1.5
 const BEAT_RISE_FRAMES = 4
 const BEAT_MIDS = [300, 4000]
 const BEAT_BASS_LEAD = 1
+// The pump (listener.pump, on; a tool can turn it off): a kick in a sidechained drop. On Animals the sub (23 to
+// 46 Hz) sits pegged near full scale and ducks for a moment on each kick while the kick's body comes up in
+// 70 to 150 Hz, so the beat range's power hardly rises: the kicks the beat missed rose a median 0.47 times
+// against BEAT_POWER_RISE's 1.5. Pegged is the beat range's 1.5 s average within PUMP_PEG dB of its held
+// peak: at the kicks Animals' beat missed it was -1.2 to -1.0 dB, at those it caught -15 to -3.3, and in
+// every other song of the library over -2.5 dB for no frame at all but Drugs I Like's 13%. While pegged, a
+// beat is also the beat range's bins rising, each over its own lowest in the last BEAT_RISE_FRAMES frames,
+// by PUMP_FLUX dB on average, at a peak of that (so a frame late) and over the mids' same rise. A ducking
+// sub then hides nothing. Lowering the rise alone was tried first (Sandman 441 beats to 669). Beat F1
+// against the teacher's kicks, as is and pumped: Animals 0.42, 0.62 (85 of 267 kicks to 155, 48 extra beats to
+// 80); Drugs I Like 0.95, 0.94 (3 beats more); every other song the same beats.
+const PUMP_PEG = -2.5
+const PUMP_FLUX = 8
+// The split (listener.split, on; a tool can turn it off; Robert: "I think kick drum needs to be split into two
+// triggers, one is lis like deep bass hits and one is like lower end melody notes, they both read as kick
+// drum"). A kick's thump falls in pitch as it rings (an electronic kick sweeps down an octave in 50 ms), a
+// bass note holds its pitch. The low end's pitch is the power weighted mean of 30 to 250 Hz, in octaves;
+// a beat waits SPLIT_FRAMES frames and how far that fell from the hit to its lowest since is its drop.
+// Measured at the tool's beats against the teacher's kicks (an offline separation's, within 0.1 s),
+// median drop: kicks Espresso 1.13, Bangarang 1.18, Drugs I Like 0.83, Animals 0.83, C-C 0.64, Killing in
+// the Name 0.37, Bohemian 0.24, Sandman 0.04; the bass notes and the rest -0.07 to 0.17 everywhere. Rock's
+// kicks hardly sweep (Sandman's), so the drop is only asked for where this song's kicks do: SPLIT_SHARE of
+// the last SPLIT_MEMORY beats dropping SPLIT_SWEPT or more. Then a beat that drops under SPLIT_DROP is a
+// bass note (`bassNote`), not a beat; elsewhere every beat is a kick, as before. Where it is asked a kick is
+// heard the frame its drop passes SPLIT_DROP (most a frame after the hit, 17 ms later than the beat as is)
+// and a bass note SPLIT_FRAMES after it. The share and the drop were swept with 1 to 3 frames: 2 was best.
+// Beat F1 against the teacher's kicks, as is and split: Espresso 0.57, 0.85 (341 beats to 178: 139 of its
+// 150 kicks kept); Bangarang 0.86, 0.87; C-C 0.89, 0.90; Killing in the Name 0.89, 0.90; Drugs I Like 0.95,
+// 0.94; Animals 0.42, 0.43; Bohemian 0.70, 0.67; Sandman 0.65, 0.65 (never swept, so as before).
+// The drop is measured from the candidate frame itself: its lowest starts at that frame's own pitch, not
+// at infinity, so a kick whose pitch has already fallen SPLIT_DROP from the frame before (the top is the
+// larger of the two) is heard on the frame it was found and only the rest wait. An offline replay of recorded
+// analyser frames found the Demucs trained kick a median 57 ms after the teacher's stamp, 33 ms of it the
+// analyser window filling, 17 ms the rise test, 17 ms this wait (one frame on five of the eight songs;
+// C-C and Sandman never read as swept). Measured from infinity, 743 of 2408 fires were on their candidate
+// frame; from the frame's own pitch 1704 of 2413, the median 50 ms, and the same fires otherwise: kick F1
+// against the teacher within 50, 70 and 100 ms pooled over the eight songs 0.30, 0.65, 0.79 to 0.42, 0.72,
+// 0.79, precision 0.82 both ways, extra beats 429 to 430, the orchestra's false kicks 422 both ways. Killing
+// in the Name within 50 ms 0.33 to 0.59, Bangarang 0.06 to 0.32, Espresso 0.11 to 0.29. Rejected first:
+// hearing every candidate at once and marking the bass note afterwards, which is the split turned off for
+// kicks (Espresso's precision 0.78 to 0.41, Bangarang's 0.90 to 0.77); a shorter rise history, which moved
+// the median by 4 ms at most, since the band is flat before a kick and the lowest of two frames is the
+// lowest of four; and firing on the beat clock's grid, which lands 32 to 40% of its predictions on no kick.
+const SPLIT_FRAMES = 2
+const SPLIT_BAND = [30, 250]
+const SPLIT_DROP = 0.5
+const SPLIT_SWEPT = 0.8
+const SPLIT_SHARE = 0.3
+const SPLIT_MEMORY = 32
+// The bass note also fires on the bass line's own onsets, the ones the beat never heard: the bytes of
+// BASS_BAND rising over those BASS_LAG frames back (summed, in bytes), at a peak of that, over its mean
+// and BASS_K spreads of the last second and over BASS_FLOOR, at most every BASS_REFRACTORY; held SPLIT_FRAMES
+// frames like a beat, and dropped when a beat came within BASS_NEAR of it (the beat's split decides it).
+// Against the teacher's bass notes (Basic Pitch on the bass stem), F1: Sandman 0.59, Animals 0.58, Killing in
+// the Name 0.47, Espresso 0.42, Bangarang 0.40, Drugs I Like 0.40, Bohemian 0.35, C-C 0.30. A start, not tuned
+// far: a K of 1.5, a floor of 80 or 150 and a refractory of 0.18 were all worse.
+const BASS_BAND = [30, 200]
+const BASS_LAG = 2
+const BASS_K = 1
+const BASS_FLOOR = 30
+const BASS_REFRACTORY = 0.12
+const BASS_NEAR = 0.1
+// The hat from the top (listener.hatTop, on; a tool can turn it off): HAT_TOP_BAND's level (dB) rising
+// HAT_TOP_RISE over its lowest of the last HAT_TOP_FRAMES frames, at most every HAT_TOP_REFRACTORY. The hat as
+// it is reads 2 to 8 kHz, where dubstep's synths and a guitar's crunch live too: against the teacher's hats
+// (within 0.1 s, with the tool's shapes on) it caught Bangarang 4 of 694, Animals 69 of 148, C-C 183 of 583.
+// Over 12 to 20 kHz only a hat, a cymbal or a snare's sizzle is left. Swept across the library (bands from
+// 2 to 22 kHz, rises 2 to 6 dB, 2 or 3 frames, 0.08 to 0.12 s), F1 as is and from the top: Bangarang 0.01,
+// 0.72; C-C 0.47, 0.85; Drugs I Like 0.48, 0.59; Espresso 0.54, 0.67; Killing in the Name 0.23, 0.65;
+// Sandman 0.18, 0.54; Bohemian 0.03, 0.52; Animals 0.23, 0.44; Beethoven's first movement (no hats) 1 hat
+// and 6. A microphone across a room, or a file cut at 16 kHz, has little up there: this is for system audio,
+// and on a mic the hats may go quiet. Accepted for now, at Robert's call, with Demucs trained the only detector.
+const HAT_TOP_BAND = [12000, 20000]
+const HAT_TOP_RISE = 5
+const HAT_TOP_FRAMES = 2
+const HAT_TOP_REFRACTORY = 0.1
+// The snare (listener.snare, on; a tool can turn it off): a backbeat's hit, not the drum fill drumHit is
+// (sections.js DRUM_BAND, a fill, which fired 0 to 14 times a song on the teacher's 111 to 477 snares). A
+// snare is its body (SNARE_BODY) rising SNARE_BODY_RISE dB, its rattle (SNARE_RATTLE) SNARE_RATTLE_RISE and
+// its sizzle (SNARE_TOP) SNARE_TOP_RISE together, each over its lowest of the last SNARE_FRAMES frames, the
+// low end (SNARE_LOW) rising less than the body (a kick is the other way round), at most every
+// SNARE_REFRACTORY. Swept against the teacher's snares: F1 Animals 0.61, Sandman 0.58, Killing in the Name
+// 0.56, Drugs I Like 0.50, Bohemian 0.44, C-C 0.41, Bangarang 0.38, Espresso 0.37 (drumHit 0 to 0.11). It
+// fires 171 times in Beethoven's first movement, which has no snare: the orchestra's tutti hits.
+const SNARE_BODY = [150, 350]
+const SNARE_RATTLE = [2000, 6000]
+const SNARE_TOP = [7000, 12000]
+const SNARE_LOW = [40, 120]
+const SNARE_BODY_RISE = 4
+const SNARE_RATTLE_RISE = 3
+const SNARE_TOP_RISE = 5
+const SNARE_FRAMES = 4
+const SNARE_REFRACTORY = 0.15
 // The surge: the whole spectrum's power over the last SURGE_FAST seconds against the last
 // SURGE_SLOW, so a drop that arrives as everything coming in at once (Robert, on Tom Vek's C-C:
 // "at 0:54-0:55 or so, there's a big bass drop and then highly active music"), with no gap in the
@@ -72,7 +239,7 @@ const REFERENCE_FALL = 1 / 15
 // and the analyser's window is moved down by as far as that is under LEVEL_LOUD (where the files
 // the lamp was tuned on peak), LEVEL_MOST at most, so the bytes read as the file's would. C-C
 // rendered 7.3 dB quiet: the drops at 55.1, 139.9 and 209.0 with the window moved 6.9 to 7.7 dB,
-// as the file's; unmoved, 0:55 lost and a false one at 92.9. System audio only: a file plays at its
+// as the file's; unmoved, 0:55 lost and a false one at 92.9. System audio and loopback inputs only: a file plays at its
 // own level, and a microphone's is the room's (the clap wants the room's quiet as it is; Sense is
 // its knob). Tried first: the floor under the reference lowered (the rest still heard a quiet
 // song: a false drop at 0:36), and the bytes raised (what sank under the window's floor was lost:
@@ -88,6 +255,10 @@ const LEVEL_START = -42
 const LEVEL_MOST = 20
 const LEVEL_SILENT = -70 // dB: under this nothing is playing
 const LEVEL_KEY = 'lavalamp-music-level-2-' // 2: what the first, starting at -35, had half learned is let go
+// A loopback input chosen as the Mic (BlackHole and its kind) is system audio too, not a room: C-C
+// through Spotify into BlackHole still fired only on 0:55's second hit (Robert: "still onlly firing
+// on the second drop with the spotify c-c") while only System was lifted. Known by the input's name.
+const LOOPBACK = /blackhole|loopback|soundflower|vb-?cable|virtual|aggregate|multi-output/i
 const FLOOR_NEAR = 3
 const FLOOR_PATIENCE = 90
 const FLOOR_FALL = 1 / 10
@@ -159,7 +330,8 @@ const BOOM_GAP = 0.1
 const BOOM_PEAK = 14
 const BOOM_PEAK_FALL = 0.6 // dB a second
 const ANALYSIS_RATE = 60 // frames a second the music is heard at, at most (see update)
-const FRAME_EVENTS = ['beat', 'hat', 'boom', 'clap', 'drop', 'wobbleNote', 'stab']
+const REPLAY_REPORT = 4 // frames: a replay's catch up longer than this reports only its last ones
+const FRAME_EVENTS = ['beat', 'hat', 'boom', 'clap', 'drop', 'wobbleNote', 'stab', 'bassNote', 'snare']
 const SECTION_EVENTS = ['drumHit', 'soloStart', 'leadNote', 'rollEnd', 'impact', 'half', 'double', 'key']
 const BOOM_REFRACTORY = 0 // was 1 s: no limits on how often (app.js BOOM_POT_GAP)
 const BOOM_FALL = 2 // dB under the note's highest: past its peak (1 fired on frame jitter, 0:55.15 for a peak at 0:55.33)
@@ -248,6 +420,37 @@ const ACTIVITY_BANDS = 24
 const ACTIVITY_SPREAD = 0.375
 const bandLevels = new Float32Array(ACTIVITY_BANDS)
 
+// The analyser's bytes at ANALYSIS_RATE over [from, to] seconds of a decoded song, rendered offline
+// with the analyser set as the live one is (docs/methods/tools/song-scan.js does a whole song so).
+async function renderFrames (buffer, from, to) {
+  const start = Math.floor(from * buffer.sampleRate)
+  const length = Math.max(1, Math.floor(to * buffer.sampleRate) - start)
+  const ctx = new OfflineAudioContext(1, length, buffer.sampleRate)
+  const piece = ctx.createBuffer(buffer.numberOfChannels, length, buffer.sampleRate)
+  for (let c = 0; c < buffer.numberOfChannels; c++) piece.copyToChannel(buffer.getChannelData(c).subarray(start, start + length), c)
+  const play = ctx.createBufferSource()
+  play.buffer = piece
+  const analyser = ctx.createAnalyser()
+  analyser.fftSize = FFT
+  analyser.smoothingTimeConstant = 0.2
+  analyser.minDecibels = MIN_DB
+  analyser.maxDecibels = MAX_DB
+  play.connect(analyser).connect(ctx.destination)
+  const frames = []
+  const quantum = 128 / buffer.sampleRate
+  for (let k = 1; k / ANALYSIS_RATE < length / buffer.sampleRate - 0.01; k++) {
+    ctx.suspend(Math.round(k / ANALYSIS_RATE / quantum) * quantum).then(() => {
+      const bins = new Uint8Array(analyser.frequencyBinCount)
+      analyser.getByteFrequencyData(bins)
+      frames.push(bins)
+      ctx.resume()
+    })
+  }
+  play.start()
+  await ctx.startRendering()
+  return frames
+}
+
 export function createMusic () {
   let context = null
   let analyser = null
@@ -257,11 +460,44 @@ export function createMusic () {
   let source = 'mic'
   let enabled = false
   let error = ''
+  // Why the last start failed, for the page to say what to do: 'gesture' (the browser wants a click first), 'cancelled'
+  // (the share picker was closed), 'blocked' (the system will not let the browser share), 'noaudio' (a share with no
+  // sound in it), 'denied' (the microphone is not allowed), 'nodevice' (no input), 'unsupported', or 'other'.
+  let errorKind = ''
+  let onSourceEnd = null // called when the stream being heard ends by itself (the share stopped, the input unplugged)
   let binHz = 0
   const sections = createSections()
   let waited = 0 // seconds since the music was last heard (see ANALYSIS_RATE)
-  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, clap: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, quiet: 0, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
+  const levels = { heat: 0, eddy: 0, kick: 0, level: 0, beat: false, hat: false, boom: false, boomPending: false, clap: false, wobble: 0, wobbleNote: false, wobbleRun: 0, stab: false, bassNote: false, snare: false, bpm: 0, activity: 0.5, sinceBeat: 0, surge: 1, calm: true, drop: false, quiet: 0, powerDb: -90, reference: -36, parts: { loud: 0, full: 0, onsets: 0 }, raw: { beat: 0, heat: 0, eddy: 0, kick: 0 } }
   // The clock, in this module's own seconds: the next predicted beat's time and number.
+  let attackOn = false // the attack in the beat (ATTACK_RISE), off as tuned
+  // The four fitted against the split tracks (the pump, the split, the hat from the top, the snare) are on: what was
+  // the Demucs trained detector is the only one (Robert: "let's make the demucs trained detector the only detector
+  // for now, we don't need the old one any more"). Their setters stay, so a tool can turn one off to measure.
+  let pumpOn = true // the pump (PUMP_PEG)
+  let splitOn = true // the split of the beat into kicks and bass notes (SPLIT_DROP)
+  const byteHistory = [] // the last BEAT_RISE_FRAMES frames' bytes, for the pump's and the bass note's rises
+  const pumpFlux = [0, 0] // the beat range's rise a bin, dB, the frame before last and last; and the mids'
+  let pumpMidsFlux = 0
+  const pitchHistory = [] // the low end's pitch (SPLIT_BAND, octaves), the last two frames
+  let splitPending = null // a beat waiting on its drop: { at, top, low, frames }
+  const splitDrops = [] // the last SPLIT_MEMORY beats' drops
+  const bassFlux = [] // BASS_BAND's rise a frame over the last second
+  let bassPending = [] // the bass line's onsets waiting SPLIT_FRAMES: { at, frames }
+  let lastBassOnset = -1e9
+  let lastCandidate = -1e9 // the last beat heard before the split judged it
+  let hatTopOn = true // the hat from the top (HAT_TOP_BAND)
+  let snareOn = true // the snare (SNARE_BODY)
+  const topHistory = [] // HAT_TOP_BAND's dB, the last HAT_TOP_FRAMES frames
+  const snareHistory = [] // [body, rattle, top, low] in dB, the last SNARE_FRAMES frames
+  let lastSnare = -1e9
+  let lastAttackAt = -1e9
+  let timeAnalyser = null, timeData = null, bassHp = null, bassLp = null
+  const shapeOn = Object.fromEntries(SHAPE_TRIGGERS.map(k => [k, false])) // each trigger's shape (SHAPE_TRIGGERS), off as tuned
+  const envs = { bass: createEnvelope(), mids: createEnvelope(), kick: createEnvelope(), broad: createEnvelope() }
+  const waits = createWaits() // the shapes waiting on their tails
+  const wobbleLevels = [] // the wobble band's level a frame, in dB, over WOBBLE_WINDOW, for its shape
+  const bandNodes = {} // live: each band's filters and analyser, made the first time a shape wants it
   const beatClock = { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }
   const gaps = []
   const fits = [] // [beat number, time] of the on-clock beats, for the period
@@ -278,6 +514,7 @@ export function createMusic () {
   let sectionPower = 0
   let peakDb = -90
   let levelPeak = LEVEL_START // the loudest this source has played (see LEVEL_LOUD)
+  let levelled = '' // 'system' or 'loopback' when this source is lifted to the files' level, its key in the store
   let levelSaved = 0
   let floorDrop = 0 // dB the reference's floor has sunk for a quiet recording (see FLOOR_PATIENCE)
   let farFromFloor = 0 // seconds since the song came within FLOOR_NEAR of the floor
@@ -315,8 +552,14 @@ export function createMusic () {
   let fileStartedAt = -1 // the audio clock when a file began, for its position
   let fileStream = null // the playing file's sound as a MediaStream, for recording
   let onFileEnd = null // called when a playing file reaches its end
+  // 'frames': analysis frames made ahead (the analyser's bytes at ANALYSIS_RATE, as renderFrames
+  // makes them) heard against an outside clock in song seconds, so a song can be watched slowed
+  // down or sped up and still be heard exactly as at its own speed.
+  let replay = null
+  let warmFrames = null // a file started part way: the frames before it, heard on the next update
+  let warmBinHz = 0
 
-  const saveLevel = () => { levelSaved = clock; if (enabled && source === 'system') try { localStorage.setItem(LEVEL_KEY + source, levelPeak.toFixed(1)) } catch (e) {} }
+  const saveLevel = () => { levelSaved = clock; if (enabled && levelled) try { localStorage.setItem(LEVEL_KEY + levelled, levelPeak.toFixed(1)) } catch (e) {} }
   const band = ([lo, hi]) => {
     if (hi < lo) [lo, hi] = [hi, lo]
     const a = Math.min(bins.length - 1, Math.max(1, Math.floor(lo / binHz)))
@@ -335,13 +578,66 @@ export function createMusic () {
     for (let k = a; k <= b; k++) sum += Math.pow(10, (bins[k] - 255) * 8 / 255)
     return sum / (b - a + 1)
   }
+  // A band's envelope read live, its analyser made the first time it is wanted (the bass's is the attack's own).
+  const readBand = (name, ranges) => {
+    let n = bandNodes[name]
+    if (!n) {
+      if (name === 'bass') n = { hp: bassHp, lp: bassLp, an: timeAnalyser, data: timeData }
+      else {
+        n = { an: context.createAnalyser(), data: new Float32Array(FFT) }
+        n.an.fftSize = FFT
+        if (shapeBands(ranges)[name]) { n.hp = context.createBiquadFilter(); n.hp.type = 'highpass'; n.lp = context.createBiquadFilter(); n.lp.type = 'lowpass'; analyser.connect(n.hp).connect(n.lp).connect(n.an) } else analyser.connect(n.an)
+      }
+      bandNodes[name] = n
+    }
+    const r = shapeBands(ranges)[name]
+    if (r && n.hp) { n.hp.frequency.value = r[0]; n.lp.frequency.value = r[1] }
+    n.an.getFloatTimeDomainData(n.data)
+    envs[name].push(envs[name].read(n.data, context.sampleRate, Math.round(context.currentTime * context.sampleRate)))
+  }
+  // The sub's rise into now: seconds from 10% to 90% of the way up from its lowest in the history, in power.
+  const swellOf = (history, nowDb) => {
+    const P = x => Math.pow(10, x / 10)
+    let lo = history.length - 1
+    for (let j = 0; j < history.length; j++) if (history[j][1] < history[lo][1]) lo = j
+    if (lo < 0) return 0
+    const floor = P(history[lo][1]), top = P(nowDb)
+    let a10 = clock, a90 = clock
+    for (let j = history.length - 1; j >= lo; j--) if (P(history[j][1]) < floor + 0.1 * (top - floor)) { a10 = history[j][0]; break }
+    for (let j = lo; j < history.length; j++) if (history[j][0] >= a10 && P(history[j][1]) >= floor + 0.9 * (top - floor)) { a90 = history[j][0]; break }
+    return a90 - a10
+  }
+  // How steadily a level repeats: the highest autocorrelation at a lag of lo to hi frames.
+  const periodicOf = (v, lo, hi) => {
+    const n = v.length
+    let m = 0
+    for (const x of v) m += x
+    m /= n
+    let e = 0
+    for (const x of v) e += (x - m) * (x - m)
+    let best = 0
+    for (let L = lo; L <= Math.min(hi, n - 1); L++) {
+      let c = 0
+      for (let j = L; j < n; j++) c += (v[j] - m) * (v[j - L] - m)
+      best = Math.max(best, c / Math.max(1e-9, e * (n - L) / n))
+    }
+    return best
+  }
   const ease = (from, to, dt) => from + (to - from) * Math.min(1, dt / (to > from ? ATTACK : RELEASE))
 
-  async function open () {
+  // quiet: started with no click (a reload with Music on): the browser may not let the audio run yet, and its resume
+  // then waits for a click forever, so it is given a moment and the start gives up, to be tried again on a click.
+  async function open (quiet) {
     const Ctx = window.AudioContext || window.webkitAudioContext
     if (!Ctx) throw new Error('no Web Audio')
     if (!context) context = new Ctx()
-    if (context.state !== 'running') await context.resume()
+    if (context.state !== 'running') {
+      if (!quiet) await context.resume()
+      else {
+        await Promise.race([context.resume(), new Promise(resolve => setTimeout(resolve, QUIET_WAIT))])
+        if (context.state !== 'running') throw Object.assign(new Error('click to start'), { kind: 'gesture' })
+      }
+    }
     analyser = analyser || context.createAnalyser()
     analyser.fftSize = FFT
     analyser.smoothingTimeConstant = 0.2
@@ -352,10 +648,19 @@ export function createMusic () {
     analyser.maxDecibels = MAX_DB - levels.quiet
     bins = new Uint8Array(analyser.frequencyBinCount)
     binHz = context.sampleRate / FFT
+    // The bass's waveform for the attack: the analyser passes its input on, band passed to the beat's range.
+    if (!timeAnalyser) {
+      bassHp = context.createBiquadFilter(); bassHp.type = 'highpass'
+      bassLp = context.createBiquadFilter(); bassLp.type = 'lowpass'
+      timeAnalyser = context.createAnalyser(); timeAnalyser.fftSize = FFT
+      analyser.connect(bassHp).connect(bassLp).connect(timeAnalyser)
+      timeData = new Float32Array(FFT)
+    }
   }
 
   function closeSource () {
     if (stream) { for (const t of stream.getTracks()) t.stop(); stream = null }
+    replay = null
     if (testNodes) { for (const n of testNodes) { try { if (n.stop) n.stop() } catch (e) {} try { n.disconnect() } catch (e) {} } testNodes = null }
   }
 
@@ -545,18 +850,27 @@ export function createMusic () {
     get enabled () { return enabled },
     get source () { return source },
     get error () { return error },
+    get errorKind () { return errorKind },
+    get running () { return !!context && context.state === 'running' },
     // Start listening from `which` ('mic', 'system', 'test' or 'file'). Call from a user gesture.
+    // Frames are { frames, binHz, clock: () => the song's seconds, from: the first frame's index }:
+    // no audio is opened; each update hears every frame up to the clock (see replay).
     // A file is { data: an ArrayBuffer of an audio file, audible: whether it is heard too }: the
-    // page plays it, so the lamp hears it exactly, from the top (Robert's test song, C-C).
-    async start (which = source, file) {
+    // page plays it, so the lamp hears it exactly, from the top (Robert's test song, C-C). Or from
+    // `at` seconds in, with `warm` seconds before that heard first, offline and silently, so the
+    // detector meets the moment with the song's history behind it, not cold (its reference and
+    // histories run over 8 s and more; played cold, 0:55 is not the 0:55 of the whole song).
+    // quiet: no click behind this start (see open); only the microphone, and only once it is allowed, can start so.
+    async start (which = source, file, quiet = false) {
       error = ''
+      errorKind = ''
       try {
-        await open()
+        if (which !== 'frames') await open(quiet)
         closeSource()
         source = which
-        levelPeak = LEVEL_START
-        try { const v = parseFloat(localStorage.getItem(LEVEL_KEY + which)); if (v > -90 && v < 0) levelPeak = v } catch (e) {}
+        levelled = ''
         if (which === 'test') startTest()
+        else if (which === 'frames') replay = { frames: file.frames, binHz: file.binHz, clock: file.clock, next: Math.max(0, Math.floor(file.from || 0)) }
         else if (which === 'file') {
           const buffer = await context.decodeAudioData(file.data.slice(0))
           const play = context.createBufferSource()
@@ -571,31 +885,50 @@ export function createMusic () {
           play.connect(record)
           fileStream = record.stream
           play.onended = () => { if (testNodes && testNodes[0] === play && onFileEnd) onFileEnd() }
-          play.start()
-          fileStartedAt = context.currentTime
+          const at = Math.max(0, Math.min(buffer.duration, Number(file.at) || 0))
+          warmFrames = at > 0 && file.warm > 0 ? await renderFrames(buffer, Math.max(0, at - file.warm), at) : null
+          warmBinHz = buffer.sampleRate / FFT
+          play.start(0, at)
+          fileStartedAt = context.currentTime - at
           testNodes = [play, out, record]
         } else if (which === 'system') {
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) throw new Error('this browser cannot share its audio; use Mic')
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) throw Object.assign(new Error('this browser cannot share its audio; use Mic'), { kind: 'unsupported' })
           // The browser only offers audio with a screen share, so a share is asked for; the
           // picture is stopped at once and never drawn, kept or sent.
           stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, systemAudio: 'include', selfBrowserSurface: 'exclude', surfaceSwitching: 'include' })
           for (const t of stream.getVideoTracks()) { t.stop(); stream.removeTrack(t) }
-          if (!stream.getAudioTracks().length) throw new Error('no audio was shared: tick "Share system audio" (or "Share tab audio") in the dialog')
+          if (!stream.getAudioTracks().length) throw Object.assign(new Error('no audio was shared: turn on "Also share tab audio" (or "Also share system audio") in the dialog'), { kind: 'noaudio' })
           context.createMediaStreamSource(stream).connect(analyser)
         } else {
           const audio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+          // The chosen input is this machine's: gone (unplugged, or a setup from another computer), the default is heard.
           if (device) audio.deviceId = { exact: device }
-          stream = await navigator.mediaDevices.getUserMedia({ audio, video: false })
+          try { stream = await navigator.mediaDevices.getUserMedia({ audio, video: false }) } catch (e) {
+            if (!device || (e.name !== 'OverconstrainedError' && e.name !== 'NotFoundError')) throw e
+            delete audio.deviceId
+            stream = await navigator.mediaDevices.getUserMedia({ audio, video: false })
+          }
           context.createMediaStreamSource(stream).connect(analyser)
         }
+        const track = stream && stream.getAudioTracks()[0]
+        if (track) { const heard = stream; track.addEventListener('ended', () => { if (stream === heard && onSourceEnd) onSourceEnd() }) }
+        levelled = which === 'system' ? 'system' : which === 'mic' && track && LOOPBACK.test(track.label) ? 'loopback' : ''
+        levelPeak = LEVEL_START
+        if (levelled) try { const v = parseFloat(localStorage.getItem(LEVEL_KEY + levelled)); if (v > -90 && v < 0) levelPeak = v } catch (e) {}
         enabled = true
-        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; floorDrop = 0; farFromFloor = 0; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; lastClap = -1e9; clapHistory.length = 0; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; musicBeats.length = 0; sections.reset(); lastBandJump = -1e9; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null
+        bassAverage = 0; beatPeak = 0; surgeFast = surgeSlow = sectionPower = 0; peakDb = -90; floorDrop = 0; farFromFloor = 0; breadth = 0; breadthPeak = 0.05; score = null; levels.calm = true; levels.drop = false; bassPowerAverage = midsPowerAverage = 0; bassHistory.fill(0); midsHistory.fill(0); lastBeat = -1; beatCount = 0; beatTimes.length = 0; lastBoom = -1e9; lastClap = -1e9; clapHistory.length = 0; boomPeak = -90; boomArmed = null; subHistory.length = 0; lowHistory.length = 0; scoreHistory.length = 0; recentBeats.length = 0; musicBeats.length = 0; sections.reset(); lastBandJump = -1e9; lastSwitch = -1e9; brightHistory.length = 0; levels.wobble = 0; levels.wobbleRun = 0; wobbleArmed = true; bandHistory.length = 0; stabPending = null; for (const e of Object.values(envs)) e.reset(); waits.reset(); wobbleLevels.length = 0
         Object.assign(beatClock, { locked: false, period: 0.5, next: 0, index: 0, onClock: 0, missed: 0, tick: false, hit: false, heardAt: -1, sectionAt: 0 }); gaps.length = 0; fits.length = 0
         for (const f of Object.values(features)) f.seen = false
         onsetTimes.length = 0; levels.activity = 0.5; levels.sinceBeat = 0; startedAt = clock
       } catch (e) {
         enabled = false
         error = e && e.message ? e.message : String(e)
+        const name = e && e.name
+        errorKind = e && e.kind ? e.kind
+          : name === 'InvalidStateError' ? 'gesture' // a share asked for with no click behind it
+            : name === 'NotAllowedError' ? (which === 'system' ? (/system/i.test(error) ? 'blocked' : 'cancelled') : 'denied')
+              : name === 'NotFoundError' || name === 'OverconstrainedError' ? 'nodevice'
+                : name === 'NotSupportedError' ? 'unsupported' : 'other'
         closeSource()
         throw e
       }
@@ -610,9 +943,42 @@ export function createMusic () {
     // Once a frame: read the analyser and update `levels`. `ranges` gives each sync its band in
     // Hz ({ beat, heat, eddy, kick }, each [lo, hi]); `sensitivity` scales them.
     update (dt, sensitivity = 1, ranges, frame) {
+      if (replay && !frame) {
+        // Every frame up to the clock, at the song's own rate whatever the screen's or the
+        // playback's; the one-frame events of the last few reported together. A longer catch up (the
+        // warm seconds, or a stall) is heard, its events not: they are past.
+        const r = replay
+        const target = Math.min(r.frames.length, Math.floor(r.clock() * ANALYSIS_RATE))
+        const caught = {}
+        const caughtSections = {}
+        let kind = ''
+        let heard = false
+        while (r.next < target && replay === r) {
+          this.update(1 / ANALYSIS_RATE, sensitivity, ranges, { bins: r.frames[r.next++], binHz: r.binHz })
+          heard = true
+          if (r.next < target - REPLAY_REPORT) continue
+          for (const k of FRAME_EVENTS) if (levels[k]) caught[k] = true
+          if (levels.sections) for (const k of SECTION_EVENTS) if (levels.sections[k]) caughtSections[k] = true
+          if (levels.drop) kind = levels.dropKind
+        }
+        for (const k of FRAME_EVENTS) levels[k] = !!caught[k]
+        if (levels.sections) for (const k of SECTION_EVENTS) levels.sections[k] = !!caughtSections[k]
+        if (caught.drop) levels.dropKind = kind
+        if (!heard) { beatClock.tick = false; beatClock.hit = false }
+        return levels
+      }
+      if (warmFrames && !frame) {
+        const warm = warmFrames
+        warmFrames = null
+        for (const b of warm) this.update(1 / ANALYSIS_RATE, sensitivity, ranges, { bins: b, binHz: warmBinHz })
+        enabled = true
+        waited = 0
+      }
       levels.beat = false
       levels.hat = false
       levels.boom = false
+      levels.bassNote = false
+      levels.snare = false
       // Heard at ANALYSIS_RATE whatever the screen's rate: the beat's rise is over
       // BEAT_RISE_FRAMES frames and the lamp was tuned at 60 of them a second. At 120 a second
       // the rise was over half the time, and C-C's drop at 0:55 went (a false one at 0:27.7, and
@@ -640,6 +1006,9 @@ export function createMusic () {
         analyser.getByteFrequencyData(bins)
       }
       clock += dt
+      // The bands' envelopes (see SHAPE_TRIGGERS): given with the frame, or read live for the shapes that are on.
+      const given = frame && frame.bins && frame.bins.shapes
+      if (given) { for (const b in envs) if (given[b]) envs[b].push(given[b]) } else if (!frame && timeAnalyser) { for (const b in SHAPE_BANDS_OF) if (SHAPE_BANDS_OF[b].some(k => shapeOn[k])) readBand(b, ranges) }
       const quiet = levels.quiet
       const raw = levels.raw
       raw.beat = band(ranges.beat); raw.heat = band(ranges.heat); raw.eddy = band(ranges.eddy); raw.kick = band(ranges.kick)
@@ -654,7 +1023,28 @@ export function createMusic () {
       levels.level = ease(levels.level, Math.min(1.5, (raw.heat + raw.eddy + raw.kick) / 3 * sensitivity), dt)
       // A hat: the same test on the kick range, quicker (a hi-hat runs eighths and sixteenths).
       hatAverage += (raw.kick - hatAverage) * Math.min(1, dt / 0.6)
-      if (raw.kick > 0.04 && raw.kick > hatAverage * (1.25 / Math.max(0.3, Math.sqrt(sensitivity))) && clock - lastHat > 0.11) { levels.hat = true; lastHat = clock; onsetTimes.push(clock) }
+      if (hatTopOn) {
+        const top = 10 * Math.log10(power(HAT_TOP_BAND) + 1e-12)
+        if (topHistory.length === HAT_TOP_FRAMES && top - Math.min(...topHistory) > HAT_TOP_RISE && clock - lastHat > HAT_TOP_REFRACTORY) { levels.hat = true; onsetTimes.push(clock); lastHat = clock }
+        topHistory.push(top)
+        if (topHistory.length > HAT_TOP_FRAMES) topHistory.shift()
+      } else if (raw.kick > 0.04 && raw.kick > hatAverage * (1.25 / Math.max(0.3, Math.sqrt(sensitivity))) && clock - lastHat > 0.11) {
+        const fire = () => { levels.hat = true; onsetTimes.push(clock) }
+        if (!shapeOn.hat || !envs.kick.length) { fire(); lastHat = clock } else {
+          const hit = hitIn(envs.kick)
+          if (hit.rise >= HAT_RISE) { lastHat = clock; waits.wait(envs.kick, hit, 30, (e, h) => tailOf(e, h, 15, 30) < HAT_TAIL, fire) }
+        }
+      }
+      // The snare (see SNARE_BODY).
+      if (snareOn) {
+        const now = [SNARE_BODY, SNARE_RATTLE, SNARE_TOP, SNARE_LOW].map(r => 10 * Math.log10(power(r) + 1e-12))
+        if (snareHistory.length === SNARE_FRAMES) {
+          const up = now.map((v, j) => v - Math.min(...snareHistory.map(h => h[j])))
+          if (up[0] > SNARE_BODY_RISE && up[1] > SNARE_RATTLE_RISE && up[2] > SNARE_TOP_RISE && up[3] < up[0] && clock - lastSnare > SNARE_REFRACTORY) { levels.snare = true; lastSnare = clock }
+        }
+        snareHistory.push(now)
+        if (snareHistory.length > SNARE_FRAMES) snareHistory.shift()
+      }
       // The beat, in power (see BEAT_POWER_RISE): the rise over the last few frames against the
       // range's own average, so a held note counts for nothing and only a hit's attack does (by
       // energy against its average a bass line hid half the test's kicks), and against the mids'.
@@ -681,16 +1071,101 @@ export function createMusic () {
       const cutBefore = lowCounted > 0 && clock - lowHistory[0][0] >= CUT_TIME + CUT_SKIP - 0.05 && low >= CUT_SHARE * lowCounted
       lowHistory.push([clock, lowPower < beatPeak * Math.pow(10, -CUT_DB / 10)])
       while (lowHistory.length && clock - lowHistory[0][0] > CUT_TIME + CUT_SKIP) lowHistory.shift()
-      if (raw.beat > BEAT_FLOOR && bassPower > beatPeak / 16 && bassRise > BEAT_POWER_RISE / Math.max(0.3, Math.sqrt(sensitivity)) && bassRise > midsRise * BEAT_BASS_LEAD && clock - lastBeat > BEAT_REFRACTORY) {
+      // The attack: given with the frame (a tool's scan reads it from the song), or read from the input.
+      let shape = frame ? frame.shape || (frame.bins && frame.bins.shape) : null
+      if (!shape && attackOn && !frame && timeAnalyser) { bassHp.frequency.value = ranges.beat[0]; bassLp.frequency.value = ranges.beat[1]; timeAnalyser.getFloatTimeDomainData(timeData); shape = shapeOf(timeData, context.sampleRate) }
+      if (shape) { raw.attackRise = shape.rise; raw.attackMs = shape.attack; if (shape.rise >= ATTACK_RISE && shape.attack >= ATTACK_MS[0] && shape.attack <= ATTACK_MS[1]) lastAttackAt = clock }
+      const attackOk = !attackOn || clock - lastAttackAt <= ATTACK_FRAMES / ANALYSIS_RATE + 1e-6
+      // The pump (see PUMP_PEG) and the bass line's onsets (see BASS_BAND), from the bytes of the frames before.
+      let pumped = false
+      let bassOnset = false
+      if ((pumpOn || splitOn) && byteHistory.length === BEAT_RISE_FRAMES) {
+        const riseOf = ([lo, hi]) => {
+          const a = Math.min(bins.length - 1, Math.max(1, Math.floor(lo / binHz)))
+          const b = Math.max(a, Math.min(bins.length - 1, Math.ceil(hi / binHz)))
+          let x = 0
+          for (let k = a; k <= b; k++) { let m = 255; for (const h of byteHistory) if (h[k] < m) m = h[k]; if (bins[k] > m) x += bins[k] - m }
+          return x / (b - a + 1) * 80 / 255
+        }
+        if (pumpOn) {
+          const f = riseOf(ranges.beat)
+          const [f2, f1] = pumpFlux
+          pumped = levels.pegged && f1 > PUMP_FLUX && f1 >= f2 && f1 >= f && f1 > pumpMidsFlux && clock - lastBeat > BEAT_REFRACTORY
+          pumpFlux.shift(); pumpFlux.push(f)
+          pumpMidsFlux = riseOf(BEAT_MIDS)
+        }
+        if (splitOn) {
+          const a = Math.max(0, Math.floor(BASS_BAND[0] / binHz)), b = Math.min(bins.length - 1, Math.ceil(BASS_BAND[1] / binHz))
+          const back = byteHistory[byteHistory.length - BASS_LAG]
+          let x = 0
+          for (let k = a; k <= b; k++) if (bins[k] > back[k]) x += bins[k] - back[k]
+          bassFlux.push(x)
+          if (bassFlux.length > ANALYSIS_RATE) bassFlux.shift()
+          let mean = 0
+          for (const v of bassFlux) mean += v
+          mean /= bassFlux.length
+          let sd = 0
+          for (const v of bassFlux) sd += (v - mean) * (v - mean)
+          sd = Math.sqrt(sd / bassFlux.length)
+          const n = bassFlux.length, v = bassFlux[n - 2]
+          bassOnset = n >= 3 && v > bassFlux[n - 3] && v >= bassFlux[n - 1] && v > mean + BASS_K * sd && v > BASS_FLOOR && clock - lastBassOnset > BASS_REFRACTORY
+        }
+      }
+      if (pumpOn) levels.pegged = 10 * Math.log10(Math.max(1e-12, bassPowerAverage) / Math.max(1e-12, beatPeak)) > PUMP_PEG // for the next frame's pump
+      if (pumpOn || splitOn) { const copy = byteHistory.length === BEAT_RISE_FRAMES ? byteHistory.shift() : new Uint8Array(bins.length); copy.set(bins); byteHistory.push(copy) }
+      const heardBeat = at => {
         levels.beat = true
-        lastBeat = clock
         beatCount++
-        beatTimes.push(clock)
+        beatTimes.push(at)
         if (beatTimes.length > 9) beatTimes.shift()
         if (beatTimes.length >= 4) levels.bpm = Math.round(60 * (beatTimes.length - 1) / (beatTimes[beatTimes.length - 1] - beatTimes[0]))
-        onsetTimes.push(clock)
-        hear(clock)
+        onsetTimes.push(at)
+        hear(at)
       }
+      // The low end's pitch (see SPLIT_BAND), and a beat waiting on its drop judged once SPLIT_FRAMES have passed.
+      let pitch = 0
+      if (splitOn) {
+        const a = Math.max(1, Math.round(SPLIT_BAND[0] / binHz)), b = Math.min(bins.length - 1, Math.round(SPLIT_BAND[1] / binHz))
+        let w = 0, q = 0
+        for (let k = a; k <= b; k++) { const p = Math.pow(10, (bins[k] - 255) * 8 / 255); w += p * Math.log2(k * binHz); q += p }
+        pitch = q > 0 ? w / q : 0
+        if (splitPending) {
+          const p = splitPending
+          p.low = Math.min(p.low, pitch)
+          p.frames++
+          // A kick is heard the frame its drop passes SPLIT_DROP, most a frame after the hit; a bass note only after SPLIT_FRAMES.
+          if (!p.heard && p.top - p.low > SPLIT_DROP) { heardBeat(p.at); p.heard = true }
+          if (p.frames >= SPLIT_FRAMES) {
+            const drop = p.top - p.low
+            splitDrops.push(drop)
+            if (splitDrops.length > SPLIT_MEMORY) splitDrops.shift()
+            raw.drop = drop
+            if (!p.heard) { if (drop > SPLIT_DROP) heardBeat(p.at); else levels.bassNote = true }
+            splitPending = null
+          }
+        }
+        if (bassOnset) { lastBassOnset = clock; bassPending.push({ at: clock - dt, frames: 0 }) }
+        for (const o of bassPending) o.frames++
+        for (const o of bassPending) if (o.frames >= SPLIT_FRAMES && Math.abs(o.at - lastCandidate) > BASS_NEAR && !(splitPending && Math.abs(o.at - splitPending.at) <= BASS_NEAR)) levels.bassNote = true
+        bassPending = bassPending.filter(o => o.frames < SPLIT_FRAMES)
+      }
+      const beatRising = raw.beat > BEAT_FLOOR && bassPower > beatPeak / 16 && bassRise > BEAT_POWER_RISE / Math.max(0.3, Math.sqrt(sensitivity)) && bassRise > midsRise * BEAT_BASS_LEAD && clock - lastBeat > BEAT_REFRACTORY && attackOk
+      if (beatRising || pumped) {
+        const at = beatRising ? clock : clock - dt // a pump beat is heard at its peak, a frame back
+        lastBeat = clock
+        if (splitOn) {
+          lastCandidate = at
+          // Where this song's kicks do not sweep the beat is heard at once, as before, its drop only measured.
+          const swept = splitDrops.length >= 8 && splitDrops.filter(d => d > SPLIT_SWEPT).length >= SPLIT_SHARE * splitDrops.length
+          // The drop is measured from the candidate frame itself (see SPLIT_DROP's comment): a kick that has
+          // already fallen that far from the frame before is heard now, the rest wait on the frames to come.
+          const top = Math.max(pitch, pitchHistory.length ? pitchHistory[pitchHistory.length - 1] : 0)
+          const heard = !swept || top - pitch > SPLIT_DROP
+          splitPending = { at, top, low: pitch, frames: 0, heard }
+          if (heard) heardBeat(at)
+        } else heardBeat(at)
+      }
+      if (splitOn) { pitchHistory.push(pitch); if (pitchHistory.length > 2) pitchHistory.shift() }
       const kickGoneFor = levels.sinceBeat // seconds without a beat before this frame
       levels.sinceBeat = levels.beat ? 0 : levels.sinceBeat + dt
       // The boom (see BOOM_RISE), in the analyser's decibels: a byte is 80/255 dB.
@@ -703,7 +1178,7 @@ export function createMusic () {
       boomPeak = Math.max(subDb, boomPeak - BOOM_PEAK_FALL * dt)
       raw.boomRise = rising.length ? subDb - Math.min(...rising.map(r => r[1])) : 0
       raw.boomOver = counted ? subDb - before / counted : 0
-      if (rising.length === BEAT_RISE_FRAMES && counted && raw.boomRise > BOOM_RISE && raw.boomOver > BOOM_OVER && subDb > boomPeak - BOOM_PEAK && clock - lastBoom > BOOM_REFRACTORY) {
+      if (rising.length === BEAT_RISE_FRAMES && counted && raw.boomRise > BOOM_RISE && raw.boomOver > BOOM_OVER && subDb > boomPeak - BOOM_PEAK && clock - lastBoom > BOOM_REFRACTORY && (!shapeOn.boom || swellOf(subHistory, subDb) >= BOOM_SWELL / 1000)) {
         boomArmed = { at: clock, max: lowDb }
         lastBoom = clock
       }
@@ -729,11 +1204,17 @@ export function createMusic () {
           const bassRise = bassDb - Math.min(...recent.map(h => h[2]))
           if (clapDb - lowest > CLAP_RISE) lastBandJump = clock
           const quietBeats = musicBeats.filter(t => clock - t <= CLAP_QUIET).length
-          if (clapDb - lowest > CLAP_RISE && clapDb - mean > CLAP_OVER && bassRise < clapDb - lowest - CLAP_BASS && levels.calm && quietBeats < CLAP_BEATS && levels.powerDb < CLAP_ROOM && clock - lastClap > CLAP_REFRACTORY) { levels.clap = true; lastClap = clock }
+          if (clapDb - lowest > CLAP_RISE && clapDb - mean > CLAP_OVER && bassRise < clapDb - lowest - CLAP_BASS && levels.calm && quietBeats < CLAP_BEATS && levels.powerDb < CLAP_ROOM && clock - lastClap > CLAP_REFRACTORY) {
+            if (!shapeOn.clap || !envs.kick.length) { levels.clap = true; lastClap = clock } else {
+              const hit = hitIn(envs.kick)
+              if (hit.attack <= CLAP_ATTACK && hit.rise >= CLAP_SPIKE) { lastClap = clock; waits.wait(envs.kick, hit, 40, (e, h) => tailOf(e, h, 15, 40) < CLAP_TAIL, () => { levels.clap = true }) }
+            }
+          }
         }
         clapHistory.push([clock, clapDb, bassDb])
         while (clapHistory.length && clock - clapHistory[0][0] > CLAP_BEFORE) clapHistory.shift()
       }
+      waits.judge() // the hats and claps whose tails are heard now
       subHistory.push([clock, subDb])
       while (subHistory.length && clock - subHistory[0][0] > BOOM_BEFORE) subHistory.shift()
       const total = power([40, 12000])
@@ -752,7 +1233,7 @@ export function createMusic () {
       // Lifted to the files' level (see LEVEL_LOUD): the analyser's decibel window moved down by as
       // much, so the bytes read as the file's would. Adding to the bytes instead lost what had sunk
       // under the window's floor (C-C so lifted to its own level still read a false drop at 0:36).
-      const wantQuiet = source !== 'system' || frame ? 0 : Math.max(0, Math.min(LEVEL_MOST, LEVEL_LOUD - levelPeak))
+      const wantQuiet = !levelled || frame ? 0 : Math.max(0, Math.min(LEVEL_MOST, LEVEL_LOUD - levelPeak))
       if (analyser && Math.abs(wantQuiet - levels.quiet) >= 0.1) {
         levels.quiet = wantQuiet
         analyser.minDecibels = MIN_DB - wantQuiet
@@ -781,6 +1262,8 @@ export function createMusic () {
         let sum = 0
         for (let k = a; k <= b; k++) { const p = Math.pow(10, (bins[k] - 255) * 8 / 255); weighted += p * k; sum += p }
         const sounding = sum > 0 && 10 * Math.log10(sum / (b - a + 1)) > reference - WOBBLE_DB
+        wobbleLevels.push(10 * Math.log10(sum / (b - a + 1) + 1e-12))
+        if (wobbleLevels.length > WOBBLE_WINDOW * ANALYSIS_RATE) wobbleLevels.shift()
         brightHistory.push([clock, sounding ? Math.log2(weighted / sum * binHz) : null])
         while (brightHistory.length && clock - brightHistory[0][0] > WOBBLE_WINDOW) brightHistory.shift()
         const v = brightHistory.map(h => h[1]).filter(x => x !== null)
@@ -801,7 +1284,7 @@ export function createMusic () {
         } else if (stabPending) stabPending.peak = stabPending.peak.map((v, j) => Math.max(v, bandsNow[j]))
         if (stabPending && clock - stabPending.at >= STAB_AFTER) {
           const rise = stabPending.peak.map((v, j) => v - stabPending.before[j])
-          if (rise[0] >= STAB_BASS && Math.min(...rise.slice(1)) >= STAB_REST) levels.stab = true
+          if (rise[0] >= STAB_BASS && Math.min(...rise.slice(1)) >= STAB_REST && (!shapeOn.stab || !envs.mids.length || hitIn(envs.mids, 130).attack <= STAB_ATTACK)) levels.stab = true
           stabPending = null
         }
         bandHistory.push([clock, bandsNow])
@@ -812,7 +1295,7 @@ export function createMusic () {
         if (spread > 0 && now !== null) {
           const mean = v.reduce((x, y) => x + y, 0) / v.length
           if (now < mean) wobbleArmed = true
-          else if (wobbleArmed && now > mean + spread / 4 && levels.wobble > 0) { wobbleArmed = false; levels.wobbleNote = true; levels.wobbleRun++ }
+          else if (wobbleArmed && now > mean + spread / 4 && levels.wobble > 0 && (!shapeOn.wobbleNote || periodicOf(wobbleLevels, 7, 30) >= WOBBLE_PERIODIC)) { wobbleArmed = false; levels.wobbleNote = true; levels.wobbleRun++ }
         }
       }
       if (!scoreHistory.length || clock - scoreHistory[scoreHistory.length - 1][0] >= 0.1) scoreHistory.push([clock, score])
@@ -842,7 +1325,7 @@ export function createMusic () {
         else if (!levels.calm && score < -CALM_DB && clock - droppedAt > DROP_HOLD) levels.calm = true
       }
       // The song's parts around a drop: a snare roll, an impact, a riser, half time, a key change (sections.js).
-      levels.sections = sections.update(clock, power, bins, binHz, levels.beat, total)
+      levels.sections = sections.update(clock, power, bins, binHz, levels.beat, total, { on: shapeOn, envs })
       // The activity, for the knobs it scales: 0 at 12 dB under the reference to 1 at it.
       levels.activity = Math.max(0, Math.min(1, (db - reference + 12) / 12))
       tickClock()
@@ -854,7 +1337,8 @@ export function createMusic () {
     get time () { return clock }, // seconds this module has been listening, all told
     get fileStream () { return source === 'file' ? fileStream : null },
     set onFileEnd (f) { onFileEnd = f },
-    get filePosition () { return source === 'file' && context ? context.currentTime - fileStartedAt : -1 }, // seconds into a playing file
+    set onSourceEnd (f) { onSourceEnd = f },
+    get filePosition () { return replay ? replay.clock() : source === 'file' && context ? context.currentTime - fileStartedAt : -1 }, // seconds into a playing file
     // The beat clock: locked or not, whether the kick is being heard (not in a breakdown), the
     // period, seconds to the next predicted beat (number index + 1), the beat the current
     // section began on, and whether a predicted beat fell in this frame.
@@ -867,6 +1351,21 @@ export function createMusic () {
       try { return (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput').map(d => ({ id: d.deviceId, label: d.label || 'Input' })) } catch (e) { return [] }
     },
     get device () { return device },
+    get attack () { return attackOn }, // the attack in the beat, off as tuned (see ATTACK_RISE)
+    set attack (v) { attackOn = shapeOn.beat = !!v },
+    // Each trigger's shape (SHAPE_TRIGGERS), as { beat, hat, ... }: true or false, a trigger left out off; true or false for all.
+    // The four fitted options, on; each setter clears its own state, so a tool can turn one off mid-song to measure.
+    get pump () { return pumpOn }, // the pump, a kick in a sidechained drop (PUMP_PEG)
+    set pump (v) { pumpOn = !!v; levels.pegged = false; pumpFlux[0] = pumpFlux[1] = 0 },
+    get hatTop () { return hatTopOn }, // the hat from the top of the spectrum (HAT_TOP_BAND)
+    set hatTop (v) { hatTopOn = !!v; topHistory.length = 0 },
+    get snare () { return snareOn }, // the snare, a backbeat's hit (SNARE_BODY); levels.snare
+    set snare (v) { snareOn = !!v; snareHistory.length = 0 },
+    get split () { return splitOn }, // the beat split into kicks and bass notes (SPLIT_DROP)
+    set split (v) { splitOn = !!v; splitPending = null; bassPending = []; splitDrops.length = 0; bassFlux.length = 0; pitchHistory.length = 0 },
+    get shapes () { return { ...shapeOn } },
+    set shapes (v) { for (const k of SHAPE_TRIGGERS) shapeOn[k] = v === true || !!(v && v[k]); attackOn = shapeOn.beat },
+    get stream () { return stream }, // the mic or tab stream being heard, for a tool to record (its tap along)
     set device (id) { device = id || '' },
     get bassAverage () { return bassAverage }
   }

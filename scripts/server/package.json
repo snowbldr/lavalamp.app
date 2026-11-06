@@ -1,0 +1,10 @@
+{
+  "name": "lavalamp-dev-server",
+  "private": true,
+  "description": "The lamp's local server. The lamp itself has no build and no package; this is only for serving it.",
+  "type": "module",
+  "engines": { "node": ">=22 <=26" },
+  "dependencies": {
+    "@srfnstack/spliffy": "^1.7.0"
+  }
+}

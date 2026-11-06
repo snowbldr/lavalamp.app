@@ -1,5 +1,5 @@
 import { a, button, div, fnstate, input, span } from '@srfnstack/fntags'
-import { TOUCH_UI, ask, chevron, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
+import { TOUCH_UI, ask, chevron, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, trio, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
   conduction,
@@ -98,12 +98,41 @@ import {
   putPlaces,
   soundPending,
   fullscreen,
+  motionOn,
+  firefly,
+  iceFly,
+  dyedFluid,
+  streamersInMusic,
+  motionInMusic,
+  musicFlow,
+  defaultMusicFlow,
+  musicHeat,
+  defaultMusicHeat,
+  musicSparkle,
+  musicGlow,
+  musicFlowEvents,
+  musicHeatEvents,
+  dyeMode,
+  dyeModes,
+  dyeModeNames,
+  dyeFade,
+  defaultDyeFade,
+  dyeStamp,
+  defaultDyeStamp,
+  dyeCurve,
+  defaultDyeCurve,
+  dyeCut,
+  defaultDyeCut,
+  dyeGlow,
+  defaultDyeGlow,
   soundBed,
   soundBeds,
   music,
   musicPending,
+  musicWait,
   musicSource,
   musicSources,
+  musicThemeNames,
   musicFileName,
   musicRecording,
   musicSensitivity,
@@ -134,6 +163,7 @@ import {
   defaultMusicVent,
   defaultMusicMotion,
   showSpectrum,
+  showFlyTrails,
   defaultMusicRanges,
   musicBeatLo,
   musicBeatHi,
@@ -160,14 +190,148 @@ import {
   defaultEddySpeed,
   eddyFalloff,
   defaultEddyFalloff,
+  eddyPullIn,
+  defaultEddyPullIn,
+  splatPullIn,
+  defaultSplatPullIn,
   eddyCurve,
   eddyCurves,
   stiffnessNear,
   stir,
   turbulence,
-  wobble
+  wobble,
+  showDefaults,
+  takeShow,
+  putShow,
+  takeView,
+  putView,
+  viewDefaults,
+  takeAdvanced,
+  putAdvanced,
+  advancedBase,
+  normColours,
+  packColours,
+  unpackColours,
+  packShow,
+  unpackShow,
+  packView,
+  unpackView,
+  cleanAdvanced,
+  sharedExtras
 } from './settings.js'
+import { themeList, confirmReset, sameData } from './themeList.js'
 import { CURRENT, goTo, versions } from '../versions.js'
+
+// The panel's names, each in one place so a rename is one line (Robert: "We should rename color themes to My Colors.
+// Music themes should be My effects? (I don't love my effects)... We should have a global themes card, probably near the
+// top. I also think we should get all of those top level toggles into a card"; the names were proposed to him).
+const THEMES_TITLE = 'Themes' // the whole lamp themes, the first card
+const COLORS_LABEL = 'Colors' // what opens the colour card
+const MY_COLORS = 'My Colors' // the colour themes, built in and saved
+const MY_SHOWS = 'My Shows' // the music themes, Vibes, Calm and the saved ones
+const VIEW_TITLE = 'View' // the card of the lamp's own switches
+// Every card folded as the panel opens the first time (Robert: "probably we should collapse all groups by default"), and
+// each fold remembered in this browser alone, never in a save or a link.
+const FOLD_KEY = 'lavalamp.app-panel-folds'
+let folds = {}
+try { folds = JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {} } catch (e) { folds = {} }
+const fold = name => {
+  const open = fnstate(folds[name] === true)
+  open.subscribe(v => { folds[name] = v; try { localStorage.setItem(FOLD_KEY, JSON.stringify(folds)) } catch (e) {} })
+  return open
+}
+// A card that folds by its title: the title row (with whatever sits on it), what shows folded, and the body.
+const card = (open, title, { tools = [], before = [], always = [], cls = '' } = {}, ...body) => div({ class: open.bindAttr(() => `sub-panel ${cls}${open() ? '' : ' folded'}`) },
+  ...before,
+  div({ class: 'sub-title foldable', onclick: e => { if (!e.target.closest('.toggle, .theme-tools')) open(!open()) } }, span({ class: 'card-title' }, title), ...tools, chevron()),
+  ...always,
+  div({ class: 'sub-body' }, ...body))
+// The words for what loading a theme would reset (themeList.js confirmReset), each a setting's name and its value now.
+const SETTING_NAMES = {
+  musicFlowEvents: 'Flow events', musicHeatEvents: 'Heat events', musicFlow: 'Flow strength', musicHeat: 'Heat strength', musicSparkle: 'Sparkle', musicGlow: 'Glow',
+  streamersInMusic: 'Streamers', motionInMusic: 'Motion in music', dyeMode: 'Drawn', dyeFade: 'Fade', dyeStamp: 'Stamp', dyeCurve: 'Streamer curve', dyeCut: 'Tail cut', dyeGlow: 'Streamer glow',
+  showFlow: 'Flow', motionOn: 'Motion', firefly: 'Firefly', iceFly: 'Ice fly', dyedFluid: 'Streamers',
+  stir: 'Stir', turbulence: 'Turb', drifters: 'Eddies', pace: 'Pace', eddySpeed: 'Speed', eddyFalloff: 'Fall off', eddyCurve: 'Curve', eddyPullIn: 'Rim pull in', splatPullIn: 'Splat pull in',
+  conduction: 'Conduct', maxTemp: 'Max Temp', heatSpots: 'Period', elementHeat: 'Heat', elementLife: 'Duration', elementLifeScale: 'Big pot', elementRate: 'Pulses', elementCore: 'Core', floorHeat: 'Floor', floorGlow: 'Glow',
+  particleCount: 'Count', interactionRadius: 'Radius', cupDepth: 'Bottles', reserve: 'Reserve', pull: 'Pull', stiffnessNear: 'Near', gravityStrength: 'Gravity', lift: 'Lift',
+  wobble: 'Wobble', wobbleKick: 'Kick', wobbleMax: 'Cap', viscosity: 'Viscosity', settle: 'Settle', reach: 'Reach', skin: 'Skin', wall: 'Wall',
+  particleSize: 'Size', smooth: 'Smooth', blend: 'Blend', autoPixels: 'Auto Pixels', targetFps: 'Target', showHeater: 'Heater', showCups: 'Reservoirs', showFlyTrails: 'Fly trails', showSpectrum: 'Spectrum',
+  musicSensitivity: 'Sense', musicEvery: 'Every', musicFloor: 'Music Floor', musicLift: 'Music Lift', musicTurb: 'Music Eddies', musicKick: 'Music Kick', musicLead: 'Lead', musicActivity: 'Activity', musicDrop: 'Drop', musicBoom: 'Boom', musicVent: 'Vent',
+  musicTempo: 'Tempo', musicPulse: 'Pulse', musicSpawn: 'Spawn', musicSpin: 'Spin', musicBusyEddies: 'Busy eddies', musicFlip: 'Flip', musicWobble: 'Music Wobble', musicSections: 'Sections',
+  musicBeatLo: 'Beat Lo', musicBeatHi: 'Beat Hi', musicHeatLo: 'Heat Lo', musicHeatHi: 'Heat Hi', musicEddyLo: 'Eddy Lo', musicEddyHi: 'Eddy Hi', musicKickLo: 'Kick Lo', musicKickHi: 'Kick Hi'
+}
+const settingWords = (k, v) => {
+  const value = typeof v === 'boolean' ? (v ? 'on' : 'off')
+    : k === 'musicFlow' || k === 'musicHeat' ? `${Number(v).toFixed(1)}x`
+      : k === 'dyeFade' ? `${Math.round(v * 100)}%/s`
+        : k === 'dyeCut' ? `${Number(v).toFixed(2)}/s`
+          : k === 'dyeGlow' ? `${Number(v).toFixed(2)}x`
+        : k === 'dyeMode' ? dyeModeNames[v] || v
+          : typeof v === 'number' ? String(Math.round(v * 100) / 100) : String(v)
+  return `${SETTING_NAMES[k] || k} ${value}`
+}
+const near = (a, b) => typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b)) : a === b
+// What differs between now and a theme's values, over the given keys, as words for now's.
+const differences = (now, target, keys) => keys.filter(k => !near(now[k], target[k])).map(k => settingWords(k, now[k]))
+const SHOW_KEYS = Object.keys(showDefaults()).filter(k => k !== 'musicTheme') // the pick itself is the theme, not a change
+const VIEW_KEYS = Object.keys(viewDefaults())
+const COLOUR_NAMES = { heatCold: 'Cold', heatCool: 'Cool', heatWarm: 'Warm', heatHot: 'Hot', heatPeak: 'Peak', bgColor: 'Background', flowSlow: 'Slow arrows', flowFast: 'Fast arrows', heatCoolAt: 'Cool\'s place', heatWarmAt: 'Warm\'s place', heatHotAt: 'Hot\'s place' }
+const colourDifferences = (now, target) => { const a = normColours(now), b = normColours(target); return Object.keys(COLOUR_NAMES).filter(k => !sameData(a[k], b[k])).map(k => COLOUR_NAMES[k]) }
+const advancedDifferences = (now, target) => { const base = advancedBase(), a = { ...base, ...now }, b = { ...base, ...target }; return differences(a, b, Object.keys(base)) }
+const wholeDifferences = (now, t) => [
+  ...(colourDifferences(now.colors, t.colors).length ? [COLORS_LABEL] : []),
+  ...differences(now.show, t.show, SHOW_KEYS),
+  ...differences(now.view, t.view, VIEW_KEYS.filter(k => !SHOW_KEYS.includes(k))),
+  ...advancedDifferences(now.advanced || {}, t.advanced || {})
+]
+
+// The Firefly switch's title and help line (settings.js firefly).
+const FIREFLY_ABOUT = 'An unseen firefly loops through the lava all the time, leaving tiny bright sparks wherever it passes.'
+// The Ice fly switch's (settings.js iceFly), the firefly's cold twin.
+const ICE_FLY_ABOUT = 'The firefly\'s cold twin: an unseen ice fly loops round the hottest lava all the time, leaving tiny cold sparks that cool it.'
+// The Streamers switch's lines (settings.js dyedFluid, render/dye.js). Shown as Streamers (Robert, on first seeing it: "oh shit,
+// this is insane looking. Let's change it from dyed fluid to 'ghosting'", then "oh, no, not ghosting, streamers. yeah, like when
+// people are on drugs lol"); the code and stored keys keep the dye names.
+const DYE_ABOUT = 'Every bit of lava leaves a streamer of its heat colour in the water, carried by the lamp\'s own flow, so the plumes and wakes show; it moves nothing.'
+const STREAMERS_MUSIC_ABOUT = 'Streamers come on by themselves whenever Music plays a theme; off, only the Streamers switch shows them.'
+// Motion in music (settings.js motionInMusic; Robert: "music mode should turn off motion by default in the lamp").
+const MOTION_MUSIC_ABOUT = 'While Music plays a theme the lava ignores the device\'s tilt and shakes and the floor stays at the bottom; on, Motion works under a theme as it does without one.'
+// The Music card's Effects (settings.js musicFlow, musicHeat, musicSparkle, musicGlow; Robert: "I had two mega sliders I want
+// for music, under a section titled 'effects', flow strength and heat strength. I think we could also add checkboxes for
+// turning off global sparkle and glow.").
+const FLOW_STRENGTH_ABOUT = 'How hard the theme moves the lava: its eddies, pushes, splats and ring waves, 1x as tuned, 0 moves nothing, 2x twice as hard.'
+const HEAT_STRENGTH_ABOUT = 'How much the theme heats and cools the lava: its pot blasts, sparkles, glow heat and cold touches, 1x as tuned, 0 heats nothing.'
+const SPARKLE_MUSIC_ABOUT = 'The sparkle on every beat the theme lays over the lava; off, only the lanes\' own sparkle effects still flash.'
+const GLOW_MUSIC_ABOUT = 'The glow that follows the music, and the heat it gives; off, only the lanes\' own glow pulses still light the lava.'
+// Flow events and Heat events (settings.js musicFlowEvents, musicHeatEvents; Robert: "we should allow disabling heat or flow
+// events, some people may not like that so much").
+const FLOW_EVENTS_ABOUT = 'Whether the music\'s hits move the lava, their eddies, pushes, splats and ring waves; off, nothing a hit fires stirs it.'
+const HEAT_EVENTS_ABOUT = 'Whether the music\'s hits heat and cool the lava, their pot blasts, sparkle effects and cold bursts; off, only the sparkle on every beat and the glow still warm it.'
+// The Effects fold's tabs (Robert: "we should make heat and flow two sub cards with 50% width tab header, one says 'Flow'
+// one says 'Heat'. Each has an enabled toggle and strength... Oh, we should also move streamers as a tab, so 3 tabs"):
+// the open one remembered in this browser alone, not in a save.
+const EFFECT_TABS = ['flow', 'heat', 'streamers']
+const EFFECT_TAB_NAMES = { flow: 'Flow', heat: 'Heat', streamers: 'Streamers' }
+const EFFECT_TAB_KEY = 'lavalamp.app-music-effects-tab'
+const DYE_MODE_ABOUT = 'Where the streamers are drawn: Under the lava, glowing in the water, Over it as faint smoke, or Alone with the lava hidden.'
+const DYE_FADE_ABOUT = 'How much of the streamers is gone each second, so a low Fade leaves long trails and a high one only the freshest.'
+const DYE_STAMP_ABOUT = 'How strongly each bit of lava leaves its streamer as it passes.'
+const DYE_CURVE_ABOUT = 'How much faster the dim end of a streamer fades than its bright head: 0 fades all of it alike, 1 holds the head at Fade and drops the tail away, so a slower Fade gives a strong head without a long tail.'
+const DYE_CUT_ABOUT = 'A fixed amount taken off every streamer each second, so the faint ends stop cleanly instead of trailing on: 0 takes nothing, 1 clears full strength dye in a second.'
+const DYE_GLOW_ABOUT = 'How brightly the streamers are drawn, 1x as they were; over 1 the brightest parts bend softly towards full instead of clipping flat.'
+// The streamers' Drawn, Fade and Stamp, shown under whichever switch turns the streamers on: the lamp's own Streamers
+// switch, and the Music card's Streamers (Robert: "oh we lost the streamer controls, can we have that back?", after the
+// music's switches moved to the Music card and the controls stayed hidden under the lamp's switch, off in music).
+const dyeControls = (shown, id) => div({ class: 'dye-controls', style: { display: shown.bindStyle(() => shown() ? 'block' : 'none') } },
+  Object.assign(row('Drawn', segmented(id + '-mode', dyeMode, dyeModes, dyeModeNames)), { title: DYE_MODE_ABOUT }),
+  knobs(
+    Object.assign(knob('Fade', id + '-fade', dyeFade, { min: 0.05, max: 0.95, step: 0.05, slider: true }, () => defaultDyeFade, v => `${Math.round(v * 100)}%/s`), { title: DYE_FADE_ABOUT }),
+    Object.assign(knob('Stamp', id + '-stamp', dyeStamp, { min: 0.05, max: 1, step: 0.05, slider: true }, () => defaultDyeStamp, fixed(2)), { title: DYE_STAMP_ABOUT }),
+    Object.assign(knob('Curve', id + '-curve', dyeCurve, { min: 0, max: 3, step: 0.05, slider: true }, () => defaultDyeCurve, fixed(2)), { title: DYE_CURVE_ABOUT }),
+    Object.assign(knob('Tail cut', id + '-cut', dyeCut, { min: 0, max: 1, step: 0.01, slider: true }, () => defaultDyeCut, v => `${Number(v).toFixed(2)}/s`), { title: DYE_CUT_ABOUT }),
+    Object.assign(knob('Glow', id + '-glow', dyeGlow, { min: 0.5, max: 5, step: 0.05, slider: true }, () => defaultDyeGlow, v => `${Number(v).toFixed(2)}x`), { title: DYE_GLOW_ABOUT })
+  )
+)
 
 // The gloops (the lava's own sounds) are hidden for now, not removed: they are not finished
 // (Robert: "let's temporarily hide all the sound stuff from the settings so we can push up this
@@ -199,7 +363,7 @@ const hz = v => v >= 1000 ? `${(v / 1000).toFixed(1)} kHz` : `${v} Hz`
 export function createSettingsPanel () {
   let panel
   // Advanced and its groups, all folded by default.
-  const advancedOpen = fnstate(false)
+  const advancedOpen = fold('advanced')
   // The music meter: three bars (bass, mids, highs) and a beat dot, written straight to the
   // DOM once a frame while listening, which is the cheapest thing a panel can do.
   const meterBars = [div(), div(), div()]
@@ -224,21 +388,139 @@ export function createSettingsPanel () {
   }
   const help = fnstate(false) // the ? button: one sentence under every control
   const loopbackHelp = fnstate(false)
-  const musicOpen = fnstate(false)
+  const musicOpen = fold('music')
+  const themesOpen = fold('themes')
+  const coloursOpen = fold('colors')
+  const touchOpen = fold('touch')
+  const viewOpen = fold('view')
+  const effectsOpen = fnstate(false) // the Music card's Effects fold, closed as the card opens
+  let tabWas = null
+  try { tabWas = localStorage.getItem(EFFECT_TAB_KEY) } catch (e) {}
+  const effectsTab = fnstate(EFFECT_TABS.includes(tabWas) ? tabWas : 'flow')
+  effectsTab.subscribe(t => { try { localStorage.setItem(EFFECT_TAB_KEY, t) } catch (e) {} })
+  // Music not working? (Robert: "a clickable link like hear every app, that opens help for if the music sync is not
+  // working... explain the sound detector... A page explaining how the chrome music sharing with system works is probably
+  // good, that little checkbox is super easy to miss"). Inline under the link, as the loopback steps are. The facts about
+  // Chrome's dialog are from Google's own help (2026-11): a tab shares its sound with "Also share tab audio"; a window
+  // or the entire screen with "Also share system audio", on macOS 14.2 or newer with a recent Chrome.
+  const musicHelp = fnstate(false)
+  const helpLink = (href, text) => a({ href, target: '_blank', rel: 'noopener', class: 'music-link' }, text)
+  const helpHead = text => div({ class: 'music-help-head' }, text)
+  const shareHelp = div({ class: 'music-help-share' },
+    helpHead('Chrome\'s share dialog'),
+    div({ class: 'music-help-flag', style: { display: musicWait.bindStyle(() => musicWait() === 'noaudio' ? 'block' : 'none') } }, 'The share had no sound: turn on Also share tab audio (or Also share system audio) at the bottom of the dialog, then Try again.'),
+    div('Chrome Tab is the surest pick: choose the tab playing the music (Spotify or YouTube in the browser) and make sure Also share tab audio, at the bottom of the dialog, is on.'),
+    div('Entire Screen hears every app, but only with Also share system audio switched on. That switch sits small at the bottom left of the dialog and is easy to miss. On a Mac it needs macOS 14.2 or newer and an up to date Chrome, and the Mac asks you once to allow Chrome under Screen & System Audio Recording.'),
+    div('Window gives sound only in a recent Chrome with Also share system audio on, under the same conditions; older versions share a window with no sound at all. Pick a tab or the screen instead.'),
+    div('On an older Mac, use a Chrome tab, or the Hear every app route above, which needs no share at all.'),
+    div('Stopping the share (the browser\'s Stop sharing bar) leaves Music on and waiting, with a Try again.')
+  )
+  const musicHelpBody = div({ class: 'music-note music-help', style: { display: musicHelp.bindStyle(() => musicHelp() ? 'block' : 'none') } },
+    helpHead('The meter'),
+    div('The three bars at the top of this card are what the lamp hears: the bass, the middle and the highs, with a dot that flashes on the beat. If they stay still while music plays, the lamp is getting no sound at all, and the fix is in the Source and the browser\'s settings below.'),
+    helpHead('Mic'),
+    div('The lamp listens through a microphone, so play the music out loud nearby and turn it up. Allow the microphone when the browser asks. If you said no, click the icon at the left of the address bar, allow the microphone and Try again.' + (TOUCH_UI ? '' : ' With more than one microphone or input, choose the right one under Input once Music is on.')),
+    ...(TOUCH_UI ? [] : [
+      helpHead('System'),
+      div('The lamp hears what this computer plays, through the browser\'s screen share dialog. Only the sound is used.'),
+      helpHead('File'),
+      div('Pick a song file and the page plays it and hears it exactly. Nothing is uploaded. The song stays in this browser only, so on another computer or browser, or from a shared link, pick it again.'),
+      shareHelp,
+      helpHead('Firefox and Safari'),
+      div('They share no sound with a screen share, so System hears nothing there. Use Mic or File.')
+    ]),
+    helpHead('More help'),
+    div(helpLink('https://support.google.com/chrome/answer/2693767?hl=en', 'Use your microphone in Chrome')),
+    ...(TOUCH_UI ? [] : [
+      div(helpLink('https://support.google.com/meet/answer/9308856?hl=en', 'Sharing a tab or screen with sound (Google)')),
+      div(helpLink('https://support.apple.com/guide/mac-help/control-access-to-the-microphone-on-mac-mchla1b1e1fe/mac', 'Mac: microphone access')),
+      div(helpLink('https://support.apple.com/guide/mac-help/control-access-screen-system-audio-recording-mchld6aa7d23/mac', 'Mac: Screen & System Audio Recording')),
+      div(helpLink('https://support.microsoft.com/en-us/windows/fix-microphone-problems-5f230348-106d-bfa4-1db5-336f35576011', 'Windows: fix microphone problems')),
+      div(helpLink('https://support.mozilla.org/en-US/kb/how-manage-your-camera-and-microphone-permissions', 'Firefox: microphone permissions')),
+      div('On a Mac, ', button({ class: 'music-help-inline', onclick: () => loopbackHelp(true) }, 'Hear every app'), ' sets the lamp up to hear everything with no share dialog.')
+    ])
+  )
+  // The prompt while Music is on and hears nothing (settings.js musicWait): a strip over the lamp, bottom centre like the
+  // version banner, and the same words in the Music card. Waiting for a click, a click anywhere starts it (app.js); after
+  // a failure, Try again (a click, which the share dialog and the microphone want) asks once more. The cross turns Music
+  // off. Hidden while the panel is open, where the card says it.
+  const panelShown = fnstate(false)
+  const retry = () => window.dispatchEvent(new CustomEvent('lavalamp-music-retry'))
+  const openHelp = (at) => {
+    musicOpen(true)
+    musicHelp(true)
+    if (!panel.isConnected) open()
+    if (at) setTimeout(() => at.scrollIntoView({ block: 'start', behavior: 'smooth' }), 50)
+  }
+  const TAP = TOUCH_UI ? 'Tap' : 'Click'
+  const waitWords = () => {
+    const w = musicWait()
+    const file = musicSource() === 'file'
+    if (w === 'tap') return file && !musicFileName() ? 'Music is on with a song file: pick the song again.' : file ? `${TAP} anywhere to play ${musicFileName()} for the music sync.` : `${TAP} anywhere to start the music sync.`
+    return {
+      file: 'Music is on with a song file: pick the song again.',
+      cancelled: 'The share was closed, so the music sync is waiting.',
+      noaudio: 'The share had no sound: turn on Also share tab audio.',
+      ended: 'Sharing stopped, so the music sync is waiting.',
+      denied: 'The microphone is blocked for this page.',
+      blocked: 'This computer is not letting the browser share its screen.',
+      nodevice: 'No microphone or audio input was found.',
+      unsupported: 'This browser cannot share its sound: choose Mic.',
+      gesture: `${TAP} anywhere to start the music sync.`
+    }[w] || 'The music sync could not start.'
+  }
+  const waitButtons = () => {
+    const w = musicWait()
+    const pick = musicSource() === 'file' && (w === 'file' || (w === 'tap' && !musicFileName()))
+    const out = []
+    if (pick) out.push(button({ class: 'music-prompt-button music-tap-skip', onclick: () => songPicker.click() }, 'Pick song'))
+    else if (w !== 'tap' && w !== 'unsupported') out.push(button({ class: 'music-prompt-button primary music-tap-skip', onclick: retry }, 'Try again'))
+    if (w !== 'tap' && !pick) out.push(button({ class: 'music-prompt-button music-tap-skip', onclick: () => openHelp(w === 'noaudio' || w === 'cancelled' || w === 'ended' || w === 'blocked' ? shareHelp : null) }, 'Help'))
+    return out
+  }
+  const promptText = span({ class: 'music-prompt-text' })
+  const promptButtons = span({ class: 'music-prompt-buttons' })
+  const cardText = span()
+  const cardButtons = span({ class: 'music-prompt-buttons' })
+  const musicPrompt = div({ class: 'music-prompt', role: 'status', style: { display: 'none' } },
+    promptText, promptButtons,
+    button({ class: 'version-banner-close music-tap-skip', title: 'Turn Music off', 'aria-label': 'Turn Music off', onclick: () => music(false) }, '×'))
+  const musicWaitNote = div({ class: 'music-note music-wait', style: { display: 'none' } }, cardText, cardButtons)
+  const paintWait = () => {
+    const w = music() ? musicWait() : ''
+    musicPrompt.style.display = w && !panelShown() ? 'flex' : 'none'
+    musicWaitNote.style.display = w ? 'flex' : 'none'
+    if (!w) return
+    promptText.textContent = cardText.textContent = waitWords()
+    promptButtons.replaceChildren(...waitButtons())
+    cardButtons.replaceChildren(...waitButtons())
+  }
+  for (const st of [music, musicWait, musicSource, musicFileName, panelShown]) st.subscribe(paintWait)
+  // A share with no sound opens the help at the share dialog (Robert: "I do also wonder if we could trigger it to be
+  // enabled after they start the share instead of dying").
+  // A moment late, so the click that started it (a click on the lamp closes the panel) has landed first.
+  musicWait.subscribe(w => { if (w === 'noaudio') setTimeout(() => { if (musicWait() === 'noaudio') openHelp(shareHelp) }, 400) })
+  const effectTab = (tab, ...body) => div({ class: 'effect-tab', style: { display: effectsTab.bindStyle(() => effectsTab() === tab ? 'block' : 'none') } }, ...body)
   // The audio inputs, filled from the browser (names only appear once the microphone has been
   // allowed, so the list is asked for again when listening starts and when a device comes or goes).
   const inputSelect = document.createElement('select')
   inputSelect.className = 'music-select'
+  // Shown for the microphone only once there is a named input to choose (Robert: "Why does the input drop down exist if
+  // chrome is going ot ask for it anyway?"): before the microphone is allowed, a desktop browser
+  // gives a single nameless input and the list held only Default input.
   let inputs = null
+  const showInput = fnstate(false)
   const fillInputs = async () => {
     if (!inputs) return
-    const list = await inputs.list()
+    const list = (await inputs.list()).filter(d => d.id && d.id !== 'default')
     const current = inputs.get()
-    inputSelect.replaceChildren(...[{ id: '', label: 'Default input' }, ...list.filter(d => d.id && d.id !== 'default')].map(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.label; o.selected = d.id === current; return o }))
+    showInput(musicSource() === 'mic' && list.length > 0)
+    inputSelect.replaceChildren(...[{ id: '', label: 'Default input' }, ...list].map(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.label; o.selected = d.id === current; return o }))
   }
   inputSelect.addEventListener('change', () => inputs && inputs.set(inputSelect.value))
   const setMusicInputs = x => { inputs = x; fillInputs(); if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', fillInputs) }
   music.subscribe(on => { if (on) setTimeout(fillInputs, 800) })
+  musicSource.subscribe(fillInputs)
 
   // Every version of the lamp is kept and can be opened (Robert: "the ability to load old
   // versions of the lava lamp"); a newer one than this, when there is one, is offered first as
@@ -261,8 +543,8 @@ export function createSettingsPanel () {
       ...(older.length ? [div({ class: 'version-chips' }, span({ class: 'version-older' }, 'Older'), ...older.map(v => button({ class: 'version-chip', title: `${v.date}: ${v.description}`, onclick: () => goTo(v.version) }, v.label)))] : [])
     )
   })
-  const open = () => document.body.append(panel)
-  const close = () => { stopEditing(); panel.remove() }
+  const open = () => { document.body.append(panel); panelShown(true) }
+  const close = () => { stopEditing(); panel.remove(); panelShown(false) }
 
   // On a touch screen a link goes to the phone's own share sheet (Robert: "can we make the share
   // button open the share dialog on mobile?"); elsewhere, or where there is none, it is copied.
@@ -276,7 +558,7 @@ export function createSettingsPanel () {
       return navigator.clipboard.writeText(url).then(() => notify(copied), err => { notify('Could not copy the link'); console.error(err) })
     }
   }
-  const copyShareLink = () => sendLink(shareLink(), 'My lava lamp', 'Link copied to clipboard')
+  const copyShareLink = () => sendLink(shareLink(themeExtras()), 'My lava lamp', 'Link copied to clipboard')
 
   const resetDefaults = () => {
     ask('Reset everything to the defaults and remove the saved settings? Your saved themes stay.', { yes: 'Reset', danger: true }).then(yes => { if (yes) resetAndReload() })
@@ -416,6 +698,7 @@ export function createSettingsPanel () {
   let loaded = takeColours() // the colours as of the last theme loaded or saved
   let loadedTheme = null
   let editing = null // { theme, field }
+  let afterColours = () => {} // the Themes card's match, once it exists
   // Deleting: the trash by My themes, then the theme, then a check (Robert: "theme delete button
   // doesn't work for mobile... maybe a trash can button next to 'my themes', you click it, then
   // click the theme you want to delete, then an r u sure"). The trash again, or any other press,
@@ -438,6 +721,16 @@ export function createSettingsPanel () {
     const code = btoa(unescape(encodeURIComponent(JSON.stringify(out)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     return `${window.location.origin}${window.location.pathname}?theme=${code}`
   }
+  // A show's or a whole theme's link: ?show= or ?lamp=, its data as base64url JSON, the name as n.
+  const listLink = (param, data) => `${window.location.origin}${window.location.pathname}?${param}=${btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}`
+  const readListLink = param => {
+    const code = new URLSearchParams(window.location.search).get(param)
+    if (!code) return null
+    const url = new URL(window.location.href)
+    url.searchParams.delete(param)
+    history.replaceState(null, '', url.pathname + url.search + url.hash)
+    try { const o = JSON.parse(decodeURIComponent(escape(atob(code.replace(/-/g, '+').replace(/_/g, '/'))))); return o && typeof o === 'object' ? o : null } catch (e) { return null }
+  }
   const readThemeLink = () => {
     const code = new URLSearchParams(window.location.search).get('theme')
     if (!code) return null
@@ -457,10 +750,13 @@ export function createSettingsPanel () {
   trash.innerHTML = ICON('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>')
   const loadTheme = async theme => {
     if (theme === loadedTheme && sameColours(takeColours(), loaded)) return true
-    if (!sameColours(takeColours(), loaded) && !(await ask(`Your colour changes aren't saved as a theme. Load ${theme.name} anyway?`, { yes: `Load ${theme.name}`, no: 'Keep mine' }))) return false
+    // Asked, as before, only when the colours have changed since the last theme was loaded or saved (Robert: "IF they have
+    // changes from the theme that was loaded, require an r u sure"), in the words the other lists use (themeList.js).
+    if (!sameColours(takeColours(), loaded) && !(await confirmReset(colourDifferences(takeColours(), theme), theme.name))) return false
     putColours(theme)
     loaded = takeColours()
     loadedTheme = theme
+    afterColours()
     return true
   }
   // Editing a saved theme (Robert: "while editing a theme, it was hard to really tell that changing
@@ -501,10 +797,12 @@ export function createSettingsPanel () {
       saveMyThemes()
       loaded = takeColours()
       loadedTheme = theme
+      afterColours()
     } else if (how === 'cancel') {
       putColours(saved)
       loaded = takeColours()
       loadedTheme = theme
+      afterColours()
     }
     editing = null
     editRow = null
@@ -652,9 +950,121 @@ export function createSettingsPanel () {
       loaded = takeColours()
       loadedTheme = theme
       fillThemes()
-      notify(`${name} added to your themes`)
+      afterColours()
+      notify(`${name} added to ${MY_COLORS}`)
     }), 600)
   }
+
+  // The colours on the lamp matched to a theme, a saved one first, so the one on the lamp is ringed after a reload too.
+  const rematchColours = () => {
+    if (editing) return
+    const now = normColours(takeColours())
+    loaded = takeColours()
+    loadedTheme = [...myThemes, ...themes].find(t => sameData(normColours(t), now)) || null
+    fillThemes()
+  }
+  // A colour theme from a share link, kept unless the same colours are already saved.
+  const addColourTheme = theme => {
+    const same = myThemes.find(t => sameData(normColours(t), normColours(theme)))
+    if (same) return same
+    const base = String(theme.name).slice(0, 24) || 'Shared'
+    let name = base
+    for (let n = 2; myThemes.some(t => t.name === name); n++) name = `${base} ${n}`
+    const t = { name, ...normColours(theme) }
+    myThemes.push(t)
+    saveMyThemes()
+    return t
+  }
+
+  // My Shows: the music theme pick as a list like My Colors (Robert: "Music themes should be My effects? (I don't love my
+  // effects)"; named My Shows). A show is the theme and every effect over it (settings.js showSettings); Vibes and Calm are
+  // built in, Calm Vibes's own theme with both event switches and the streamers off.
+  const VIBES = { name: musicThemeNames.live, ...showDefaults() }
+  const CALM = { name: musicThemeNames.calm, ...showDefaults(), musicTheme: 'calm', musicFlowEvents: false, musicHeatEvents: false, streamersInMusic: false }
+  // Trippy: Vibes at twice the flow and heat, the streamers drawn alone, slow to fade and bright (Robert: "these music effect
+  // settings are a new show we're calling trippy", from his link: Flow and Heat strength 2, Drawn Alone, Fade 5%/s, Tail cut
+  // 0.04/s, Glow 3x).
+  const TRIPPY = { name: 'Trippy', ...showDefaults(), musicFlow: 2, musicHeat: 2, dyeMode: 'alone', dyeFade: 0.05, dyeCut: 0.04, dyeGlow: 3 }
+  const shows = themeList({
+    key: 'lavalamp.app-my-shows',
+    builtins: [VIBES, CALM, TRIPPY],
+    take: takeShow,
+    put: putShow,
+    changes: (now, show) => differences(now, show, SHOW_KEYS),
+    onLoad: () => lampThemes.rematch(),
+    caption: MY_SHOWS,
+    what: 'show',
+    newName: n => `Show ${n}`,
+    fallback: 'Shared show',
+    share: t => sendLink(listLink('show', { n: t.name, ...packShow(t) }), `${t.name}, a lava lamp show`, `Link to ${t.name} copied`)
+  })
+  // Themes: the whole lamp at once (Robert: "I think we also need to combine color, music, global toggles, and all modified
+  // advanced toggles into the themes"), its colours, its show, the View switches and every Advanced setting that differs
+  // from its default, only those, so a theme does not freeze the defaults of its day. Default, built in, is the lamp as
+  // shipped. Its tile is its colours.
+  const takeWhole = () => ({ colors: normColours(takeColours()), show: takeShow(), view: takeView(), advanced: takeAdvanced() })
+  const putWhole = t => { putColours(normColours(t.colors || {})); putView(t.view || {}); putShow(t.show || {}); putAdvanced(t.advanced || {}) }
+  const lampThemes = themeList({
+    key: 'lavalamp.app-lamp-themes',
+    builtins: [{ name: 'Default', colors: normColours({}), show: showDefaults(), view: viewDefaults(), advanced: {} }],
+    take: takeWhole,
+    put: putWhole,
+    changes: wholeDifferences,
+    paint: t => t.colors ? { background: themeBackground(t.colors), back: css(liftBand(t.colors.bgColor)) } : null,
+    onLoad: () => { rematchColours(); shows.rematch() },
+    caption: null,
+    what: 'theme',
+    newName: n => `Theme ${n}`,
+    fallback: 'Shared theme',
+    // Every setting: the theme, and Music on and its source as they are on the lamp now (a theme keeps no switch of its
+    // own for them), so a music theme comes on for the opener as it does for a link from Share below.
+    share: t => sendLink(listLink('lamp', { n: t.name, c: packColours(t.colors), s: packShow(t.show), v: packView(t.view), a: t.advanced, ...(music() ? { m: 1, ms: musicSource() } : {}) }), `${t.name}, a lava lamp theme`, `Link to ${t.name} copied`)
+  })
+  // Opening a show or theme link (?show=, ?lamp=; ?theme= is a colours link, the first kind, kept as it was): asked, as
+  // a colours link is, then added to the list and put on the lamp, and the link taken out of the address.
+  const openListLink = (param, list, unpack, what) => {
+    const o = readListLink(param)
+    if (!o || typeof o.n !== 'string') return
+    setTimeout(() => ask(`Add ${o.n.slice(0, 24) || 'this'} to your ${what}?`, { yes: 'Add it', no: 'No thanks' }).then(yes => {
+      if (!yes) return
+      const t = list.adopt({ name: o.n.slice(0, 24), ...unpack(o) })
+      if (param === 'lamp' && o.m) { if (musicSources.includes(o.ms)) musicSource(o.ms); music(true) }
+      notify(`${t.name} added to ${what === 'shows' ? MY_SHOWS : THEMES_TITLE}`)
+    }), 600)
+  }
+  openListLink('show', shows, o => unpackShow(o), 'shows')
+  openListLink('lamp', lampThemes, o => ({ colors: unpackColours(o.c), show: unpackShow(o.s), view: unpackView(o.v), advanced: cleanAdvanced(o.a) }), 'themes')
+  afterColours = () => lampThemes.rematch()
+
+  // A share link carries the themes on the lamp that are the sender's own (Robert: "if the currently selected color or
+  // effects is a sub theme, we include the theme data in the share so they get the themes and all the settings all at
+  // once"): its name alone when the lamp still matches it, the link's own settings being its data, or its short form.
+  const themeExtras = () => {
+    const out = {}
+    const c = loadedTheme && myThemes.includes(loadedTheme) ? loadedTheme : null
+    if (c) out._c = sameData(normColours(c), normColours(takeColours())) ? c.name : { n: c.name, ...packColours(c) }
+    const sh = shows.current()
+    if (sh && sh.mine) out._s = sh.same ? sh.theme.name : { n: sh.theme.name, ...packShow(sh.data) }
+    const w = lampThemes.current()
+    if (w && w.mine) out._t = w.same ? w.theme.name : { n: w.theme.name, c: packColours(w.data.colors), s: packShow(w.data.show), v: packView(w.data.view), a: w.data.advanced }
+    return out
+  }
+  // Opening one: each theme it carries is added to the opener's lists, unless they have it already, and nothing is asked.
+  const extras = sharedExtras()
+  if (extras) {
+    const named = v => typeof v === 'string' ? v.slice(0, 24) : v && typeof v.n === 'string' ? v.n.slice(0, 24) : null
+    const added = []
+    if (named(extras.c)) added.push(addColourTheme(typeof extras.c === 'string' ? { name: named(extras.c), ...takeColours() } : { name: named(extras.c), ...unpackColours(extras.c) }).name)
+    if (named(extras.s)) added.push(shows.add(typeof extras.s === 'string' ? { name: named(extras.s), ...takeShow() } : { name: named(extras.s), ...unpackShow(extras.s) }).name)
+    if (named(extras.t)) {
+      const t = extras.t
+      added.push(lampThemes.add(typeof t === 'string' ? { name: named(t), ...takeWhole() } : { name: named(t), colors: unpackColours(t.c), show: unpackShow(t.s), view: unpackView(t.v), advanced: cleanAdvanced(t.a) }).name)
+    }
+    if (added.length) setTimeout(() => notify(`Added ${added.join(', ')}`), 400)
+  }
+  rematchColours()
+  shows.rematch()
+  lampThemes.rematch()
 
   panel = div(
     { class: knobStyle.bindAttr(() => knobStyle() === 'sliders' ? 'panel sliders' : 'panel'), onclick: e => e.stopPropagation() },
@@ -673,36 +1083,41 @@ export function createSettingsPanel () {
       { class: 'panel-scroll' },
     section(
       null, null,
-      // The colours as a boxed sub panel like Touch (Robert: "Let's do the colors in a sub panel
-      // like that too").
-      div({ class: 'sub-panel' },
-      div({ class: 'swatch-row' },
-        gradientPending
+      // The colours first, then Themes, the whole lamp at once, then Touch, Music and View, every card folded as the panel first
+      // opens (Robert: "We should have a global themes card, probably near the top"; "probably we should collapse all groups
+      // by default").
+      // The colours folded show the gradient and its background button, the picker itself; the word Colors opens the rest
+      // (Robert: "The collapsed form of the color panel should be the color gradient selector with the background button.
+      // The expand should be on a text label like 'color settings' or 'color options' or maybe just 'colors'").
+      // The gradient over the word (Robert: "the gradient slider should be above the colors label, themes should be under
+      // color, so the top thing on the page is the gradient slider at all times as this is mostly what people poke first").
+      card(coloursOpen, COLORS_LABEL, { before: [div({ class: 'swatch-row' }, gradientPending)], cls: 'colours-card' },
+        div({ class: 'swatch-row' },
+          div({ class: 'swatch-caption my-themes-caption' }, span(MY_COLORS), span({ class: 'theme-tools' }, plane, trash)),
+          themesGrid,
+          myThemesGrid
+        ),
+        swatchRow('Flow colours', showFlow, true,
+          swatch('Slow', 'flowSlow', flowSlow),
+          swatch('Fast', 'flowFast', flowFast)
+        ),
+        hint(help, `The lava is coloured by its heat, coldest and sinking to hottest. The bar is the heat colours: click a dot to change it, drag the middle three along the bar. ${MY_COLORS} are starting points: click one to load it, and the plus saves what you have as a new one (the pencil renames a saved one or saves over it). The flow colours are the slowest to fastest arrow.`)
       ),
-      div({ class: 'swatch-row' },
-        div({ class: 'swatch-caption' }, 'Themes'),
-        themesGrid,
-        div({ class: 'swatch-caption my-themes-caption' }, span('My themes'), span({ class: 'theme-tools' }, plane, trash)),
-        myThemesGrid
-      ),
-      swatchRow('Flow colours', showFlow, true,
-        swatch('Slow', 'flowSlow', flowSlow),
-        swatch('Fast', 'flowFast', flowFast)
-      ),
-      hint(help, 'The lava is coloured by its heat, coldest and sinking to hottest. The bar is the heat colours: click a dot to change it, drag the middle three along the bar. A theme is a starting point: click one to load it, and the plus saves what you have as a new one (the pencil renames a saved one or saves over it). The flow colours are the slowest to fastest arrow.')
+      card(themesOpen, THEMES_TITLE, { tools: [span({ class: 'sub-sub music-sub themes-sub' }, 'save and share every setting'), span({ class: 'theme-tools' }, lampThemes.plane, lampThemes.trash)] },
+        lampThemes.element,
+        hint(help, `A theme is the whole lamp: its colours, its show, the ${VIEW_TITLE} switches and every Advanced setting you changed. Click one to load it (it asks first if that would reset something); the plus saves the lamp as it is now as a new one, the pencil renames one or saves over it, the trash deletes one. Default is the lamp as it comes.`)
       ),
       // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
-      // thirteen year old (Robert: "I want to make it look more like a sub panel").
-      div({ class: 'sub-panel' },
-        div({ class: 'sub-title' }, span('Touch'), span({ class: 'sub-sub' }, 'what your finger does to the lava')),
+      // thirteen year old (Robert: "I want to make it look more like a sub panel"). Folded to its title.
+      card(touchOpen, 'Touch', { tools: [span({ class: 'sub-sub music-sub' }, 'what your finger does to the lava')] },
         iconChoice('touch', touchMode, TOUCH_OPTIONS),
-        knobs(knob('Strength', 'touch-strength', touchStrength, { min: 0, max: 3, step: 0.1, slider: true }, () => defaultTouchStrength, v => `${Number(v).toFixed(1)}x`))
+        knobs(knob('Strength', 'touch-strength', touchStrength, { min: 0, max: 3, step: 0.1, slider: true }, () => defaultTouchStrength, v => `${Number(v).toFixed(1)}x`)),
+        hint(help, 'What a finger or the mouse does to the lava under it: Push shoves it away, Pull gathers it in, Spin whirls it, Heat and Cool change its temperature. Strength is how hard, 1x as tuned.')
       ),
-      hint(help, 'What a finger or the mouse does to the lava under it: Push shoves it away, Pull gathers it in, Spin whirls it, Heat and Cool change its temperature. Strength is how hard, 1x as tuned.'),
-      // Music in the top section, always in view, folded to its switch (Robert: "let's put music
+      // Music, folded to its title and switch (Robert: "let's put music
       // as a default collapsible group under touch, always visible. It should just have the button
       // to enable it and set the device. The remaining controls should be in the advanced").
-      div({ class: musicOpen.bindAttr(() => musicOpen() ? 'sub-panel' : 'sub-panel folded') },
+      div({ class: musicOpen.bindAttr(() => musicOpen() ? 'sub-panel music-card' : 'sub-panel music-card folded') },
         div({ class: 'sub-title foldable', onclick: e => { if (!e.target.closest('.toggle')) musicOpen(!musicOpen()) } },
           span('Music'),
           span({ class: 'sub-sub music-sub' }, 'sync the lava to your music'),
@@ -715,13 +1130,14 @@ export function createSettingsPanel () {
           // The meter up here with the switch, so the card shows it hearing (Robert: "we should move
           // this sound indicator to the main audio controls... in the expanded form").
           meterRow,
+          musicWaitNote,
           ...(musicSources.length > 1 ? [row('Source', segmented('music-source', musicSource, musicSources))] : []),
           // System audio comes only with a screen share, so say plainly what is and is not used
           // (Robert: "a note explaining that it's required in order to hear the audio playing on
           // the system and that we do not record any visuals from the screen or connect to any
           // devices like webcam and only use the audio stream from the screen share").
           div({ class: 'music-note', style: { display: musicSource.bindStyle(() => musicSource() === 'system' ? 'block' : 'none') } },
-            'To hear what your computer is playing, the browser has to ask to share your screen, because that is the only way it hands a page the system\'s audio. Pick a screen and tick "Share system audio" (or a tab and "Share tab audio"). Only the sound is used: the picture is switched off the moment it arrives and is never shown, kept or sent, nothing is recorded, and no camera or other device is touched.'
+            'To hear what your computer is playing, the browser has to ask to share your screen, because that is the only way it hands a page the system\'s audio. Pick a tab and turn on "Also share tab audio", or a screen and "Also share system audio". Only the sound is used: the picture is switched off the moment it arrives and is never shown, kept or sent, nothing is recorded, and no camera or other device is touched.'
           ),
           div({ class: 'music-note', style: { display: TOUCH_UI ? 'block' : 'none' } },
             'On a phone the lamp listens through the microphone: play the song out loud and it follows along.'
@@ -733,7 +1149,7 @@ export function createSettingsPanel () {
             row('Record', toggle('music-record', musicRecording)),
             div({ class: 'music-note' }, 'Record plays the song from the start and records the lamp with it, then saves the video when the song ends or you switch it off. Only the lamp is recorded, not this panel. Keep this tab in front while it records.')
           ),
-          div({ class: 'music-input', style: { display: musicSource.bindStyle(() => musicSource() === 'mic' ? 'grid' : 'none') } },
+          div({ class: 'music-input', style: { display: showInput.bindStyle(() => showInput() ? 'grid' : 'none') } },
             span({ class: 'row-label' }, 'Input'), inputSelect
           ),
           // A loopback driver hears every app with no share dialog (Robert: "a little clickable
@@ -745,18 +1161,63 @@ export function createSettingsPanel () {
               div('1. Install BlackHole 2ch, a free audio loopback driver: ', a({ href: 'https://existential.audio/blackhole/', target: '_blank', rel: 'noopener', class: 'music-link' }, 'existential.audio/blackhole'), ', or "brew install blackhole-2ch" in a terminal.'),
               div('2. Open Audio MIDI Setup, press +, Create Multi-Output Device, and tick your speakers and BlackHole 2ch.'),
               div('3. In System Settings, Sound, choose that Multi-Output Device as the output, so you still hear the music.'),
-              div('4. Here, choose Mic as the source and BlackHole 2ch as the Input, then Listen.'),
+              div('4. Here, choose Mic as the source and Listen, allow the microphone, then choose BlackHole 2ch as the Input.'),
               div('On Windows, VB-Audio Virtual Cable does the same job.')
             )
           ]),
+          button({ class: 'music-help-link', onclick: () => musicHelp(!musicHelp()) }, 'Music not working?'),
+          musicHelpBody,
+          // The show, picked from My Shows (the Music theme's two buttons before).
+          Object.assign(shows.element, { title: `What the lamp does with the music: Vibes is the tuned show over a still lamp, Calm the same with no hit moving or heating the lava and no streamers, its sparkles and glow alone. The plus saves the effects below as a show of your own.` }),
+          // Effects, one fold under the theme pick holding every switch and slider for how the theme looks (Robert: "our
+          // toggles have become unkempt. these settings for music should be in the music panel"; "under a section titled
+          // 'effects', flow strength and heat strength... checkboxes for turning off global sparkle and glow"; "let's make
+          // effects collapsible and put stream controls in there, then also move streamers and motion into the effects group"),
+          // in three tabs, one card at a time: Flow, Heat and Streamers (EFFECT_TABS).
+          div({ class: effectsOpen.bindAttr(() => effectsOpen() ? 'sub-panel nested' : 'sub-panel nested folded') },
+            div({ class: 'sub-title foldable', onclick: () => effectsOpen(!effectsOpen()) }, span('Effects'), chevron()),
+            div({ class: 'sub-body' },
+              div({ class: 'effect-tabs', role: 'tablist' }, ...EFFECT_TABS.map(t => button({ id: 'music-effects-' + t, role: 'tab', class: effectsTab.bindAttr(() => effectsTab() === t ? 'on' : ''), 'aria-selected': effectsTab.bindAttr(() => String(effectsTab() === t)), onclick: () => effectsTab(t) }, EFFECT_TAB_NAMES[t]))),
+              effectTab('flow',
+                Object.assign(row('Flow events', toggle('music-flow-events', musicFlowEvents)), { title: FLOW_EVENTS_ABOUT }),
+                knobs(Object.assign(knob('Flow strength', 'music-flow', musicFlow, { min: 0, max: 2, step: 0.05, slider: true }, () => defaultMusicFlow, v => `${Number(v).toFixed(1)}x`), { title: FLOW_STRENGTH_ABOUT })),
+                Object.assign(row('Motion', toggle('motion-in-music', motionInMusic)), { title: MOTION_MUSIC_ABOUT }),
+                hint(help, [['Flow events', FLOW_EVENTS_ABOUT], ['Flow strength', FLOW_STRENGTH_ABOUT], ['Motion', MOTION_MUSIC_ABOUT]])
+              ),
+              effectTab('heat',
+                Object.assign(row('Heat events', toggle('music-heat-events', musicHeatEvents)), { title: HEAT_EVENTS_ABOUT }),
+                knobs(Object.assign(knob('Heat strength', 'music-heat', musicHeat, { min: 0, max: 2, step: 0.05, slider: true }, () => defaultMusicHeat, v => `${Number(v).toFixed(1)}x`), { title: HEAT_STRENGTH_ABOUT })),
+                pair('Sparkle', Object.assign(toggle('music-sparkle', musicSparkle), { title: SPARKLE_MUSIC_ABOUT }), 'Glow', Object.assign(toggle('music-glow', musicGlow), { title: GLOW_MUSIC_ABOUT })),
+                hint(help, [['Heat events', HEAT_EVENTS_ABOUT], ['Heat strength', HEAT_STRENGTH_ABOUT], ['Sparkle', SPARKLE_MUSIC_ABOUT], ['Glow', GLOW_MUSIC_ABOUT]])
+              ),
+              effectTab('streamers',
+                Object.assign(row('Streamers', toggle('streamers-in-music', streamersInMusic)), { title: STREAMERS_MUSIC_ABOUT }),
+                dyeControls(streamersInMusic, 'music-dye'),
+                hint(help, [['Streamers', STREAMERS_MUSIC_ABOUT], ['Drawn', DYE_MODE_ABOUT], ['Fade', DYE_FADE_ABOUT], ['Stamp', DYE_STAMP_ABOUT]])
+              )
+            )
+          ),
         )
       ),
-      hint(help, 'Music: the switch makes the lamp listen and move to the music. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used. What the music does is under Advanced, Music.'),
-      pair('Flow Field', toggle('flow', showFlow), 'Fullscreen', toggle('fullscreen', fullscreen)),
-      hint(help, [
-        ['Flow Field', 'Draw the stirring as arrows, like wind on a weather map.'],
-        ['Fullscreen', 'The lamp over the whole screen with nothing around it. Esc brings the browser back.']
-      ])
+      hint(help, 'Music: the switch makes the lamp listen and move to the music. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used. What the music does is under Advanced, Music. The beat finder hears what was learned from songs split into their drums and bass: the kick heard in a pumping drop, the kick told from the bass\'s notes, the hat from the very top of the spectrum (which System audio has and a microphone across a room may not) and a real snare.'),
+      // View: the lamp's own switches in a card, folded to its title (Robert: "I also think we should get all of those top
+      // level toggles into a card").
+      // Fullscreen on the card's title line, as Music's switch is on its own (Robert: "put the fullscreen checkbox on the
+      // header line of view, kinda like how music enabled is there").
+      card(viewOpen, VIEW_TITLE, { tools: [span({ class: 'sub-sub music-sub' }, 'fullscreen'), toggle('fullscreen', fullscreen)] },
+        // Two to a row: three did not fit the card's width.
+        pair('Flow', toggle('flow', showFlow), 'Motion', toggle('motion', motionOn)),
+        // The two flies side by side, each its own switch (the Ice fly the firefly's cold twin).
+        pair('Firefly', Object.assign(toggle('firefly', firefly), { title: FIREFLY_ABOUT }), 'Ice fly', Object.assign(toggle('ice-fly', iceFly), { title: ICE_FLY_ABOUT })),
+        hint(help, [
+          ['Flow', 'Draw the stirring as arrows, like wind on a weather map.'],
+          ['Motion', 'The lava follows the device: a shake shoves it, and turning a phone turns the floor. Off, the floor stays at the bottom.'],
+          ['Fullscreen', 'The lamp over the whole screen with nothing around it. Esc brings the browser back.']
+        ]),
+        pair('Streamers', Object.assign(toggle('dyed-fluid', dyedFluid), { title: DYE_ABOUT })),
+        dyeControls(dyedFluid, 'dye'),
+        hint(help, [['Firefly', FIREFLY_ABOUT], ['Ice fly', ICE_FLY_ABOUT], ['Streamers', DYE_ABOUT], ['Drawn', DYE_MODE_ABOUT], ['Fade', DYE_FADE_ABOUT], ['Stamp', DYE_STAMP_ABOUT]])
+      )
     ),
     sectionWith(
       button({ class: help.bindAttr(() => help() ? 'panel-close panel-help on' : 'panel-close panel-help'), onclick: () => help(!help()), title: 'What the controls do', 'aria-label': 'What the controls do' }, '?'),
@@ -781,10 +1242,16 @@ export function createSettingsPanel () {
             knob('Fall off', 'eddy-falloff', eddyFalloff, { min: 0, max: 4, step: 0.1 }, () => defaultEddyFalloff, fixed(1))
           ),
         row('Curve', segmented('eddy-curve', eddyCurve, eddyCurves)),
+        subgroup('Fade',
+            knob('Rim pull in', 'eddy-pull-in', eddyPullIn, { min: 0, max: 1, step: 0.05 }, () => defaultEddyPullIn, fixed(2)),
+            knob('Splat pull in', 'splat-pull-in', splatPullIn, { min: 0, max: 1, step: 0.05 }, () => defaultSplatPullIn, fixed(2))
+          ),
         helpList(help, [
           ['Speed', 'How fast an eddy comes in from the edge at birth, in px/s; each is a little faster or slower than the knob.'],
           ['Fall off', 'How quickly an eddy loses that speed with age; 0 keeps it. It never drops below 15% of its birth speed.'],
           ['Curve', 'The shape of the slowing: log falls fast then hobbles on, linear runs down steadily, exp drops off and levels.'],
+          ['Rim pull in', 'How far every eddy\'s reach pulls in to its core as it fades, so the outside dies first and the last thing left is a tight spin in the middle, the core outlasting the rim a little. 0 fades the whole eddy at once, as it was.'],
+          ['Splat pull in', 'How thin a splat\'s legs narrow as it flies: each starts as wide as ever and keeps its strength, then thins to a spike, so the lava is cut into spikes rather than thrown out in fat arms; the splat lives a little longer with it. 0 is the splat as it was.'],
           ['Stir', 'Speed of the slow convection roll, up the middle and down the walls; negative runs it backwards.'],
           ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
           ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
@@ -879,6 +1346,7 @@ export function createSettingsPanel () {
           ),
         pair('Auto Pixels', toggle('auto-pixels', autoPixels)),
         pair('Heater', toggle('heater', showHeater), 'Reservoirs', toggle('cups', showCups)),
+        pair('Fly trails', toggle('fly-trails', showFlyTrails)),
         helpList(help, [
           ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
           ['Smooth', 'Rounds off the bumps along every edge by blurring the lava\'s shape before it is cut, by this many pixels. 0 is the raw metaballs.'],
@@ -887,6 +1355,7 @@ export function createSettingsPanel () {
           ['Auto Pixels', 'The lamp picks Pixels itself: down a step after two seconds under Target, up a step after four seconds well over it, never past the window\'s own size. Moving Pixels by hand switches this off.'],
           ['Target', 'The frame rate Auto Pixels holds.'],
           ['Heater', 'Show the heater strip and its elements along the floor.'],
+          ['Fly trails', 'Draw where each fly has been in the last 6 seconds as a fading line, fireflies orange and ice flies blue; the dot is hollow while a fly lights no lava.'],
           ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
         ])
       ),
@@ -998,5 +1467,5 @@ export function createSettingsPanel () {
   )
 
   tooltips(panel)
-  return { element: panel, open, close, meter, setMusicInputs }
+  return { element: panel, open, close, meter, setMusicInputs, musicPrompt }
 }

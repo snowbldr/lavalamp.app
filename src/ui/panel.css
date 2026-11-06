@@ -74,6 +74,7 @@
 .panel-section-head .panel-section-title { flex: 1; }
 .panel-section-title .chevron { transition: transform 0.2s; margin-right: 4px; }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 34px; align-items: center; }
+.pair.trio { grid-template-columns: 1fr 1fr 1fr; }
 .pair-cell { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel-rows > .swatch-row:first-child { padding-top: 0; }
 .panel-rows > .swatch-row:first-child .swatch-caption { line-height: 30px; margin-bottom: 2px; padding-right: 80px; }
@@ -178,6 +179,8 @@
 .sub-sub { font-size: 11px; letter-spacing: 0; text-transform: none; color: rgba(236, 236, 236, 0.55); }
 .sub-panel .swatch-row:first-of-type { padding-top: 0; }
 .sub-panel .swatch-caption { padding-right: 0; }
+/* The Music card's Effects caption, a little air over it after the view switches. */
+.sub-panel .swatch-caption.music-effects { margin: 10px 0 2px; }
 /* Inside a box the width is 24 px shorter: six swatches and the Gradient choice still fit on one line. */
 .sub-panel { padding-left: 9px; padding-right: 9px; }
 .sub-panel .swatches { gap: 6px; justify-content: space-between; }
@@ -218,6 +221,7 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .spectrum-legend { position: absolute; right: 10px; top: 4px; font: 11px system-ui, sans-serif; color: rgba(236, 236, 236, 0.7); }
 .sub-title.foldable { cursor: pointer; align-items: center; flex-wrap: nowrap; }
 .sub-title .music-sub { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 10px; }
+.sub-title .themes-sub { white-space: normal; line-height: 1.2; } /* beside the share and the trash it wraps rather than cut off */
 .chevron { display: inline-flex; align-items: center; }
 .sub-title .chevron { margin-left: 4px; transition: transform 0.2s; color: rgba(236, 236, 236, 0.8); }
 .sub-panel.folded .chevron { transform: rotate(-90deg); }
@@ -237,6 +241,9 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 /* The Advanced list: each group a card, knobs packed four to a row, the subgroup named in small
    print over its first knob (every cell keeps the line so the dials align). */
 .sub-panel.group { padding-bottom: 6px; }
+/* A fold inside a card (the Music card's Effects): no second card border, just its own title and chevron. */
+.sub-panel.nested { margin: 8px 0 2px; padding: 6px 0 0; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.1); border-radius: 0; background: none; }
+.sub-panel.nested > .sub-title { margin-bottom: 6px; font-size: 11px; }
 .sub-panel.group .knobs { padding-top: 0; }
 .knob-sub { height: 12px; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); white-space: nowrap; align-self: flex-start; }
 .subgroup-title { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.5); margin: 6px 0 0; }
@@ -251,6 +258,26 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 }
 .version-banner a { color: #e8e8ea; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .version-banner-close { margin-left: 6px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.1); color: inherit; font-size: 14px; line-height: 22px; cursor: pointer; padding: 0; }
+/* Music on and hearing nothing (settingsPanel.js musicPrompt): the same strip, wrapping on a phone. */
+.music-prompt {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 25;
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 8px 10px; padding: 10px 12px 10px 16px; border-radius: 12px;
+  width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box;
+  background: rgba(20, 20, 22, 0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  color: #ececec; font: 15px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); cursor: pointer; user-select: none; -webkit-user-select: none;
+}
+.music-prompt .version-banner-close { margin-left: 0; }
+.music-prompt-text { flex: 1 1 auto; min-width: 0; }
+.music-prompt-buttons { display: inline-flex; gap: 6px; }
+.music-prompt-button { border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px; background: rgba(255, 255, 255, 0.08); color: #ececec; font: inherit; font-size: 13px; padding: 5px 12px; cursor: pointer; }
+.music-prompt-button.primary { background: #e8e8ea; border-color: #e8e8ea; color: #1c1c1e; font-weight: 600; }
+.music-wait { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; color: #ececec; }
+.music-help-head { margin-top: 8px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(236, 236, 236, 0.55); }
+.music-help .music-help-head:first-child { margin-top: 0; }
+.music-help-share { scroll-margin-top: 12px; }
+.music-help-flag { margin: 4px 0; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.1); color: #ececec; }
+.music-help-inline { border: 0; background: none; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
 /* Segmented choice and toggles */
 .segmented { display: flex; width: 100%; border-radius: 8px; background: rgba(255, 255, 255, 0.08); padding: 2px; }
@@ -357,6 +384,7 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .theme-share.on { color: var(--edit-accent, #8fa8ff); border-color: rgba(143, 168, 255, 0.6); background: rgba(143, 168, 255, 0.12); }
 .themes.sharing .theme:not(.theme-add) { box-shadow: 0 0 0 2px #8fa8ff; }
 .themes.sharing .theme-add, .themes.sharing .theme-edit { opacity: 0.3; }
+.themes.named.sharing > .theme:not(.theme-add) { box-shadow: none; opacity: 0.3; } /* the built in ones: only your own share */
 .theme-trash.on:not(.theme-share) { color: #ff6b6b; border-color: rgba(255, 107, 107, 0.6); background: rgba(255, 107, 107, 0.12); }
 .themes.deleting .theme:not(.theme-add) { box-shadow: 0 0 0 2px #ff6b6b; }
 .themes.deleting .theme-add, .themes.deleting .theme-edit { opacity: 0.3; }
@@ -418,3 +446,24 @@ input[type="range"].slider::-moz-range-thumb { width: 26px; height: 26px; border
 .version-chip:hover { background: rgba(255, 255, 255, 0.16); }
 .version-chip.primary { background: #e8e8ea; color: #1c1c1e; border-color: transparent; align-self: flex-start; }
 .panel-info a { color: inherit; text-decoration: underline; text-decoration-color: rgba(236, 236, 236, 0.3); text-underline-offset: 2px; }
+
+/* The Music card's Effects tabs: three equal headers over one card at a time (Robert: "two sub cards with 50% width tab
+   header, one says 'Flow' one says 'Heat'... so 3 tabs"). */
+.effect-tabs { display: flex; gap: 2px; margin: 2px 0 0; }
+.effect-tabs button {
+  flex: 1; border: 0; border-radius: 8px 8px 0 0; padding: 7px 0 6px; background: rgba(255, 255, 255, 0.04);
+  color: rgba(236, 236, 236, 0.6); font: inherit; font-size: 12px; cursor: pointer; box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.08);
+}
+.effect-tabs button.on { background: rgba(255, 255, 255, 0.09); color: #ececec; font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.effect-tab { padding: 8px 10px 4px; border-radius: 0 0 8px 8px; background: rgba(255, 255, 255, 0.09); }
+
+/* Themes and My Shows (themeList.js): a show is no colours, so its tile is plain; a whole theme's tile is its colours. */
+.theme.plain { background: rgba(255, 255, 255, 0.09); }
+.theme.plain::after { display: none; }
+.theme.plain span { background: none; transform: none; }
+.theme-item.edit-row.plain { background: #2a2a2e; }
+.sub-body > .swatch-row:first-child .my-themes-caption { margin-top: 0; }
+/* The colour card's title over the gradient it shows folded. */
+.colours-card > .swatch-row { padding-top: 0; }
+.card-title { flex: none; }
+.themes.builtin + .themes { margin-top: 6px; }

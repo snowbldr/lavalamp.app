@@ -20,7 +20,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let cups = null
   let bottles = []
   let floorBottles = []
-  let touches = []
+  let touches = [] // the frame's touches as given (simulation.js setTouches), a touch's own radius, heat and strength carried whole to the worker
   let slotOf = new Int32Array(0) // previous slot by birth index
   let slotGen = new Int32Array(0) // which build of slotOf each entry belongs to
   let slotBuild = 0
@@ -28,7 +28,8 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let light = 0 // pots to light at the next frame (the music's beat)
   let eddy = 0 // eddies to bear at the next frame (the music's beat)
   let pulse = 0 // pulse waves to send
-  let splat = [] // splats to send, [x, y, size] each
+  let pulseShapes = [] // shaped pulse waves to send, a tool's (simulation.js pulseWave), carried whole
+  let splat = [] // splats to send, [x, y, size, shape] each, a tool's shape carried whole (simulation.js splat)
   const flip = [] // eddy flips to send, each a chance
   let vent = 0 // seconds to lift the lid for
   let ventSmall = false // a train's vent: never the drop's big pot
@@ -39,6 +40,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
   let warmEnd = false // music on: the worker's warm up to be ended
   let drop = 0 // a drop's blast strength, 0 for none
   let dropAt = -1 // the pot it asks for, -1 for the usual
+  let dropOpts = null // a tool's shape for it (simulation.js dropOpts), null as tuned
   let sentParams = ''
   const empty = new Float32Array(0)
   const state = { x: empty, y: empty, vx: empty, vy: empty, temp: empty, id: new Int32Array(0) }
@@ -108,10 +110,11 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       const json = JSON.stringify(params)
       const changed = json !== sentParams
       sentParams = json
-      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, splat, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, chargeFull, drop, dropAt, warmEnd, pace: paceNow, want: wantNow })
+      worker.postMessage({ type: 'frame', params: changed ? params : null, touches, push, light, eddy, pulse, pulseShapes, splat, flip: flip.splice(0), vent, ventSmall, retire, charge, chargeBig, chargeFull, drop, dropAt, dropOpts, warmEnd, pace: paceNow, want: wantNow })
       push = null
       light = 0
       eddy = 0
+      pulseShapes = []
       pulse = 0
       splat = []
       vent = 0
@@ -119,6 +122,7 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
       retire = false
       drop = 0
       dropAt = -1
+      dropOpts = null
       warmEnd = false
       if (!wantNow.cups) { cups = null }
     },
@@ -146,14 +150,14 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     push (fx, fy) { push = push ? [push[0] + fx, push[1] + fy] : [fx, fy] },
     lightElement () { light++ },
     spawnEddy () { eddy++ },
-    pulseWave () { pulse++ },
-    splat (x, y, size) { splat.push([x, y, size]) },
+    pulseWave (shape) { if (shape) pulseShapes.push(shape); else pulse++ },
+    splat (x, y, size, shape) { splat.push(shape ? [x, y, size, shape] : [x, y, size]) },
     flipEddies (chance = 1) { flip.push(chance) },
     ventPot (seconds, smallOnly) { vent = Math.max(vent, seconds || 0); ventSmall = !!smallOnly },
     retirePot () { retire = true },
     chargePot (level, big, fullness) { if (level != null) { charge = level; chargeBig = !!big } if (fullness) chargeFull = fullness },
     endWarmup () { warmEnd = true },
-    dropPot (strength, at) { drop = Math.max(drop, strength); if (at >= 0) dropAt = at },
+    dropPot (strength, at, opts) { if (strength >= drop) dropOpts = opts || null; drop = Math.max(drop, strength); if (at >= 0) dropAt = at },
     setTouches (list) { touches = list || [] },
     transform (fn) {
       const map = affine(fn)
@@ -181,6 +185,8 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     bottles: () => bottles,
     floorBottles: () => floorBottles,
     profile: () => ({ stepMs, steps, gap }),
+    // Finished with: the worker stopped, for a lamp started over in place (app.js restart).
+    destroy () { worker.terminate() },
     get state () { return state },
     get count () { return latest ? latest.count : 0 },
     get width () { return width },

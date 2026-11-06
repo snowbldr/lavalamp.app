@@ -1,3 +1,4 @@
+import { createWaits, hitIn, tailOf } from './shape.js'
 // The parts of a song around a drop, heard from the analyser's spectrum frame by frame (Robert:
 // "all those additions sound great, let's just yolo and add them all. vibes forever"):
 //
@@ -23,7 +24,19 @@
 //            band getting louder is a section, not a solo). Measured on the solos Robert named,
 //            against the rest of each song's busy parts: Enter Sandman 2:58 to 3:30, mids up 2.9 dB
 //            and presence 2.5; Killing in the Name 3:50 to 4:15, 4.5 and 3.7; the bass level the same.
-//            `solo` is 0 to 1, `soloStart` its first frame, `leadNote` each attack in the lead's band.
+//            `solo` is 0 to 1, `leadNote` each attack in the lead's band. `soloStart` is not the solo's
+//            first frame but the first frame of a solo whose mids have also tilted up (SOLO_TILT): the
+//            upper mids (SOLO_UPPER) over the lower (SOLO_LOW) SOLO_TILT dB more than over their own
+//            SOLO_SLOW means, held SOLO_HOLD. Robert: "solo start always misfires". A voice's weight is
+//            in the lower mids, a lead guitar's in the upper, so a sung part getting louder raises the
+//            lead's band and not the tilt. Measured over nine songs against the stems (the guitar stem,
+//            or the other stem, 2.5 dB over its median while the vocals are 8 dB under their singing
+//            level, 6 s or more; 16 such starts after 0:10, 8 in a section a structure analyzer calls solo or
+//            inst), fires within 4 s of a start: the solo's first frame fired 26 times, 3 starts, 22
+//            false; the tilted start 8, 2 starts (Killing 3:53.9, Bohemian 2:44.7, both in a solo
+//            section; Bangarang's chorus 2:56.5 lost), 4 false. 1.5 dB fired 10, 5 false; 2.5 lost
+//            Killing. Sandman's solo (the mix no louder, 1.4 dB) fires neither. `solo`, `leadNote`
+//            and the drums are as they were.
 //   drums    a drum solo or a big fill: hits in the drums' body (DRUM_BAND, toms and snare) at
 //            DRUM_RATE a second or more for DRUM_HOLD with no lead out front. `drums` is 0 to 1,
 //            `drumHit` each hit while it lasts.
@@ -76,6 +89,9 @@ const SOLO_SLOW = 20 // s
 const SOLO_RISE = 2 // dB
 const SOLO_HOLD = 2 // s
 const SOLO_BASS_RISE = 1.5 // dB the bass may rise with it
+const SOLO_LOW = [300, 1000] // a voice's weight
+const SOLO_UPPER = [1000, 2000] // a lead guitar's
+const SOLO_TILT = 2 // dB, the upper over the lower more than over their SOLO_SLOW means, for soloStart
 const NOTE_RISE = 5 // dB over the lowest of the last NOTE_FRAMES frames
 const NOTE_FRAMES = 4
 const NOTE_DEBOUNCE = 0.08 // s
@@ -91,6 +107,18 @@ const DRUM_FULL = 12
 const SUB_BAND = [20, 80]
 const SUB_RANGE = 18 // dB
 const SUB_FALL = 3 // dB a second the loudest falls
+
+// Their shapes (music.js SHAPE_TRIGGERS, each an option, off as tuned): the band envelopes music.js keeps.
+// A drum hit: its attack in the mids DRUM_ATTACK ms or less, a snare's crack. Bangarang 371 to 109 hits and
+// their vector strength on the eighths of its beats 0.32 to 0.58; Bohemian 9 to 5, 0.64 to 0.84; Espresso
+// 10 to 1; Drugs I Like 17 to 5; Killing in the Name 74 to 26, its drum intro (20 to 28 s, 14 hits, taken
+// from the scan) to 5. A noisy tail (the kick band 50 to 150 ms after) as well told nothing more.
+// An impact: a crash's long ring, the kick band still IMPACT_TAIL of its peak or more 30 to 80 ms after it
+// (it waits for that, up to 80 ms past where it fired; waiting to 150 ms after the peak put C-C 139.92 and
+// Bohemian 207.83 out of the tool's 0.15 s). The snaps' 29 impacts (each at most 2% left) and 11 of
+// Sandman's 12 go, C-C's 6 and Bohemian's 9 stay, Bangarang 3 to 1, Killing in the Name 36 to 24.
+const DRUM_ATTACK = 5
+const IMPACT_TAIL = 0.15
 
 const db = p => 10 * Math.log10(p + 1e-12)
 
@@ -115,9 +143,11 @@ export function createSections () {
   let lastKey = -1e9
   let subPeak = -120
   let leadFast = null, leadSlow = null, bassFast = null, bassSlow = null, soloSince = -1, soloWas = false, lastNote = -1e9
+  let lowFast = null, lowSlow = null, upFast = null, upSlow = null, startSince = -1, startWas = false
   const lead = []
   const drum = [], drumHits = []
   let lastDrum = -1e9, drumSince = -1
+  const waits = createWaits()
   const out = { drums: 0, drumHit: false, solo: 0, soloStart: false, leadNote: false, sub: 0, subHz: 0, roll: 0, rolling: false, rollEnd: false, impact: false, riser: 0, rising: false, half: false, double: false, key: false, keyShift: 0 }
 
   const meanOf = (list, from) => { let s = 0, n = 0; for (const [t, v] of list) if (t >= from) { s += Math.pow(10, v / 10); n++ } return n ? db(s / n) : -120 }
@@ -127,11 +157,14 @@ export function createSections () {
     reset () {
       body.length = rattle.length = hits.length = top.length = total.length = bright.length = beats.length = keyFrames.length = 0
       lastHit = lastImpact = lastBright = lastHalf = lastKeyLook = lastKey = -1e9
-      rollSince = -1; rollWas = false; tempoWas = 0; subPeak = -120; leadFast = leadSlow = bassFast = bassSlow = null; soloSince = -1; soloWas = false; lastNote = -1e9; lead.length = 0; drum.length = drumHits.length = 0; lastDrum = -1e9; drumSince = -1
+      rollSince = -1; rollWas = false; tempoWas = 0; subPeak = -120; leadFast = leadSlow = bassFast = bassSlow = null; soloSince = -1; soloWas = false; lastNote = -1e9; lowFast = lowSlow = upFast = upSlow = null; startSince = -1; startWas = false; lead.length = 0; drum.length = drumHits.length = 0; lastDrum = -1e9; drumSince = -1; waits.reset()
     },
     // power: the analyser's band power helper (music.js), bins and binHz for the pitch classes.
-    update (clock, power, bins, binHz, beat, totalPower) {
+    // shape: { on, envs }, which shapes are on and music.js's band envelopes.
+    update (clock, power, bins, binHz, beat, totalPower, shape) {
       out.rollEnd = false; out.impact = false; out.half = false; out.double = false; out.key = false
+      const shaped = (k, band) => shape && shape.on[k] && shape.envs[band].length
+      waits.judge()
 
       // The solo: the lead's band over its own long mean, the bass not with it.
       {
@@ -146,8 +179,17 @@ export function createSections () {
         if (on) { if (soloSince < 0) soloSince = clock } else soloSince = -1
         const soloing = soloSince >= 0 && clock - soloSince >= SOLO_HOLD
         out.solo = soloing ? Math.max(0.2, Math.min(1, (over - SOLO_RISE) / 3 + 0.2)) : 0
-        out.soloStart = soloing && !soloWas
         soloWas = soloing
+        // The start: the same, with the mids tilted up too (SOLO_TILT), on its own hold.
+        const lo = db(power(SOLO_LOW)), up = db(power(SOLO_UPPER))
+        lowFast = lowFast === null ? lo : lowFast + (lo - lowFast) * Math.min(1, dt / SOLO_FAST)
+        lowSlow = lowSlow === null ? lo : lowSlow + (lo - lowSlow) * Math.min(1, dt / SOLO_SLOW)
+        upFast = upFast === null ? up : upFast + (up - upFast) * Math.min(1, dt / SOLO_FAST)
+        upSlow = upSlow === null ? up : upSlow + (up - upSlow) * Math.min(1, dt / SOLO_SLOW)
+        if (on && (upFast - lowFast) - (upSlow - lowSlow) > SOLO_TILT) { if (startSince < 0) startSince = clock } else startSince = -1
+        const starting = startSince >= 0 && clock - startSince >= SOLO_HOLD
+        out.soloStart = starting && !startWas
+        startWas = starting
         lead.push(l)
         if (lead.length > NOTE_FRAMES + 1) lead.shift()
         out.leadNote = false
@@ -165,7 +207,7 @@ export function createSections () {
         if (drumHits.length >= DRUM_RATE && out.solo === 0) { if (drumSince < 0) drumSince = clock } else if (clock - lastDrum > 0.4 || out.solo > 0) drumSince = -1
         const drumming = drumSince >= 0 && clock - drumSince >= DRUM_HOLD
         out.drums = drumming ? Math.min(1, drumHits.length / DRUM_FULL) : 0
-        out.drumHit = drumming && hit
+        out.drumHit = drumming && hit && (!shaped('drumHit', 'mids') || hitIn(shape.envs.mids).attack <= DRUM_ATTACK)
       }
 
       // The sub bass, for the shaker.
@@ -198,7 +240,11 @@ export function createSections () {
       // The impact.
       const tp = db(power(IMPACT_BAND)), tt = db(totalPower)
       const topBefore = meanOf(top, clock - IMPACT_BEFORE), totalBefore = meanOf(total, clock - IMPACT_BEFORE)
-      if (top.length > 5 && tp - topBefore > IMPACT_RISE && tt - totalBefore > IMPACT_TOTAL && clock - lastImpact > IMPACT_DEBOUNCE) { out.impact = true; lastImpact = clock }
+      if (top.length > 5 && tp - topBefore > IMPACT_RISE && tt - totalBefore > IMPACT_TOTAL && clock - lastImpact > IMPACT_DEBOUNCE) {
+        lastImpact = clock
+        if (!shaped('impact', 'kick')) out.impact = true
+        else { const e = shape.envs.kick; waits.wait(e, hitIn(e), 80, (e, h) => tailOf(e, h, 30, 80) >= IMPACT_TAIL, () => { out.impact = true }) }
+      }
       top.push([clock, tp]); total.push([clock, tt])
       while (top.length && clock - top[0][0] > IMPACT_BEFORE) top.shift()
       while (total.length && clock - total[0][0] > IMPACT_BEFORE) total.shift()

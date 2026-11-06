@@ -5,7 +5,7 @@ call about how it looks and moves. Claude supplies mechanism, measurement and ty
 
 ## Vibes only
 
-No tests, no package.json, no build step. The lamp is judged by feel, not correctness. Preserve
+No tests, no build step, and no package.json for the lamp (the local server has its own, scripts/server, for spliffy). JavaScript only: no Python or shell scripts in the project (Robert: "this is a js project, we will use spliffy for the backend"). The lamp is judged by feel, not correctness. Preserve
 the tuned behaviour; when a change could alter how it looks, say so before or as you make it, and
 offer a before and after screenshot.
 
@@ -13,7 +13,7 @@ offer a before and after screenshot.
 
 The making of the 3D lamp is the subject of a meetup talk about directing AI as the engineer
 (docs/talk-v1.md is the first talk; the sequel is being recorded now). Recording is not optional
-and a Stop hook (scripts/talk-check.sh) will nag when it is skipped. Capture:
+and a Stop hook (scripts/talk-check.mjs) will nag when it is skipped. Capture:
 
 1. Decisions, in docs/decisions.md, as they happen, newest at the bottom. For each: what was
    seen, what was proposed (including what Claude proposed), what Robert decided, why, and what
@@ -44,4 +44,6 @@ docs/methods/tools.
 ## Layout
 
 src/sim is the simulation with no DOM, src/render the metaball pass, src/ui settings and
-panel, src/app.js the wiring. Serve index.html from any static server.
+panel, src/app.js the wiring. Serve it with node scripts/server/serve.mjs (--https for phones on the LAN).
+Private checkouts inside this folder are kept out of git by .git/info/exclude (never .gitignore,
+which is public), and the server will not serve them.

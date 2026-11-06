@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>mic test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin: 0; background: #1c1c1e; color: #ececec; font: 15px system-ui, sans-serif; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 6px; }
+  p { color: rgba(236,236,236,0.7); margin: 4px 0 12px; line-height: 1.4; }
+  .way { border: 1px solid rgba(255,255,255,0.14); border-radius: 8px; padding: 10px; margin: 10px 0; }
+  .way.on { border-color: #ffb347; }
+  .way.clean { background: rgba(80,200,120,0.12); }
+  .way.bad { background: rgba(230,80,80,0.12); }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .name { font-weight: 600; flex: 1; min-width: 60%; }
+  .what { color: rgba(236,236,236,0.6); font-size: 13px; margin: 4px 0 8px; }
+  button { font: inherit; padding: 10px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: #ececec; }
+  button.go { background: #ffb347; color: #1c1c1e; border-color: #ffb347; }
+  .meter { height: 10px; background: rgba(255,255,255,0.08); border-radius: 5px; overflow: hidden; margin: 8px 0 4px; }
+  .meter div { height: 100%; width: 0; background: #ffb347; }
+  .got { font: 12px ui-monospace, monospace; white-space: pre-wrap; color: rgba(236,236,236,0.6); }
+  label { display: inline-flex; gap: 4px; align-items: center; margin-right: 10px; font-size: 14px; }
+  select { font: inherit; background: #2c2c2e; color: #ececec; border-radius: 6px; padding: 4px; }
+  textarea { width: 100%; box-sizing: border-box; height: 120px; background: #2c2c2e; color: #ececec; border-radius: 6px; font: 12px ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<h1>Mic test</h1>
+<p>Play Spotify on the speaker, then Start one way at a time. Listen for a few seconds and mark it Clean or Distorted. Stop before the next one. The bar shows the mic is hearing. Tell Claude the numbers that came out clean (or copy the summary at the bottom).</p>
+<div id="ways"></div>
+<div class="way" id="custom">
+  <div class="row"><div class="name">C. Custom</div></div>
+  <div class="what">
+    <label><input type="checkbox" id="c-ec"> echoCancellation</label>
+    <label><input type="checkbox" id="c-ns"> noiseSuppression</label>
+    <label><input type="checkbox" id="c-agc"> autoGainControl</label>
+    <label>channels <select id="c-ch"><option value="">any</option><option>1</option><option>2</option></select></label>
+    <label>context <select id="c-lat"><option value="">default</option><option>interactive</option><option>balanced</option><option>playback</option><option value="none">no Web Audio</option></select></label>
+    <label><input type="checkbox" id="c-out"> output running (muted)</label>
+    <label>input <select id="c-dev"><option value="">default</option></select></label>
+  </div>
+</div>
+<p id="env" class="got"></p>
+<button id="copy">Copy summary</button>
+<textarea id="summary" readonly></textarea>
+<script type="module">
+// One test per way the lamp could open the mic on Android, to find which keeps the phone out of
+// its call mode (Robert, on the Pixel: "it gets that weird in call sound when it's playing").
+// 1 is what the lamp does today (music.js, the 'mic' source).
+const off = { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+const WAYS = [
+  { name: 'The lamp today', what: 'echo, noise and gain off; Web Audio, the mic into an analyser only', audio: off },
+  { name: 'Browser defaults', what: 'audio: true (echo, noise and gain on); expected to be the call sound', audio: true },
+  { name: 'Only echo cancellation off', what: 'noise and gain left on', audio: { echoCancellation: false } },
+  { name: 'Only echo cancellation on', what: 'noise and gain off', audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } },
+  { name: 'Stereo', what: 'the lamp\'s constraints and channelCount 2 (some phones pick a music input for stereo)', audio: { ...off, channelCount: 2 } },
+  { name: 'Mono', what: 'the lamp\'s constraints and channelCount 1', audio: { ...off, channelCount: 1 } },
+  { name: 'Playback context', what: 'the lamp\'s constraints; AudioContext latencyHint playback', audio: off, latency: 'playback' },
+  { name: 'Interactive context', what: 'the lamp\'s constraints; AudioContext latencyHint interactive', audio: off, latency: 'interactive' },
+  { name: 'Output running', what: 'the lamp\'s constraints; the analyser into a muted gain to the speaker, so the context plays', audio: off, output: true },
+  { name: 'No Web Audio at all', what: 'the lamp\'s constraints; the mic held, nothing reading it (no bar): is holding the mic enough?', audio: off, latency: 'none' },
+  { name: 'Track processor', what: 'the lamp\'s constraints; read by MediaStreamTrackProcessor, no AudioContext', audio: off, processor: true },
+  { name: 'Voice isolation off', what: 'the lamp\'s constraints and voiceIsolation false', audio: { ...off, voiceIsolation: false } },
+  { name: 'Audio session: play and record', what: 'navigator.audioSession.type before the mic, where the browser has it', audio: off, session: 'play-and-record' },
+  { name: 'Audio session: playback', what: 'navigator.audioSession.type playback', audio: off, session: 'playback' }
+]
+const marks = {}
+try { Object.assign(marks, JSON.parse(localStorage.getItem('mic-test') || '{}')) } catch (e) {}
+let running = null
+
+const $ = id => document.getElementById(id)
+const el = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e }
+
+function card (n, way, box) {
+  const meter = el('div')
+  const got = el('div', { className: 'got' })
+  const start = el('button', { className: 'go', textContent: 'Start' })
+  const clean = el('button', { textContent: 'Clean' })
+  const bad = el('button', { textContent: 'Distorted' })
+  const paint = () => { box.classList.toggle('clean', marks[n] === 'clean'); box.classList.toggle('bad', marks[n] === 'distorted'); summary() }
+  const mark = v => { marks[n] = marks[n] === v ? undefined : v; try { localStorage.setItem('mic-test', JSON.stringify(marks)) } catch (e) {} paint() }
+  clean.onclick = () => mark('clean')
+  bad.onclick = () => mark('distorted')
+  start.onclick = async () => {
+    const mine = running && running.n === n
+    if (running) await stop()
+    if (mine) return
+    start.textContent = 'Stop'
+    box.classList.add('on')
+    try { running = await open(n, typeof way === 'function' ? way() : way, meter, got); running.button = start; running.box = box } catch (e) { got.textContent = 'failed: ' + (e && e.message || e); start.textContent = 'Start'; box.classList.remove('on') }
+  }
+  box.append(el('div', { className: 'row' }, start, clean, bad), el('div', { className: 'meter' }, meter), got)
+  paint()
+}
+
+async function open (n, way, meter, got) {
+  const r = { n, stopped: false, ctx: null, stream: null }
+  if (way.session) {
+    if (!navigator.audioSession) throw new Error('this browser has no navigator.audioSession')
+    navigator.audioSession.type = way.session
+  }
+  r.stream = await navigator.mediaDevices.getUserMedia({ audio: way.audio, video: false })
+  const track = r.stream.getAudioTracks()[0]
+  const lines = ['asked ' + JSON.stringify(way.audio), 'got ' + JSON.stringify(track.getSettings())]
+  let level = () => 0
+  if (way.processor) {
+    if (!window.MediaStreamTrackProcessor) throw new Error('this browser has no MediaStreamTrackProcessor')
+    const reader = new MediaStreamTrackProcessor({ track }).readable.getReader()
+    let peak = 0
+    ;(async () => {
+      while (!r.stopped) {
+        const { value, done } = await reader.read()
+        if (done) break
+        const a = new Float32Array(value.numberOfFrames)
+        value.copyTo(a, { planeIndex: 0, format: 'f32-planar' })
+        let m = 0
+        for (const s of a) m = Math.max(m, Math.abs(s))
+        peak = Math.max(m, peak * 0.9)
+        value.close()
+      }
+    })()
+    level = () => peak
+  } else if (way.latency !== 'none') {
+    const opts = way.latency ? { latencyHint: way.latency } : {}
+    r.ctx = new AudioContext(opts)
+    if (r.ctx.state !== 'running') await r.ctx.resume()
+    const analyser = r.ctx.createAnalyser()
+    analyser.fftSize = 2048
+    r.ctx.createMediaStreamSource(r.stream).connect(analyser)
+    if (way.output) { const g = r.ctx.createGain(); g.gain.value = 0; analyser.connect(g).connect(r.ctx.destination) }
+    const data = new Float32Array(analyser.fftSize)
+    level = () => { analyser.getFloatTimeDomainData(data); let m = 0; for (const s of data) m = Math.max(m, Math.abs(s)); return m }
+    lines.push(`context ${r.ctx.sampleRate} Hz, base latency ${(r.ctx.baseLatency * 1000).toFixed(1)} ms, output latency ${((r.ctx.outputLatency || 0) * 1000).toFixed(1)} ms`)
+  }
+  if (way.session) lines.push('audioSession ' + navigator.audioSession.type + ', ' + navigator.audioSession.state)
+  got.textContent = lines.join('\n')
+  const tick = () => { if (r.stopped) return; meter.style.width = Math.min(100, level() * 100) + '%'; requestAnimationFrame(tick) }
+  tick()
+  r.meter = meter
+  fillDevices()
+  return r
+}
+
+async function stop () {
+  const r = running
+  running = null
+  if (!r) return
+  r.stopped = true
+  for (const t of r.stream.getTracks()) t.stop()
+  if (r.ctx) await r.ctx.close()
+  if (navigator.audioSession) navigator.audioSession.type = 'auto'
+  r.meter.style.width = '0'
+  r.button.textContent = 'Start'
+  r.box.classList.remove('on')
+}
+
+const ways = document.getElementById('ways')
+WAYS.forEach((w, i) => {
+  const box = el('div', { className: 'way' }, el('div', { className: 'row' }, el('div', { className: 'name', textContent: `${i + 1}. ${w.name}` })), el('div', { className: 'what', textContent: w.what }))
+  ways.append(box)
+  card(String(i + 1), w, box)
+})
+card('C', () => {
+  const audio = { echoCancellation: $('c-ec').checked, noiseSuppression: $('c-ns').checked, autoGainControl: $('c-agc').checked }
+  if ($('c-ch').value) audio.channelCount = Number($('c-ch').value)
+  if ($('c-dev').value) audio.deviceId = { exact: $('c-dev').value }
+  return { audio, latency: $('c-lat').value || undefined, output: $('c-out').checked }
+}, $('custom'))
+
+// Inputs are only named once the mic has been allowed.
+async function fillDevices () {
+  const sel = $('c-dev')
+  const list = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput' && d.label)
+  const was = sel.value
+  sel.replaceChildren(el('option', { value: '', textContent: 'default' }), ...list.map(d => el('option', { value: d.deviceId, textContent: d.label })))
+  sel.value = was
+}
+fillDevices()
+
+$('env').textContent = navigator.userAgent + '\naudioSession: ' + (navigator.audioSession ? 'yes' : 'no') + ', MediaStreamTrackProcessor: ' + (window.MediaStreamTrackProcessor ? 'yes' : 'no')
+function summary () {
+  $('summary').value = [...WAYS.map((w, i) => [String(i + 1), w.name]), ['C', 'Custom']].filter(([n]) => marks[n]).map(([n, name]) => `${n}. ${name}: ${marks[n]}`).join('\n') + '\n' + navigator.userAgent
+}
+$('copy').onclick = () => { $('summary').select(); navigator.clipboard && navigator.clipboard.writeText($('summary').value) }
+summary()
+</script>
+</body>
+</html>

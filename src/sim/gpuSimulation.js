@@ -37,7 +37,9 @@
 import { createSimulation, STIR_OVERRIDE } from './simulation.js'
 
 const WORKGROUP = 64
-const MAX_TOUCHES = 4
+// The most touches a frame: a tool driving a push front beside its glints wanted more than the
+// pointer's four, and eight cost nothing (a 256 byte uniform, the shader's loop runs to P.touches).
+const MAX_TOUCHES = 8
 const FIXED = 64 // the mean density is summed in fixed point: integer atomics are all WGSL has
 // The bottle table: 16 scalars (cx, lineY, dir, w, rm, rs, yf, neckEnd, cy, R, reach, then room),
 // the bulb's radius at OUTLINE_POINTS angles, and the outline as OUTLINE_POINTS x,y pairs.
@@ -114,8 +116,15 @@ struct Params {
   plumeHeat: f32,
   plumePush: f32,
   ceilingCool: f32, // how many times faster lava in the ceiling bottles cools (app.js, the music's activity), 1 as tuned
+  minTemp: f32, // no lava cools under this (params.minTemp), 0 as tuned
+  flapEdge: f32, // the lid opened as a flap (params.lidFlap): lava past this x on the open side is let through
+  flapSide: f32, // +1 open to the right of the edge, -1 to the left, 0 the whole lid as tuned
+  plumeTilt: f32, // a tool's tilt on the pump's heat and push across its width (simulation.js dropOpts), 0 as tuned
 }
-struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, pad0: u32, pad1: u32, pad2: u32 }
+// A touch's own radius (px), heat (per step) and strength (simulation.js setTouches): writeParams
+// fills them with the lamp's touchRadius, touchHeat and touchStrength for a touch without its
+// own, so the pointer's finger is as it was.
+struct Touch { x: f32, y: f32, vx: f32, vy: f32, mode: u32, radius: f32, heat: f32, strength: f32 }
 struct Touches { t: array<Touch, ${MAX_TOUCHES}> }
 
 @group(0) @binding(0) var<uniform> P: Params;
@@ -280,7 +289,7 @@ fn contain(i: u32, pIn: vec2f) -> vec2f {
     // The drop's lid: the lidded pot's lava that reaches the floor's line is held under it.
     // Each held a different depth under the line (0.5 to 6.5 px, by the particle's number): held
     // all at one depth they stacked in flat rows against the lid and left in stripes.
-    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height) { p.y = P.height + 0.5 + f32((i * 2654435761u) >> 29u) * 0.857; } // simulation.js LID_DEPTH; the renderers keep its glow from showing white
+    if (P.lid >= 0.0 && i32(F[HOME(i)]) == i32(P.lid) && p.y <= P.height && !(P.flapSide != 0.0 && (p.x - P.flapEdge) * P.flapSide > 0.0)) { p.y = P.height + 0.5 + f32((i * 2654435761u) >> 29u) * 0.857; } // simulation.js LID_DEPTH; the renderers keep its glow from showing white
     if (p.y > P.height) {
       if (P.floorBottles > 0u) { p = containIn(i, p, P.ceilingBottles, P.floorBottles); } else { p.y = P.height; F[HOME(i)] = -1.0; }
     } else if (p.y < 0.0) {
@@ -330,13 +339,24 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     let pot = WLD[o + 4u]; // the floor bottle this element is, as a HOME value, or -1
     if (F[HOME(i)] >= 0.0) {
       // Lava in a pot: its own element's heat in full, wherever it sits (simulation.js elementHeat).
-      if (F[HOME(i)] == pot) { t = max(t, min(select(P.maxTemp, WLD[o + 5u], WLD[o + 5u] > 0.0), t + heat)); }
+      // A tool's tilted blast (simulation.js dropOpts): the heat and the cap's rise over neutral times
+      // 1 + tilt times where the lava sits across the cup.
+      if (F[HOME(i)] == pot) {
+        let tilt = WLD[o + 6u];
+        if (tilt == 0.0) { t = max(t, min(select(P.maxTemp, WLD[o + 5u], WLD[o + 5u] > 0.0), t + heat)); }
+        else {
+          let f = 1.0 + tilt * clamp((p.x - ex) / eh, -1.0, 1.0);
+          let cap = select(P.maxTemp, min(P.maxTemp, P.gravity + (WLD[o + 5u] - P.gravity) * f), WLD[o + 5u] > 0.0);
+          t = max(t, min(cap, t + heat * f));
+        }
+      }
       continue;
     }
-    if (WLD[o + 5u] > 0.0 && P.lid >= 0.0 && pot == P.lid) { continue; } // a lidded pot heats only its own lava
+    if (WLD[o + 7u] > 0.0) { continue; } // an instant blast heats only its own pot's lava (simulation.js dropOpts)
+    if (WLD[o + 5u] > 0.0 && P.lid >= 0.0 && pot == P.lid && P.flapSide == 0.0) { continue; } // a lidded pot heats only its own lava; with its flap open (params.lidFlap) it heats over its mouth as an open one, else its lava stays plugged under the cold pool
     let dx = (p.x - ex) * er / eh;
     let d2 = (dx * dx + fromFloor * fromFloor) / (er * er);
-    if (d2 < 4.0) { t = min(P.maxTemp, t + heat * exp(-d2)); }
+    if (d2 < 4.0) { t = min(P.maxTemp, t + heat * exp(-d2) * select(1.0, 1.0 + WLD[o + 6u] * clamp((p.x - ex) / eh, -1.0, 1.0), WLD[o + 6u] != 0.0)); } // a tool's tilt over the mouth too
   }
   // The stirring at this point, from the grid, bilinear: velocity and how much the eddies here
   // override the inertia (simulation.js overrideAt), three floats a point.
@@ -364,27 +384,29 @@ fn drift(@builtin(global_invocation_id) id: vec3u) {
     let tc = T.t[k];
     let d = p - vec2f(tc.x, tc.y);
     let r = length(d);
-    let q = r / P.touchRadius;
+    let q = r / tc.radius;
     if (q > 2.5) { continue; }
-    let w = exp(-q * q);
-    if (tc.mode == 3u) { t += P.touchHeat * P.touchStrength * w; }
-    else if (tc.mode == 4u) { t -= P.touchHeat * P.touchStrength * w; }
+    let m = tc.mode & 7u; // bit 3: a flat touch (simulation.js TOUCH_EDGE), full weight to its radius and a sharp edge
+    let e = (q - 1.0) / 0.15;
+    let w = select(exp(-q * q), select(exp(-e * e), 1.0, q <= 1.0), tc.mode >= 8u);
+    if (m == 3u) { t += tc.heat * tc.strength * w; }
+    else if (m == 4u) { t -= tc.heat * tc.strength * w; }
     else { stirred = max(stirred, min(1.0, P.fingerOverride * w)); } // a moving finger overrides the inertia by its weight, simulation.js STIR_OVERRIDE.finger
-    if (tc.mode == 0u) { let u = select(vec2f(0.0), d / r, r > 0.0); finger += (250.0 * P.touchStrength * u + vec2f(tc.vx, tc.vy)) * w; }
-    else if (tc.mode == 1u) { if (r > 0.0) { let speed = min(250.0 * P.touchStrength * w, r / P.dt); finger += -d / r * speed + vec2f(tc.vx, tc.vy) * w; } }
-    else if (tc.mode == 2u) { let core = P.touchRadius * 0.5; let c = r / core; let speed = 300.0 * P.touchStrength * 2.0 * c / (1.0 + c * c) * exp(-(q * q) / 4.0); if (r > 0.0) { finger += vec2f(-d.y, d.x) / r * speed + vec2f(tc.vx, tc.vy) * w; } }
+    if (m == 0u) { let u = select(vec2f(0.0), d / r, r > 0.0); finger += (250.0 * tc.strength * u + vec2f(tc.vx, tc.vy)) * w; }
+    else if (m == 1u) { if (r > 0.0) { let speed = min(250.0 * tc.strength * w, r / P.dt); finger += -d / r * speed + vec2f(tc.vx, tc.vy) * w; } }
+    else if (m == 2u) { let core = tc.radius * 0.5; let c = r / core; let speed = 300.0 * tc.strength * 2.0 * c / (1.0 + c * c) * exp(-(q * q) / 4.0); if (r > 0.0) { finger += vec2f(-d.y, d.x) / r * speed + vec2f(tc.vx, tc.vy) * w; } }
   }
   // The drop's pump (simulation.js plume): heat and a push up over the firing pot, falling off
   // across and upward, in the tank only; it moves the lava even out of an empty pot.
   if (P.plumeHeat > 0.0 && F[HOME(i)] < 0.0) {
     let dx = (p.x - P.plumeX) / P.plumeWidth;
     let up = max(0.0, fromFloor) / P.plumeReach;
-    let g = exp(-dx * dx - up);
+    let g = exp(-dx * dx - up) * select(1.0, 1.0 + P.plumeTilt * clamp(dx, -1.0, 1.0), P.plumeTilt != 0.0);
     t += P.plumeHeat * g;
     finger += vec2f(0.0, -P.plumePush * g);
   }
   t = clamp(t, 0.0, P.maxTemp);
-  F[TEMP(i)] = t;
+  F[TEMP(i)] = max(t, P.minTemp);
   // Lava in a bottle takes no stirring (simulation.js: the eddies packed the pots).
   if (F[HOME(i)] >= 0.0) { finger = vec2f(0.0); stir = vec2f(0.0); stirred = 0.0; }
   // Buoyancy goes through the inertia; the stirring (roll, eddies, fingers, impulse) moves the
@@ -464,10 +486,23 @@ fn wallLattice(p: vec2f, side: u32) -> bool {
   return P.wallNear > 0.0 && dist < P.radius;
 }
 
+// CELL_ORDER: the neighbour passes (density, relax, kick, viscosity, conduct) take their particles in
+// cell order, thread k on the k-th particle of the sorted list (scatter), not thread i on particle i, so a
+// SIMD group runs particles from the same few cells and its loops are about the same length. Each
+// particle's sums are the same, over the same neighbours in the same order, and each pass writes only its
+// own particle (the OUT buffers, its own DENS, PRESS, NEAR and DELTA, and kick its own position and
+// velocity in place, as it did), so what the lamp computes is unchanged; only which thread does it.
+// Why: a GPU group runs as long as its longest loop. A black hole pinch (a tool's flat pull) gathers
+// thousands of particles into one spot, each with thousands of neighbour candidates, and taken by index
+// they sat in most groups of the dispatch: at 2560 by 1318 (54939 particles) 4192 gathered sat in 1278 of
+// 1717 groups of 32, and the lanes paid went from 17.3 to 175.9 million a pass while the neighbours
+// themselves only went from 13.5 to 29.9 million (30.8 million in cell order). The spread grows as the lamp
+// runs and stirs its particles, so a fresh lamp hardly showed it. Held, the gathered pinch ran 39 to 64 fps
+// by index and 95 to 120 in cell order. Robert: "still extremely laggy... during the pinches".
 @compute @workgroup_size(${WORKGROUP})
 fn density(@builtin(global_invocation_id) id: vec3u) {
-  let i = id.x;
-  if (i >= P.n) { return; }
+  if (id.x >= P.n) { return; }
+  let i = U[SORTED(id.x)]; // in cell order, see CELL_ORDER
   let p = V[POS(i)];
   let cx = cellX(p.x);
   let cy = cellY(p.y);
@@ -519,8 +554,8 @@ fn density(@builtin(global_invocation_id) id: vec3u) {
 // the share of each neighbour's move that lands on i, from the same positions.
 @compute @workgroup_size(${WORKGROUP})
 fn relax(@builtin(global_invocation_id) id: vec3u) {
-  let i = id.x;
-  if (i >= P.n) { return; }
+  if (id.x >= P.n) { return; }
+  let i = U[SORTED(id.x)]; // in cell order, see CELL_ORDER
   let p = V[POS(i)];
   let cx = cellX(p.x);
   let cy = cellY(p.y);
@@ -623,8 +658,8 @@ fn copyPos(@builtin(global_invocation_id) id: vec3u) {
 
 @compute @workgroup_size(${WORKGROUP})
 fn kick(@builtin(global_invocation_id) id: vec3u) {
-  let i = id.x;
-  if (i >= P.n) { return; }
+  if (id.x >= P.n) { return; }
+  let i = U[SORTED(id.x)]; // in cell order, see CELL_ORDER
   var p = V[POS(i)];
   var v = V[VEL(i)];
   let onWall = p.x < 2.0 || p.x > P.width - 2.0;
@@ -684,8 +719,8 @@ fn kick(@builtin(global_invocation_id) id: vec3u) {
 // fluid.js viscosity, every pair from both sides: each particle takes its half of the impulse.
 @compute @workgroup_size(${WORKGROUP})
 fn viscosity(@builtin(global_invocation_id) id: vec3u) {
-  let i = id.x;
-  if (i >= P.n) { return; }
+  if (id.x >= P.n) { return; }
+  let i = U[SORTED(id.x)]; // in cell order, see CELL_ORDER
   let p = V[POS(i)];
   let vi = V[VEL(i)];
   var v = vi;
@@ -733,8 +768,8 @@ fn copyVel(@builtin(global_invocation_id) id: vec3u) {
 
 @compute @workgroup_size(${WORKGROUP})
 fn conduct(@builtin(global_invocation_id) id: vec3u) {
-  let i = id.x;
-  if (i >= P.n) { return; }
+  if (id.x >= P.n) { return; }
+  let i = U[SORTED(id.x)]; // in cell order, see CELL_ORDER
   let p = V[POS(i)];
   let t = F[TEMP(i)];
   var weight = 0.0;
@@ -772,7 +807,7 @@ fn copyTemp(@builtin(global_invocation_id) id: vec3u) {
 `
 
 const TOUCH_MODES = { push: 0, pull: 1, spin: 2, heat: 3, cool: 4 }
-const PARAM_FLOATS = 60 // the Params struct, 60 fields, 240 bytes (a uniform's size is a multiple of 16)
+const PARAM_FLOATS = 64 // the Params struct, 64 fields, 256 bytes with its padding (a uniform's size is a multiple of 16)
 // The most a relaxation pass may move a particle, in radii, whatever Reach says. The Jacobi
 // solver resolves a packed cold pool only a few rows a pass, and moves of a whole radius let the
 // floor compress and burst (the GPU's Reach default has been 0.5 since that was measured, 979 to
@@ -1052,13 +1087,21 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     const plume = world && world.plume
     pf[54] = plume ? plume.x : 0; pf[55] = plume ? plume.width : 1; pf[56] = plume ? plume.reach : 1; pf[57] = plume ? plume.heat : 0; pf[58] = plume ? plume.push : 0
     pf[59] = params.ceilingCool ?? 1
+    pf[60] = params.minTemp ?? 0
+    pf[61] = params.lidFlap ? params.lidFlap.edge : 0; pf[62] = params.lidFlap ? params.lidFlap.side : 0
+    pf[63] = plume && plume.tilt ? plume.tilt : 0
     impulse[0] = 0; impulse[1] = 0
     device.queue.writeBuffer(buffers.params, 0, paramData)
+    // Each touch's own radius, heat and strength, the lamp's (pf[26], pf[27], pf[52], the very
+    // values the shader read for every touch before) for a touch without them.
     for (let k = 0; k < MAX_TOUCHES; k++) {
       const t = touches[k]
       const o = k * 8
       tf[o] = t ? t.x : 0; tf[o + 1] = t ? t.y : 0; tf[o + 2] = t ? t.vx || 0 : 0; tf[o + 3] = t ? t.vy || 0 : 0
-      tu[o + 4] = t ? (TOUCH_MODES[t.mode] ?? 0) : 0
+      tu[o + 4] = t ? (TOUCH_MODES[t.mode] ?? 0) + (t.flat ? 8 : 0) : 0 // a flat touch in bit 3
+      tf[o + 5] = t && t.radius > 0 ? t.radius : pf[27]
+      tf[o + 6] = t && t.heat != null ? t.heat : pf[26]
+      tf[o + 7] = t && t.strength != null ? t.strength : pf[52]
     }
     device.queue.writeBuffer(buffers.touches, 0, touchData)
   }
@@ -1080,7 +1123,7 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
       set.pos.unmap(); set.temp.unmap(); set.press.unmap(); set.vel.unmap()
       reads++
     } catch (err) {
-      if (!warned) { warned = true; console.warn('gpu readback', err) }
+      if (!warned && !lost) { warned = true; console.warn('gpu readback', err) } // a destroyed lamp's last readback is no news
     }
     set.busy = false
   }
@@ -1182,6 +1225,13 @@ export function createGpuSimulation ({ device, width: width0, height: height0, p
     },
     debug () { return { warned, reads, alive, capacity } },
     endWarmup () { heaterTime = Math.max(heaterTime, 2) }, // the floor's heat front done (simulation.js endWarmup)
+    // Finished with: the buffers given back to the device and no more steps, for a lamp started over
+    // in place (app.js restart). A readback in flight rejects and is swallowed as a lost device's is.
+    destroy () {
+      lost = lost || { reason: 'destroyed' }
+      for (const b of Object.values(buffers)) if (b) b.destroy()
+      for (const set of staging) { set.pos.destroy(); set.temp.destroy(); set.press.destroy(); set.vel.destroy() }
+    },
     gpu: true
   }
 }
@@ -1200,6 +1250,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
   const floats = new Float32Array(WORLD_FLOATS)
   let bottlesSeen = null
   let potsSeen = null
+  const grid = { floats, at: FLOW_AT, stride: 3, cols: 0, rows: 0, cell: FLOW_CELL } // the last stirring sampled, for a view to read (render/dyeField.js)
   function sample () {
     const w = gpu.width
     const h = gpu.height
@@ -1215,6 +1266,8 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
       floats[o] = el.x; floats[o + 1] = el.radius; floats[o + 2] = el.halfWidth; floats[o + 3] = el.heat * el.glow
       floats[o + 4] = el.pot >= 0 ? bottles.length + el.pot : -1 // HOME counts the ceiling bottles first
       floats[o + 5] = el.capTemp || 0 // a lidded or opened pot heats its lava to this temperature at most
+      floats[o + 6] = el.mode === 'blast' && el.tilt ? el.tilt : 0 // a tool's tilt across the cup (simulation.js dropOpts), 0 as tuned
+      floats[o + 7] = el.mode === 'blast' && el.potOnly ? 1 : 0 // a tool's instant blast: its own pot's lava only
       n++
     }
     let gridCols = Math.floor(w / FLOW_CELL) + 2
@@ -1229,6 +1282,7 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
       }
     }
     gpu.setWorld(floats, { elementCount: n, gridCols, gridRows, gridCell, lid: shell.lid, plume: shell.plume })
+    grid.cols = gridCols; grid.rows = gridRows; grid.cell = gridCell
   }
   // The fingers act on the GPU side, so the shell steps and is sampled without them (they would
   // land twice through the flow grid); they are given back to it after, so the flow field drawn
@@ -1247,6 +1301,9 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     setTouches (list) { fingers = list || []; gpu.setTouches(fingers) },
     transform: gpu.transform,
     flowAt: shell.flowAt,
+    // The stirring as the step just sampled it onto the GPU, the samples at gx * cell, gy * cell (vx, vy, override): the
+    // Dyed fluid view reads it here rather than calling flowAt a few thousand times more a frame. Read only.
+    flowGrid: () => grid,
     heaterAt: shell.heaterAt,
     heaterElements: shell.heaterElements,
     lightElement: shell.lightElement,
@@ -1264,11 +1321,15 @@ export function createGpuLamp ({ device, width, height, params, onLost }) {
     bottles: shell.bottles,
     floorBottles: shell.floorBottles,
     core: gpu, // the particle simulation itself, for poking from the console
+    get eddies () { return shell.eddies },
+    get drifting () { return shell.drifting },
+    get lid () { return shell.lid },
     get state () { return gpu.state },
     get count () { return gpu.count },
     get width () { return gpu.width },
     get height () { return gpu.height },
     get reads () { return gpu.debug().reads }, // readbacks landed: the page smooths between them (app.js)
+    destroy: gpu.destroy,
     gpu: true
   }
 }

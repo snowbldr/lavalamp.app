@@ -2,8 +2,11 @@ import { canvas, div } from '@srfnstack/fntags'
 import { createSimulation } from './sim/simulation.js'
 import { createGpuLamp, getGpuDevice } from './sim/gpuSimulation.js'
 import { createWorkerLamp } from './sim/workerLamp.js'
+import { createFireflies, ICE_TUNING } from './sim/firefly.js'
+import { seedRandom } from './sim/random.js'
 import { FLOW_SPACING, HEATER_CELL } from './render/overlays.js'
 import { createRenderer } from './render/renderer.js'
+import { createDyeField } from './render/dyeField.js'
 import { createMotionInput } from './input/motion.js'
 import { createPointerInput } from './input/pointer.js'
 import { createGloop } from './audio/gloop.js'
@@ -109,6 +112,18 @@ import {
   particleSize,
   pull,
   showFlow,
+  motionOn,
+  firefly,
+  iceFly,
+  dyedFluid,
+  streamersInMusic,
+  motionInMusic,
+  dyeMode,
+  dyeFade,
+  dyeStamp,
+  dyeCurve,
+  dyeCut,
+  dyeGlow,
   showCups,
   sound,
   soundPending,
@@ -119,7 +134,15 @@ import {
   soundBed,
   music,
   musicPending,
+  musicWait,
   musicSource,
+  musicTheme,
+  musicFlow,
+  musicHeat,
+  musicSparkle,
+  musicGlow,
+  musicFlowEvents,
+  musicHeatEvents,
   musicFileName,
   musicRecording,
   musicSensitivity,
@@ -138,6 +161,7 @@ import {
   musicSections,
   musicVent,
   showSpectrum,
+  showFlyTrails,
   musicBeatLo,
   musicBeatHi,
   musicHeatLo,
@@ -160,6 +184,8 @@ import {
   touchStrength,
   eddySpeed,
   eddyFalloff,
+  eddyPullIn,
+  splatPullIn,
   eddyCurve,
   turbulence,
   viscosity,
@@ -253,11 +279,20 @@ export async function start () {
   if (dampQuery !== null && !Number.isNaN(Number(dampQuery))) params.damp = Number(dampQuery)
   // ?wallNear=N&wallPull=M try the glass as boundary particles (see wallLattice in
   // gpuSimulation.js); 0 and 0, the lamp as it was.
+  // ?pots=many: the floor laid out as many small pots and a few big ones (Robert: "many more smaller
+  // pots that fire on every beat. still a few bigger pots to fire for drops and stuff"), for a tool.
+  // Without it the pots are as tuned.
+  // ?pots=share,smallLo,smallHi,bigLo,bigHi gives the mix's numbers (the tool's fields).
+  const potsQuery = new URLSearchParams(window.location.search).get('pots')
+  if (potsQuery === 'many') params.cupMix = { share: 0.8, small: [0.05, 0.08], big: [0.2, 0.3] }
+  else if (potsQuery) { const n = potsQuery.split(',').map(Number); if (n.length === 5 && n.every(v => v >= 0 && v <= 1)) params.cupMix = { share: n[0], small: [n[1], n[2]], big: [n[3], n[4]] } }
   for (const key of ['wallNear', 'wallPull']) { const q = new URLSearchParams(window.location.search).get(key); if (q !== null && !Number.isNaN(Number(q))) params[key] = Number(q) }
   mirror(particleCount, params, 'particleCount', Math.trunc)
   mirror(touchStrength, params, 'touchStrength')
   mirror(eddySpeed, params, 'eddySpeed')
   mirror(eddyFalloff, params, 'eddyFalloff')
+  mirror(eddyPullIn, params, 'eddyPullIn')
+  mirror(splatPullIn, params, 'splatPullIn')
   mirror(eddyCurve, params, 'eddyCurve')
   mirror(interactionRadius, params, 'interactionRadius')
   params.restDensity = REST_DENSITY // Pull is Stiff times Density; see computeDefaultPull
@@ -320,6 +355,17 @@ export async function start () {
   mirror(flowFast, look, 'flowFast')
   mirror(particleSize, look, 'particleSize')
   mirror(showFlow, look, 'showFlow')
+  // Streamers show with the switch, or in music mode under a theme while In music mode is on (settings.js streamersInMusic).
+  // Every pick of the Music theme is a theme now (Classic is gone from it).
+  const streamersOn = () => dyedFluid() || (music() && streamersInMusic())
+  look.dyedFluid = streamersOn()
+  for (const st of [dyedFluid, music, musicTheme, streamersInMusic]) st.subscribe(() => { look.dyedFluid = streamersOn() })
+  mirror(dyeMode, look, 'dyeMode')
+  mirror(dyeFade, look, 'dyeFade')
+  mirror(dyeStamp, look, 'dyeStamp')
+  mirror(dyeCurve, look, 'dyeCurve')
+  mirror(dyeCut, look, 'dyeCut')
+  mirror(dyeGlow, look, 'dyeGlow')
   look.showHeat = true // the heat map is the lamp's only colouring now; the lab still draws its silhouette flat
   mirror(showHeater, look, 'showHeater')
   mirror(showCups, look, 'showCups')
@@ -389,7 +435,7 @@ export async function start () {
   // Without WebGPU the simulation runs on a worker thread (see sim/cpuWorker.js), so the drawing
   // keeps the display's rate however long a step takes; ?mainthread keeps it on the page's thread.
   const remote = !device && typeof Worker === 'function' && !new URLSearchParams(window.location.search).has('mainthread')
-  const overlayWants = () => ({ flow: showFlow() ? FLOW_SPACING : 0, heater: showHeater() ? HEATER_CELL : 0, cups: !!showCups() })
+  const overlayWants = () => ({ flow: showFlow() || streamersOn() ? FLOW_SPACING : 0, heater: showHeater() ? HEATER_CELL : 0, cups: !!showCups() })
   // When the browser takes the GPU device away the lamp cannot go on (see createGpuSimulation):
   // say so and start the page over, which asks for a device again. Not more than three times in
   // two minutes, so a GPU that is gone for good does not reload the page forever; after that
@@ -403,11 +449,43 @@ export async function start () {
     notify('GPU lost (', info.reason || 'unknown', '): restarting the lamp')
     setTimeout(() => location.reload(), 1500)
   }
-  const sim = device
+  const makeSim = () => device
     ? createGpuLamp({ device, width, height: height + FLOOR_HIDDEN, params, onLost })
     : remote
       ? createWorkerLamp({ width, height: height + FLOOR_HIDDEN, params, seed: seed(), frame: FRAME, pace: pace(), want: overlayWants() })
       : createSimulation({ width, height: height + FLOOR_HIDDEN, params })
+  let sim = makeSim()
+  // The Firefly switch (settings.js firefly): its wanderers, ticked each frame while it is on and cleared when it goes off
+  // or the lava starts over.
+  const fireflies = createFireflies()
+  let fireflyAt = 0
+  firefly.subscribe(on => { if (!on) fireflies.clear() })
+  // The Ice fly switch (settings.js iceFly): the firefly's cold twin, its own fly on the same clock, independent of it.
+  const iceFlies = createFireflies(ICE_TUNING)
+  iceFly.subscribe(on => { if (!on) iceFlies.clear() })
+  window.__lampFlies = { fire: fireflies, ice: iceFlies } // read only, for measuring where the two switches' flies are
+  // Fly trails (Advanced, Fly trails): loaded the first time it is switched on, and drawn only while it is on.
+  let flyTrailsLoaded = false
+  const loadFlyTrails = () => { if (flyTrailsLoaded || !showFlyTrails()) return; flyTrailsLoaded = true; import('./ui/flyTrails.js').then(m => m.startFlyTrails(() => ({ turns, pageWidth, pageHeight, width, height, view: shownView }), { fire: fireflies, ice: iceFlies, fireOn: firefly, iceOn: iceFly }, showFlyTrails)) }
+  showFlyTrails.subscribe(loadFlyTrails)
+  loadFlyTrails()
+  // The lava started over in place (?hooks, hooks.restart): the simulation made again from the same seed
+  // and params at the lamp's present size, as a reload makes it, and nothing else touched: the music
+  // listener keeps its source (a screen share or a microphone, which a reload drops and only a gesture
+  // and a dialog bring back), its settings and the page's hooks. For a tool holding the lamp in a frame
+  // (Robert: "reset lamp should not reset the music settings as it interrupts the streaming"). The
+  // readbacks kept for smoothing are dropped with the old lava, or the first frames would be drawn
+  // between the old positions and the new.
+  const restart = () => {
+    if (sim.destroy) sim.destroy()
+    seedRandom(seed())
+    sim = makeSim()
+    if (window.__lamp) window.__lamp.sim = sim
+    Object.assign(readback, { reads: -1, prev: null, cur: null, tPrev: 0, tCur: 0 })
+    fireflies.clear()
+    iceFlies.clear()
+    return sim
+  }
   backendLabel(device ? 'GPU (WebGPU)' : remote ? 'CPU, simulation on a worker thread' : 'CPU, simulation on the page thread')
   // A visitor who tuned the old lamp is told their settings are kept and where it lives.
   const v1Banner = v1SettingsBanner()
@@ -429,6 +507,7 @@ export async function start () {
     if (sim.core && sim.core.calm) sim.core.calm()
   }
   const renderer = createRenderer(lamp, look)
+  const dyeGrid = createDyeField()
   const motion = createMotionInput()
   // In the Reservoirs view the lamp is drawn scaled down and shifted (see `view` in frame), so a
   // finger on the glass has to be mapped back through that as well, or it lands below where it
@@ -440,22 +519,27 @@ export async function start () {
   }
   const pointer = createPointerInput(lamp, toLamp)
   const settingsPanel = createSettingsPanel()
+  document.body.append(settingsPanel.musicPrompt)
   // Sound, switched on from the panel's toggle (a click, which is what the browser wants first).
   const gloop = createGloop()
   gloop.setBed(soundBed())
   soundBed.subscribe(name => gloop.setBed(name))
   sound.subscribe(on => { soundPending(!!on); gloop.set(on).then(() => soundPending(false)) })
   // Music: the switch starts listening (a click, the gesture the microphone wants); the source
-  // can be changed while listening. A failure (no permission, no audio in the tab) puts the
-  // switch back off and says why.
+  // can be changed while listening. A failure (no permission, a share closed or with no sound in it)
+  // leaves the switch on and the lamp waiting, with a prompt saying why and a Try again (settings.js
+  // musicWait, the panel's musicPrompt); it used to switch Music off.
   const listener = createMusic()
+  // ?hooks: the music listener, the simulation, its params and each frame's levels on window.__lamp, for tools that drive the
+  // lamp from outside (a page holding it in a frame reads the song's position and what was heard).
+  const hooks = new URLSearchParams(window.location.search).has('hooks') ? (window.__lamp = { listener, sim, params, restart, onLevels: null, off: {} }) : null
   // The chosen audio input (a loopback such as BlackHole hears every app), remembered here.
   const DEVICE_KEY = 'lavalamp.app-v2-music-device'
   try { listener.device = localStorage.getItem(DEVICE_KEY) || '' } catch (e) {}
   settingsPanel.setMusicInputs && settingsPanel.setMusicInputs({
     list: () => listener.inputs(),
     get: () => listener.device,
-    set: id => { listener.device = id; try { localStorage.setItem(DEVICE_KEY, id) } catch (e) {} if (music() && musicSource() === 'mic') listen() }
+    set: id => { listener.device = id; try { localStorage.setItem(DEVICE_KEY, id) } catch (e) {} if (music() && musicSource() === 'mic') { if (musicWait()) musicOn(); else listen() } }
   })
   // The File source's song, as read by the panel's picker, and kept in this browser's own
   // storage (IndexedDB, nothing leaves the machine) so a reload has it ready: one click on
@@ -479,20 +563,50 @@ export async function start () {
       req.onsuccess = () => { if (req.result && !musicFile) { musicFile = req.result.data; musicFileName(req.result.name) } }
     } catch (e) {}
   })()
+  // A song handed in by an event: { data, name }, and to start part way, `at` seconds with `warm`
+  // seconds before it heard first (music.js, start), for the next listen only.
+  let fileStart = {}
   window.addEventListener('lavalamp-music-file', e => {
+    fileStart = { at: e.detail.at, warm: e.detail.warm }
     musicFile = e.detail.data
     musicFileName(e.detail.name)
-    keepSong(e.detail.name, e.detail.data)
+    if (e.detail.keep !== false) keepSong(e.detail.name, e.detail.data)
     if (musicSource() !== 'file') musicSource('file')
-    else if (music()) listen()
+    else if (music()) { if (musicWait()) musicOn(); else listen() }
   })
-  let listening = Promise.resolve()
+  let listening = Promise.resolve(false)
+  // Music on and hearing nothing: the lamp as without music, the switch on, and why in musicWait.
+  const idle = why => { listener.stop(); stopSync(); unMusic(); musicWait(why); if (why === 'tap') armTap() }
+  // Resolves true once it hears.
   const listen = () => (listening = (async () => {
-    if (musicSource() === 'file' && !musicFile) { music(false); notify('Music: ', 'choose a song first'); return }
+    if (musicSource() === 'file' && !musicFile) { idle('file'); return false }
     musicPending(true)
-    try { await listener.start(musicSource(), musicSource() === 'file' ? { data: musicFile, audible: true } : undefined) } catch (e) { music(false); notify('Music: ', listener.error || 'could not listen') }
+    const from = fileStart
+    fileStart = {}
+    let ok = true
+    try { await listener.start(musicSource(), musicSource() === 'file' ? { data: musicFile, audible: true, ...from } : undefined) } catch (e) { ok = false }
     musicPending(false)
+    if (!music()) { if (ok) listener.stop(); return false } // switched off while it started
+    if (!ok) { idle(listener.errorKind === 'gesture' ? 'tap' : listener.errorKind || 'other'); return false }
+    musicWait('')
+    if (!syncOn) startSync()
+    return true
   })())
+  // The stream ended by itself (Stop sharing, an input unplugged): waiting, with Try again.
+  listener.onSourceEnd = () => { if (music()) idle('ended') }
+  window.addEventListener('lavalamp-music-retry', () => { if (music()) musicOn() })
+  // Waiting for a click (a reload, a save or a link with Music on): the first click or key anywhere starts it, as the
+  // switch does, but not one in the Music card (its switch turns Music off; its source and input start it themselves)
+  // or on the prompt's own buttons.
+  const onTap = e => {
+    if (!music() || musicWait() !== 'tap') { disarmTap(); return }
+    if (e.target && e.target.closest && e.target.closest('.music-card, .music-tap-skip')) return
+    if (e.type === 'keydown' && (e.key === 'Escape' || e.key === 'Tab' || e.metaKey || e.ctrlKey || e.altKey)) return
+    disarmTap()
+    musicOn()
+  }
+  const armTap = () => { addEventListener('pointerdown', onTap, true); addEventListener('keydown', onTap, true) }
+  const disarmTap = () => { removeEventListener('pointerdown', onTap, true); removeEventListener('keydown', onTap, true) }
   // Record (the File source): the song from the top, and the lamp's canvas with the song's own
   // sound into one video, saved when the song ends or Record is switched off. From inside the
   // page, so it needs no screen recording permission and the sound is exactly in time.
@@ -534,18 +648,102 @@ export async function start () {
   const TRAIN_STEP = 0.22 // seconds between a train's globs
   const TRAIN_GLOB = 0.05 // seconds of the lamp's time the lid lifts for each glob
   const MID_HIT_RISE = 2.5
+  const NO_OFF = {} // no trigger off: the lamp without a tool
   const MID_HIT_BASS = 1 // the bass's rise under this: not a kick
   let dropCharged = false // a pot is lidded and heating (see driveMusic)
   // Off puts every knob the music drives back to the knob's own value, and lets a lidded pot go.
   const HAT_SPLAT = 1 // by Kick (0.5 by default): half a drop's splat; a quarter only ruffled the pool's surface
-  const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; train = null; tempoPace = 1; params.floorHeat = floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters(); params.ceilingCool = 1 }
-  music.subscribe(on => { if (on) { musicLog.length = 0; musicLogStart = listener.time; if (sim.endWarmup) sim.endWarmup(); listen() } else { listener.stop(); unMusic() } })
-  musicSource.subscribe(() => { if (music()) listen() })
+  // The music theme (settings.js musicTheme; Robert: "we have music themes like the color themes"): with Music on, the
+  // sync engine plays the theme (Vibes or Calm) (src/sync/live.js) on the lamp's listener: every lane of
+  // the lamp's own is off (SYNC_OFF, as a tool's hooks.off has them), each hit goes through the engine's router to the
+  // theme's lanes and layers, and its touches, eddies, pots, splats and waves reach the simulation as a tool's do. The
+  // still lamp the theme wants (no lightings, no eddies or first glob of the lamp's own, no pot kept charged, the heater
+  // kept for the pots, the floor at its Warmth) is set on params each frame, never on the saved settings, and put back
+  // when the theme stops. Under ?hooks a tool drives the lamp and no theme runs, and the lamp's own music moves below
+  // play (Classic, which the pick no longer offers: Robert, "I don't think we need classic music mode"; the code stays
+  // for a tool). Loaded on first use, so a lamp with Music off loads none of it. Lookahead stays off: the file source
+  // plays what it hears as it hears it.
+  // Calm plays Vibes's data with both event switches off (settings.js musicTheme), so both picks load the one theme.
+  const SYNC_THEMES = { live: 'live.json', calm: 'live.json' } // src/sync/themes, data the engine's store loads
+  const SYNC_OFF = new Proxy({}, { get: (t, k) => typeof k === 'string' })
+  // Of the eight touches a frame, kept for the Firefly switch beside a theme: as many as its fly has glints waiting, two
+  // at most, so a frame it has nothing to send leaves them to the theme (its sparkles and its own Firefly move's glints)
+  // and neither starves the other (Robert: "firefly should stay on if it's there, but not prevent spawning more from
+  // music"). Its glints wait for a slot rather than being lost, as the theme's do. The Ice fly switch keeps its own two
+  // the same way, so with both on and both waiting four of the eight are the flies'.
+  const FIREFLY_ROOM = 2
+  const flyRoom = () => (firefly() ? Math.min(FIREFLY_ROOM, fireflies.waiting) : 0) + (iceFly() ? Math.min(FIREFLY_ROOM, iceFlies.waiting) : 0)
+  // Motion under a theme (settings.js motionInMusic; Robert: "music mode should turn off motion by default in the lamp"):
+  // while a theme plays the device's tilt and shakes and the window's moves are not given to the lava, the floor stays
+  // at the bottom, unless Motion in music is on; the Motion switch itself is never changed, and with Music off (or
+  // under ?hooks, where no theme runs) it is as set.
+  const motionNow = () => motionOn() && (!sync || motionInMusic())
+  let sync = null
+  let syncWant = 0
+  let syncOn = false // between startSync and stopSync, the theme loaded or loading
+  const stopSync = () => {
+    syncWant++
+    syncOn = false
+    if (!sync) return
+    sync.stop()
+    sync = null
+    for (const k of ['keepCharged', 'emptyBoost', 'noCharge', 'minTemp', 'ownEddies', 'kickOff', 'effectTuning', 'glowBoost', 'glowKnee']) delete params[k]
+    params.glowReach = 0
+    params.lidFlap = null
+    params.elementRate = elementRate()
+    params.heatSpots = heatSpots()
+    params.floorHeat = floorHeat()
+  }
+  const startSync = async () => {
+    stopSync()
+    syncOn = true
+    const want = syncWant
+    const file = SYNC_THEMES[musicTheme()]
+    if (hooks || !music() || !file) return
+    // The still lamp's heater at once, before the theme has loaded: no lighting of the lamp's own and no first glob in the
+    // frames between Music on (which ends the warm up) and the theme's first frame (measured: 32 frames without it).
+    params.elementRate = 0
+    params.kickOff = false
+    try {
+      const [live, doc] = await Promise.all([import('./sync/live.js'), fetch(new URL('./sync/themes/' + file, import.meta.url)).then(r => r.json())])
+      const moves = await live.loadMoves(live.movesOf(doc))
+      if (want !== syncWant || !music()) return
+      sync = live.createLiveTheme({ doc, getSim: () => sim, params, settings: { gravityStrength }, listener, ranges: musicRanges, sensitivity: musicSensitivity, moves, effects: { flow: musicFlow, heat: musicHeat, sparkle: musicSparkle, glow: musicGlow, flowEvents: musicFlowEvents, heatEvents: musicHeatEvents } }) // the Music card's Effects (settings.js musicFlow, musicFlowEvents)
+    } catch (e) { console.error(e); params.elementRate = elementRate(); delete params.kickOff; notify('Music theme: ', 'could not load, the lamp\'s own moves play') }
+  }
+  musicTheme.subscribe(() => { if (music()) startSync() })
+  const unMusic = () => { if (dropCharged && sim.chargePot) sim.chargePot(0); dropCharged = false; train = null; tempoPace = 1; params.floorHeat = sync ? sync.floorBase(floorHeat()) : floorHeat(); params.liftCap = lift(); params.turbulence = turbulence(); params.wobbleKick = wobbleKick(); params.drifters = drifters(); params.ceilingCool = 1 }
+  const heard = () => { disarmTap(); musicWait(''); musicLog.length = 0; musicLogStart = listener.time; if (sim.endWarmup) sim.endWarmup() }
+  const musicOn = () => { heard(); listen(); startSync() }
+  music.subscribe(on => { if (on) musicOn(); else { disarmTap(); musicWait(''); listener.stop(); stopSync(); unMusic() } })
+  // A reload, a saved setup or a link that comes back with Music on (settings.js): a browser starts no screen share or
+  // sound without a click, so it waits for the first click or key on the page, with a prompt over the lamp saying so
+  // (Robert: "that'd be lame to share a music lava lamp and not have it turn on"), then listens as the switch does (a
+  // file source plays the song this browser kept last, or asks for it again). The microphone, once allowed, may start
+  // with no click: tried quietly first, and if the browser still holds the audio back the prompt stays.
+  if (music()) {
+    musicWait('tap')
+    armTap()
+    if (musicSource() === 'mic' && navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' }).then(async p => {
+        if (p.state !== 'granted' || !music() || musicWait() !== 'tap') return
+        try { await listener.start('mic', undefined, true) } catch (e) { return } // held back: the prompt stays
+        if (!music() || musicWait() !== 'tap') return // a click got there first and is starting it
+        heard()
+        startSync()
+      }).catch(() => {})
+    }
+  }
+  musicSource.subscribe(() => { if (music()) { if (musicWait()) musicOn(); else listen() } })
+  // The listener's four fitted options (the pump, the split, the hat from the top, the snare) are on in
+  // music.js itself: Demucs trained is the only detector (Robert: "let's make the demucs trained detector
+  // the only detector for now"), so nothing is set here and a tool that turns one off keeps it off.
   // What the music does to the lamp, once a frame: the knobs' values are the baseline and the
   // bands add to them, so a quiet room is the lamp as tuned (see settings.js, musicFloor and
   // the rest). A beat lights a pot through the simulation's own lighting.
   const musicMeter = { bass: 0, mid: 0, high: 0, beat: 0 }
   const musicRanges = { beat: [0, 0], heat: [0, 0], eddy: [0, 0], kick: [0, 0] }
+  if (hooks) Object.assign(hooks, { ranges: musicRanges, sensitivity: musicSensitivity, music, musicSource })
   let beatsHeard = 0
   let lastMusicAt = performance.now()
   let tempoPace = 1 // the pace's multiplier from the music's tempo, 1 with no music
@@ -656,7 +854,13 @@ export async function start () {
     musicRanges.eddy[0] = musicEddyLo(); musicRanges.eddy[1] = musicEddyHi()
     musicRanges.kick[0] = musicKickLo(); musicRanges.kick[1] = musicKickHi()
     const m = listener.update(dt, musicSensitivity(), musicRanges)
+    if (hooks && hooks.onLevels) hooks.onLevels(m, listener.filePosition)
+    // A theme hears the frame where a tool's hooks.onLevels does, its still lamp set first.
+    if (sync) { sync.still(); sync.levels(m) }
     const musicNow0 = listener.time
+    // A tool's triggers turned off (?hooks: hooks.off.beat and so on): each reaction below asks, so a
+    // trigger off does nothing, its clock locked moves too. With no hooks every one is on.
+    const off = sync ? SYNC_OFF : hooks ? hooks.off : NO_OFF
     // Silence: with Listen on and nothing playing, the closed pot charged on and the knobs stayed
     // where the music left them, so every pot sat hot (Robert: "when music is enabled but there is
     // silence, all the pots get stuck hot. we should turn off the effects of music mode after 15
@@ -676,7 +880,7 @@ export async function start () {
     // at times an empty one with full ones beside it (Robert: "sometimes it's firing pots that are
     // empty when there are pots with lava, when we get a snap in mic mode we should fire the
     // biggest filled lava pot").
-    if (m.clap && musicSource() === 'mic') {
+    if (m.clap && !off.clap && musicSource() === 'mic') {
       if (musicNow0 - lastClapPotAt >= CLAP_POT_GAP && sim.dropPot) { lastClapPotAt = musicNow0; sim.dropPot(1.5, fullestPot()) }
       if (sim.spawnEddy) sim.spawnEddy()
       if (sim.pulseWave) sim.pulseWave()
@@ -702,7 +906,7 @@ export async function start () {
     const sec = m.sections || {}
     const secK = musicSections()
     const windup = secK > 0 ? secK * Math.max(sec.roll || 0, sec.riser || 0) : 0
-    params.floorHeat = floorHeat() * (1 + musicFloor() * m.heat) * (1 + 0.5 * windup)
+    params.floorHeat = (sync ? sync.floorBase(floorHeat()) : floorHeat()) * (1 + musicFloor() * m.heat) * (1 + 0.5 * windup)
     params.liftCap = lift() * (1 + musicLift() * m.heat)
     params.turbulence = turbulence() * busy * (1 + musicTurb() * m.eddy)
     params.wobbleKick = wobbleKick() * (1 + musicKick() * m.kick)
@@ -756,9 +960,16 @@ export async function start () {
     // part up to the reference, or the first kick after the bass was cut): the big pot opens
     // and two eddies come in ("I would expect to see a big pot fire and probably an eddie
     // or two spawn at the same time because of all the activity"). Then the beat pots, while busy.
-    const lidded = musicDrop() > 0 && !!sim.chargePot
+    // params.noCharge: with Drop up, no pot kept lidded and charging (a tool's; none as tuned). The lid
+    // holds the lava in, not the heat: the charged pot warmed the pool through its mouth and the pool
+    // every pot. The drop, a stab, a roll's end and an impact still blast a pot, the fullest one heated
+    // harder (simulation.js dropPot, params.emptyBoost), and no pot is lit Lead ahead as with Drop 0;
+    // what lets out the lidded pot (a wave on a boom or the beat, a train, a vent) has none to let out.
+    const dropOn = musicDrop() > 0 && !!sim.chargePot
+    const lidded = dropOn && !params.noCharge
     const calm = m.sinceBeat > DROP_WAIT || m.calm
     if (lidded) { sim.chargePot(2 * musicDrop() * (1 + windup), calm || windup > 0, potFullness); dropCharged = true } else if (dropCharged && sim.chargePot) { sim.chargePot(0); dropCharged = false }
+    if (dropOn && !lidded && potFullness) sim.chargePot(null, false, potFullness) // the pots counted only, for the drop's pick
     const heardNumber = clock.locked ? (clock.until < clock.period / 2 ? clock.index + 1 : clock.index) : -1
     const musicNow = listener.time
     // The drop is music.js's alone: a surge out of a calm part, or the bass back after a cut. The
@@ -774,8 +985,8 @@ export async function start () {
     // tempo switch.
     // A key change while the song is going (sections.js) is a drop of its own; in a quiet part, an
     // outro or a fade, it was a false one (Bangarang 3:34.6, Bohemian Rhapsody 5:54.3).
-    const keyDrop = secK > 0 && sec.key && !calm
-    const isDrop = (m.drop || keyDrop) && musicNow - musicLogStart > DROP_SETTLE
+    const keyDrop = secK > 0 && sec.key && !calm && !off.key
+    const isDrop = (m.drop && !off.drop || keyDrop) && musicNow - musicLogStart > DROP_SETTLE
     if (m.beat) beatsHeard++
     // The lava buffer (Robert: "I think we have a lava starvation problem. We should try to keep a
     // lava buffer in the pots so that we always can fire something"). Measured on Bangarang, live:
@@ -797,7 +1008,7 @@ export async function start () {
     // 1:02.22 and 1:02.26, 1:15.61 and 1:15.64; Robert: "the bwongs on c-c are still not
     // triggering the pots... sometimes it does seem like it fires, but I'm not sure why the
     // inconsistency"). While a boom waits for its peak, the beat pots wait too.
-    const onBeatPot = m.beat && !calm && !lavaLow && !m.boomPending && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
+    const onBeatPot = m.beat && !off.beat && !calm && !lavaLow && !m.boomPending && (clock.locked ? onPhrase(heardNumber) : beatsHeard % every() === 0)
     // A drop or a stab goes to the lidded pot if it holds lava, else to the fullest, heated harder
     // (simulation.js, chargePot and the drop).
     const open = strength => { if (sim.dropPot) sim.dropPot(strength); fired = true }
@@ -827,38 +1038,38 @@ export async function start () {
     // A roll's end is where the drop lands, and an impact is a crash on the one: both fire the pot
     // (when the drop rules did not already); half time turns the eddies, double time brings more.
     if (secK > 0 && !isDrop) {
-      if (sec.rollEnd && lidded) { open(musicDrop() * 1.5 * Math.min(1, secK)); if (sim.spawnEddy) sim.spawnEddy() }
-      else if (sec.impact && lidded) { open(musicDrop() * Math.min(1.5, secK)); splatAt() }
-      if (sec.half && sim.flipEddies) sim.flipEddies(Math.min(1, secK))
-      if (sec.double && sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
+      if (sec.rollEnd && !off.rollEnd && dropOn) { open(musicDrop() * 1.5 * Math.min(1, secK)); if (sim.spawnEddy) sim.spawnEddy() }
+      else if (sec.impact && !off.impact && dropOn) { open(musicDrop() * Math.min(1.5, secK)); splatAt() }
+      if (sec.half && !off.half && sim.flipEddies) sim.flipEddies(Math.min(1, secK))
+      if (sec.double && !off.double && sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
     }
     if (isDrop) {
       lastDropAt = musicNow
       dropped = true
       splatAt() // a splat on the drop (simulation.js SPLAT)
-      if (lidded) open(musicDrop() * 1.5)
+      if (dropOn) open(musicDrop() * 1.5)
       if (sim.spawnEddy) { sim.spawnEddy(); sim.spawnEddy() }
       // The eddies already turning swing round on the drop (Robert: "the eddies could abruptly
       // switch directions up to one time during their life time triggered by rareish music
       // events"); the two just asked for are born after this and keep their spin.
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip())
-    } else if (m.stab && calm && lidded) {
+    } else if (m.stab && !off.stab && calm && dropOn) {
       // A stab out of a calm part (music.js): the pot that has been charging all through it goes,
       // and nothing else changes (Robert: "send a bolt of lightning did not release a pot! one
       // was ready though"; "don't change anythign else").
       open(musicDrop() * 1.5)
-    } else if (m.boom && !calm && !lavaLow && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP && musicNow - lastDropAt >= BOOM_AFTER_DROP) {
+    } else if (m.boom && !off.boom && !calm && !lavaLow && musicBoom() > 0 && musicNow - lastBoomPotAt >= BOOM_POT_GAP && musicNow - lastDropAt >= BOOM_AFTER_DROP) {
       // A deep note (music.js, the boom): a burst of lava with it, the lidded pot blasted by Boom,
       // or with Drop 0 a pot lit as it is heard; at most every BOOM_POT_GAP, since dubstep's sub
       // lands every bar (Bangarang: about one a second through its full parts, against C-C's
       // one every 3.45 s).
       lastBoomPotAt = musicNow
       if (sim.flipEddies && musicFlip() > 0) sim.flipEddies(musicFlip() / 8)
-      if (lidded) wave(); else potNow()
+      if (lidded) wave(); else if (!dropOn) potNow()
       beatPotAt = -1
     } else if (lidded && onBeatPot) beatPotAt = musicNow
-    else if (lidded && !calm && !m.beat && m.raw.midsRise > MID_HIT_RISE && m.raw.rise < MID_HIT_BASS && musicNow - lastTrainAt >= TRAIN_GAP) startTrain('mid')
-    else if (lidded && m.beat && !train && !lavaLow && Math.random() < musicVent()) {
+    else if (lidded && !off.mid && !calm && !m.beat && m.raw.midsRise > MID_HIT_RISE && m.raw.rise < MID_HIT_BASS && musicNow - lastTrainAt >= TRAIN_GAP) startTrain('mid')
+    else if (lidded && m.beat && !off.beat && !train && !lavaLow && Math.random() < musicVent()) {
       // A vent (Robert: "what if we occasionally pulse the pre heated pots to release pulses of
       // heat to match the music"): on a beat that opens nothing, now and then the charged pot's
       // lid lifts for VENT_TIME and a puff of its lava goes up with the beat.
@@ -878,17 +1089,17 @@ export async function start () {
     }
     // A busy part keeps at least Busy eddies alive, never fewer than the Eddies knob.
     params.drifters = calm ? drifters() : Math.max(drifters(), musicBusyEddies())
-    if (clock.locked) {
+    if (off.beat) {} else if (clock.locked) {
       const w = due('pulse')
       if (w !== false && clock.hearing) pulse()
       const e = due('eddy')
       if (e !== false) { if (clock.hearing) spawn(); if (onPhrase(e) && sim.spawnEddy) sim.spawnEddy() }
-      const p = !lidded && musicLead() > 0 ? due('pot') : false
+      const p = !dropOn && musicLead() > 0 ? due('pot') : false
       if (p !== false && clock.hearing && onPhrase(p) && !lavaLow) potNow()
-      if (!lidded && musicLead() <= 0 && onBeatPot) potNow()
+      if (!dropOn && musicLead() <= 0 && onBeatPot) potNow()
     } else if (m.beat) {
       pulse(); spawn()
-      if (beatsHeard % every() === 0) { if (!lidded && !lavaLow) potNow(); if (sim.spawnEddy) sim.spawnEddy() }
+      if (beatsHeard % every() === 0) { if (!dropOn && !lavaLow) potNow(); if (sim.spawnEddy) sim.spawnEddy() }
     }
     // A wobble brings eddies while it sweeps, up to Wobble a second at its fullest (Robert: "is
     // there a way to detect that sort of wahwahwah sound that sounds kind of spinny and trigger
@@ -898,22 +1109,25 @@ export async function start () {
     // on the second to fourth note of something that looks like a wobble trigger an eddie and
     // keep spawning the eddies more frequently. not necessarily constantly").
     if (m.wobbleRun === 0) wobbleNext = 2 + Math.floor(Math.random() * 3)
-    if (m.wobbleNote && m.wobbleRun >= wobbleNext && musicWobble() > 0) {
+    if (m.wobbleNote && !off.wobbleNote && m.wobbleRun >= wobbleNext && musicWobble() > 0) {
       wobbleNext = m.wobbleRun + Math.ceil((2 + Math.random() * 4) / musicWobble())
       if (!calm && sim.spawnEddy) sim.spawnEddy()
     }
     // A hat brings a spinning eddy now and then, more often in a busy part.
-    if (m.hat && sim.spawnEddy && Math.random() < musicSpin() * act * chance * 0.25) sim.spawnEddy()
+    if (m.hat && !off.hat && sim.spawnEddy && Math.random() < musicSpin() * act * chance * 0.25) sim.spawnEddy()
     // A hi-hat (the kick range, 2 to 8 kHz) throws a small splat, HAT_SPLAT of a drop's by Kick, so
     // the lava sizzles with the hats (Robert: "for the kick yellow band... should have a stronger
     // effect. I noticed zero effect from it"; it only sharpened the recoil of parting necks).
-    if (m.hat && !calm && musicKick() > 0) splatAt(HAT_SPLAT * musicKick())
+    if (m.hat && !off.hat && !calm && musicKick() > 0) splatAt(HAT_SPLAT * musicKick())
     // Pace follows the tempo a little: against 120 bpm, by Tempo, held to 0.75 to 1.3 times,
     // eased over two seconds so it breathes rather than jumps.
     if (m.bpm > 40) {
       const target = Math.max(0.75, Math.min(1.3, 1 + musicTempo() * (Math.max(0.6, Math.min(1.6, m.bpm / 120)) - 1)))
       tempoPace += (target - tempoPace) * Math.min(1, dt / 2)
     }
+    // A tool's own song-wide effects, after the lamp has set its knobs for this frame (?hooks).
+    if (hooks && hooks.afterMusic) hooks.afterMusic(m, { calm, act, clock })
+    if (sync) sync.after(m, dt) // the theme's glow follow, after the lamp set its knobs, as a tool's afterMusic
     if (showSpectrum()) spectrumView.draw(listener.spectrum(), m, musicRanges, fired || dropped, clock.tick)
     // The recorder: ten rows a second of what the lamp heard and did, for tuning against a song
     // (Robert's C-C: calm to 0:54, the drop, busy to 1:50). Saved from the Music card.
@@ -1106,8 +1320,8 @@ export async function start () {
   // kept on window.lavaProfile, for finding what a slow device is spending its time on.
   const profiling = new URLSearchParams(window.location.search).has('profile')
   look.profile = profiling
-  if (profiling) window.lavalamp = { sim, params, look, gloop, device, music: listener, musicLog, shown } // for timing the running lamp from the console
-  const tally = { frames: 0, sim: 0, steps: 0, render: 0, span: 0, last: performance.now(), phases: {} }
+  if (profiling) window.lavalamp = { sim, params, look, gloop, device, music: listener, musicLog, shown, get sync () { return sync } } // for timing the running lamp from the console
+  const tally = { frames: 0, sim: 0, steps: 0, render: 0, music: 0, span: 0, last: performance.now(), phases: {} }
   // The busiest 20 px cell, in particles: 40 or so is lava at rest, hundreds is a pile the
   // solver's neighbour loops pay for (the eddies packing the pots was 814, and single digit fps).
   const crowd = () => {
@@ -1131,6 +1345,7 @@ export async function start () {
       simMs: (tally.sim / tally.frames).toFixed(2),
       stepsPerFrame: (tally.steps / tally.frames).toFixed(2),
       renderMs: (tally.render / tally.frames).toFixed(2),
+      musicMs: (tally.music / tally.frames).toFixed(2), // the music each frame: driveMusic, and a theme's touches
       pixels: renderer.pixels(),
       particles: sim.count,
       renderer: renderer.kind || 'canvas'
@@ -1143,7 +1358,7 @@ export async function start () {
     for (const k in tally.phases) out[k] = (tally.phases[k] / tally.frames).toFixed(2)
     window.lavaProfile = out
     console.log('[profile]', JSON.stringify(out))
-    tally.frames = 0; tally.sim = 0; tally.steps = 0; tally.render = 0; tally.span = 0; tally.phases = {}
+    tally.frames = 0; tally.sim = 0; tally.steps = 0; tally.render = 0; tally.music = 0; tally.span = 0; tally.phases = {}
   }
   let leaning = 0 // seconds gravity has pointed at an edge other than the current one
   let lastScreen = null // the window's place on the screen last frame, for shaking it
@@ -1161,8 +1376,9 @@ export async function start () {
       fpsSince = performance.now()
     }
     // A shake is a shove, in the lamp's frame.
+    // Motion off: the sensor is still read (and its shakes dropped), the window's moves are not owed.
     const [ax, ay] = pageVectorToLamp(turns, ...motion.consume())
-    sim.push(ax / FRAME * MOTION_GAIN, ay / FRAME * MOTION_GAIN)
+    if (motionNow()) sim.push(ax / FRAME * MOTION_GAIN, ay / FRAME * MOTION_GAIN)
     // Shaking the window shakes the lava, as a shake of the phone does (Robert: "could we make
     // shaking the window shake the lava like on mobile?"). The lava keeps its place in the world
     // by inertia, so a move of the window is owed to the lava the other way. Pushed all in the
@@ -1176,7 +1392,7 @@ export async function start () {
     if (lastScreen) {
       const dx = wx - lastScreen[0]
       const dy = wy - lastScreen[1]
-      if (Math.abs(dx) + Math.abs(dy) > 2) {
+      if (motionNow() && Math.abs(dx) + Math.abs(dy) > 2) {
         shakeDebt[0] -= dx * WINDOW_SHAKE_GAIN
         shakeDebt[1] -= dy * WINDOW_SHAKE_GAIN
         const owed = Math.hypot(shakeDebt[0], shakeDebt[1])
@@ -1192,7 +1408,7 @@ export async function start () {
       shakeDebt[1] -= shakeDebt[1] * share
     }
     // Gravity picks the floor.
-    const wanted = motion.downEdge(edge)
+    const wanted = motionNow() ? motion.downEdge(edge) : 'bottom'
     leaning = wanted === edge ? 0 : leaning + FRAME
     if (leaning >= TURN_DELAY) {
       leaning = 0
@@ -1200,7 +1416,29 @@ export async function start () {
     }
     // Fingers.
     const mode = touchMode()
-    sim.setTouches(pointer.consume(FRAME).map(p => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, mode })))
+    // A tool's own touches (hooks.touches) after the pointer's, passed whole: a tool's touch may carry
+    // its own radius, heat and strength (simulation.js setTouches); the pointer's take the lamp's.
+    // A theme's touches (its kit's queue: the moves' held lists, the sparkles, the glow's heat) the same way, in what the
+    // pointer leaves, up to two kept for each of the Firefly and Ice fly switches while on with glints waiting (FIREFLY_ROOM).
+    const fingers = pointer.consume(FRAME).map(p => ({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, mode }))
+    const tm0 = profiling ? performance.now() : 0
+    if (sync) { sync.still(); sync.frame(performance.now()) } // the still lamp every frame, heard or not (driveMusic sets it only while listening)
+    const touches = [...fingers, ...(sync ? sync.touches(8 - fingers.length - flyRoom()) : []), ...(hooks && hooks.touches ? hooks.touches : [])]
+    // The Firefly switch's glints after both, each with its own radius and heat, in what is left of the GPU lamp's eight
+    // touches a frame; it reads the particles where every lamp keeps them (sim.state: the CPU lamp's own arrays, the GPU
+    // lamp's last readback, the worker lamp's last state) and runs on real time, as the music does.
+    const fireflyNow = performance.now()
+    if (firefly() || iceFly()) {
+      const st = sim.state, dt = fireflyAt ? Math.min(0.1, Math.max(0, (fireflyNow - fireflyAt) / 1000)) : FRAME
+      const lamp = st && st.x ? { width, height, x: st.x, y: st.y, temp: st.temp, count: Math.min(sim.count, st.x.length, st.y.length), float: params.gravity } : null
+      // Each its own share of what is left: with both on, the firefly may take no more than leaves the ice fly its room.
+      const iceRoom = iceFly() ? Math.min(FIREFLY_ROOM, iceFlies.waiting || 1) : 0
+      if (lamp && firefly()) touches.push(...fireflies.tick(lamp, dt, 8 - touches.length - iceRoom))
+      if (lamp && iceFly()) touches.push(...iceFlies.tick(lamp, dt, 8 - touches.length))
+    }
+    fireflyAt = fireflyNow
+    if (profiling) tally.music += performance.now() - tm0
+    sim.setTouches(touches)
     const t0 = profiling ? performance.now() : 0
     let count = 0
     if (sim.remote) {
@@ -1231,6 +1469,7 @@ export async function start () {
       }
       shown.temp = sim.state.temp
     }
+    shown.id = sim.state.id || null // the particles' own ids where the lamp reorders them, for the dye's strokes (glRenderer.js)
     const t1 = profiling ? performance.now() : 0
     // The Cups view: fit everything from the top of the highest cup to the bottom of the deepest
     // into the frame, scaled down and centred, so the hidden lava can be watched.
@@ -1248,13 +1487,18 @@ export async function start () {
       view = { k, ox: (width - width * k) / 2, oy: -minY * k, ceilingAt: sim.ceilingAt, floorAt: sim.floorAt, bottles: sim.bottles(), floorBottles: sim.floorBottles(), glow, look }
     }
     shownView = view
-    renderer.render(shown, count, { flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, floorY: sim.height, bottles: sim.bottles, ceilingCool: params.ceilingCool, view })
+    // The Dyed fluid view (render/dye.js): the velocity grid it is carried by, read from the flow and the particles and
+    // written nowhere, built only while the switch is on; the dye is advected by the lamp's own seconds this frame.
+    const dyeField = streamersOn() ? dyeGrid.build({ width, height, flowAt: sim.flowAt, flowGrid: sim.flowGrid ? sim.flowGrid() : null, state: sim.state, count: sim.count }) : null
+    renderer.render(shown, count, { dyeField, dyeDt: FRAME * pace() * tempoPace, flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, floorY: sim.height, bottles: sim.bottles, ceilingCool: params.ceilingCool, view, glowBoost: params.glowBoost || 0, glowReach: params.glowReach || 0, glowKnee: params.glowKnee || 0 })
     if (gloop.enabled) gloop.update(sim.state, sim.count, width, height, params.gravity, FRAME * pace(), params.interactionRadius)
     // Real time for the music, not the lamp's fixed step: at 120 Hz FRAME ran its clock at
     // double speed and a 120 bpm song read as 62.
     const musicNow = performance.now()
+    if (profiling) tally.music -= musicNow
     driveMusic(Math.min(0.1, Math.max(0.001, (musicNow - lastMusicAt) / 1000)))
     lastMusicAt = musicNow
+    if (profiling) tally.music += performance.now()
     if (profiling) {
       const t2 = performance.now()
       tally.frames++

@@ -308,6 +308,61 @@ export const seed = fnstate(randomSeed())
 // remembered in this browser (see loadViews; Robert, 2026-11-01: "not all settings are being
 // preserved on reload, very annoying... i.e. reservoirs being on").
 export const showFlow = fnstate(false)
+// Whether the lamp follows the device's motion: a shake of the phone (or of the window) shoves the
+// lava, and turning the phone turns the floor. Off, the floor stays at the bottom and shakes are
+// ignored (Robert: "for mobile, i think we should have an option to disable motion"). Remembered.
+export const motionOn = fnstate(true)
+// The Firefly switch: an unseen wanderer always looping through the lava, dropping tiny hot glints wherever it passes
+// over it (sim/firefly.js), music or no music. Robert: "we should make a firefly lavalamp toggle that just runs the
+// firefly all the time in the regular lamp"; "like, just a firefly that lives in the lava all the time". Off as shipped,
+// so the lamp is as tuned; remembered in this browser like the other switches.
+export const firefly = fnstate(false)
+// The Ice fly switch: the firefly's cold twin (Robert: "add an ice fly that is a cold fire fly in all places"), an unseen
+// wanderer looping round the hottest floating lava and dropping tiny cold glints there, so it cools what is hottest
+// (sim/firefly.js ICE_TUNING). Its own switch beside the Firefly's, each independent; off as shipped, remembered and
+// saved with the setup as the Firefly switch is.
+export const iceFly = fnstate(false)
+// The Dyed fluid switch: a dye carried through the water by the lamp's own flow and laid by every particle in its
+// heat colour (render/dye.js), so the plumes and wakes show (Robert: "looks like watching radar, super cool";
+// "we can add that as a layer on top of the lavalamp? like with another switch for something like, 'dyed fluid'?").
+// A view only, it moves nothing. Off as shipped; remembered in this browser like the other switches, with its Dye
+// pick (Under the lava, Over it as smoke, or Alone with the lava hidden), its Fade (the share of the dye gone each
+// second) and its Stamp (how strongly each particle lays its colour).
+export const dyedFluid = fnstate(false)
+// Streamers in music mode: on by default whenever a music theme plays, whatever the switch above (Robert: "the streamers
+// really make it feel alive in a fluid. not very lava lamp like, but I think we should turn it on by default in music
+// mode"). Off here keeps them to the switch alone.
+export const streamersInMusic = fnstate(true)
+// Motion in music mode: off as shipped, so while a music theme plays the lamp's Motion is off on its live parameters
+// and the device never tilts or shakes the lava (Robert: "music mode should turn off motion by default in the lamp");
+// the saved Motion switch is not touched, and Music off puts it back. On here, Motion works under a theme as it does
+// without one.
+export const motionInMusic = fnstate(false)
+export const dyeModes = ['under', 'over', 'alone']
+export const dyeModeNames = { under: 'Under', over: 'Over', alone: 'Alone' }
+// The streamers as Robert set them in his panel: Drawn Under, Fade 0.85, Stamp 0.05 (Robert: "make this the streamers
+// default"; they were Alone, 0.8 and 0.15 from the deploy, and Under, 0.5 and 0.3 before that). Defaults only: a stored
+// pick or knob is kept (the views).
+export const defaultDyeMode = 'under'
+export const dyeMode = fnstate(defaultDyeMode)
+export const defaultDyeFade = 0.05
+export const dyeFade = fnstate(defaultDyeFade)
+// 1 since each particle stamps the lava's own smoothed colour (Robert: "the stamp fix is great, setting that to 1 finally
+// makes the streamers look right and no pixelation"); it was 0.05 while each particle laid its own colour.
+export const defaultDyeStamp = 1
+export const dyeStamp = fnstate(defaultDyeStamp)
+// How the streamers fade, for Robert to fiddle with (dye.js; Robert: "add a couple different controls for this so I can
+// fiddle with it and then I'll probably pick a single control with a slider and defaults for the others"). Curve: dim
+// dye fades faster than bright; Tail cut: a fixed amount off every bit of dye a second; Glow: the streamers' drawn
+// brightness, bent softly under full. The defaults, with Fade 0.05, are Robert's for Vibes ("make these the default
+// streamer settings for vibes": Fade 5%/s, Stamp 1, Curve 1, Tail cut 0.90/s, Glow 3x; before that 70%/s, 0.28/s, 2x);
+// the streamers as they first were are Curve 0, Tail cut 0, Glow 1.
+export const defaultDyeCurve = 1
+export const dyeCurve = fnstate(defaultDyeCurve)
+export const defaultDyeCut = 0.9
+export const dyeCut = fnstate(defaultDyeCut)
+export const defaultDyeGlow = 3
+export const dyeGlow = fnstate(defaultDyeGlow)
 // Draw the heater strip and the heating elements along the floor, in either view. Remembered.
 export const showHeater = fnstate(false)
 // Pull the whole lamp into frame, hidden cups and all, scaled down, with the cup outlines drawn.
@@ -318,16 +373,26 @@ export const sound = fnstate(false)
 export const soundPending = fnstate(false) // on while the audio is starting, for the switch to show it
 export const soundBeds = ['simmer', 'glug', 'noise', 'hum', 'none']
 export const soundBed = fnstate('simmer')
-// The lamp listening to music (Robert: "one thing I would love is a music sync"). Listening is
-// never saved (browsers want a gesture); the source is remembered; the depths are numbers saved
-// and shared with the rest. Each depth is how much the music adds on top of the knob's value:
+// The lamp listening to music (Robert: "one thing I would love is a music sync"). Music on is
+// kept by Save and a link, and remembered in this browser as it was left (MUSIC_KEY below; Robert:
+// "If it's enabled in the settings, it should stay enabled if it was saved or shared"); the source is
+// remembered too. The depths are numbers saved and shared with the rest. Each depth is how much the music adds on top of the knob's value:
 // Floor and Lift from the bass, Turb from the mids, Kick from the highs, and Beat is the chance
 // that a beat lights a pot.
 export const music = fnstate(false)
 // The spectrum strip along the bottom, for seeing what the music sync hears (a view: remembered
 // per browser, not in links or saves).
 export const showSpectrum = fnstate(false)
+// Each fly's last 6 s drawn as a fading line, fireflies orange and ice flies blue, for tuning how they fly (a view:
+// remembered per browser, not in links or saves; Robert: "let's turn the trails off behind a flag so we can get it back
+// if there's future changes needed").
+export const showFlyTrails = fnstate(false)
 export const musicPending = fnstate(false)
+// Why Music is on but hears nothing, '' while it hears or is off: 'tap' (waiting for a click, as a browser starts no
+// microphone, screen share or sound without one), 'file' (the File source with no song in this browser), or what
+// stopped the last start or the listening (music.js errorKind: 'cancelled', 'noaudio', 'ended', 'denied' and the
+// rest). The lamp shows a prompt with a Try again for it (app.js) instead of switching Music off.
+export const musicWait = fnstate('')
 // A phone can only hear the room, so it gets the microphone alone (Robert: "Phones using mic is
 // fine, makes more sense for mobile too").
 // A computer can also play a song file itself, and record the lamp to it (Robert: "now we're
@@ -336,6 +401,59 @@ export const musicSources = (typeof window !== 'undefined' && window.matchMedia(
 export const musicFileName = fnstate('') // the chosen song's name, '' for none (the file itself is not kept)
 export const musicRecording = fnstate(false)
 export const musicSource = fnstate('mic')
+// The music theme (Robert: "we have music themes like the color themes"): what the lamp does with the music it hears.
+// Vibes (its id live), the default, is Robert's tuned set (src/sync/themes/live.json; Robert: "Pull the current settings one last time
+// and let's get it ready to go live as the live music sync."): every lane fires its theme's effects through the sync
+// engine (src/sync) over a still lamp, with a sparkle on every tick and the glow following the music, and the lamp's own
+// music moves off. Calm is Vibes with both event switches off (musicFlowEvents and musicHeatEvents below; Robert: "The
+// calm is just set both events to disabled and leave sparkle and glow on"): the same theme's data, its sparkle on every
+// tick, its glow follow and its streamers, and no lane's motion or heat, the lamp glowing and glinting with the music and
+// nothing else moving it. Picking Calm sets both switches off and picking Vibes sets both on; a switch changed by hand
+// after keeps the pick. Calm had a theme file of its own (lamp-only.json, the two layers alone, every lane off), gone
+// with it; a stored lamp-only reads as Calm. The names are Robert's ("music theme 'lamp only' should just be 'calm',
+// live should be 'vibes'"); Vibes keeps its id so a stored pick still reads. Classic, the lamp's own music moves as they were before the themes, is gone from the pick (Robert:
+// "I don't think we need classic music mode"): its code stays in app.js for ?hooks and the plain lamp, and a stored
+// classic reads as Vibes (loadViews). Remembered in this browser, and kept by Save with Music and the source.
+export const musicThemes = ['live', 'calm']
+export const musicThemeNames = { live: 'Vibes', calm: 'Calm' }
+export const musicTheme = fnstate('live')
+const themeId = t => t === 'classic' ? 'live' : t === 'lamp-only' ? 'calm' : t // Robert: "I don't think we need classic music mode"; lamp-only was Calm's id
+// The theme's effects, four controls over everything a theme does to the lava (Robert: "I had two mega sliders I want for
+// music, under a section titled 'effects', flow strength and heat strength. I think we could also add checkboxes for
+// turning off global sparkle and glow."). Flow strength (Robert: "flow strength"): every motion the theme gives the lamp
+// times it, its eddies' spin and speed, its touches' push, pull and spin, its splats' throw and its ring waves' push
+// (src/sync/kit.js, where each reaches the simulation); 1 as tuned, 0 moves nothing, 2 twice as hard. Heat strength
+// (Robert: "heat strength"): every heat the theme gives times it, its pot blasts' strength and lift, its touches' heat
+// and their cold alike, so heat and cold stay in balance (the sparkles, the glints, the glow's heat spots, the heat
+// sweep, the cold sides); 1 as tuned, 0 heats nothing. Not the Firefly switch's own fly, which is the lamp's. Sparkle
+// (Robert: "turning off global sparkle"): off stops the sparkle on every tick, the layer only, so a lane's Sparkle effect
+// still fires. Glow (Robert: "and glow"): off stops the glow following the music and its heat spots; a lane's Glow pulse
+// still fires. Kept by Save and links with the theme, and remembered in this browser as the theme is.
+export const defaultMusicFlow = 1
+export const musicFlow = fnstate(defaultMusicFlow)
+export const defaultMusicHeat = 1
+export const musicHeat = fnstate(defaultMusicHeat)
+export const musicSparkle = fnstate(true)
+export const musicGlow = fnstate(true)
+// Flow events and Heat events (Robert: "ooo two more toggles, heat events and flow events. We really only have these two
+// things, we should allow disabling heat or flow events, some people may not like that so much"): on as shipped. An event
+// is anything a lane fires (a tick's or a hold's effect, from a type, a lane or a Scene effect); off, Flow events drops
+// every motion an event gives the lamp (eddies, flow touches, splats, rings, the held push and eddy, a big moment's flow)
+// and Heat events every heat or cold (pot blasts and lightings, vents, heat and cold touches, a glow pulse's heat, a big
+// moment's blast and cold side), in the kit (src/sync/kit.js) beside the strengths. The song wide layers, the sparkle
+// on every tick and the glow follow, are not events and stay as Sparkle and Glow say. Kept by Save and links with the
+// theme, and remembered in this browser as it is.
+export const musicFlowEvents = fnstate(true)
+export const musicHeatEvents = fnstate(true)
+// Picking Calm sets both off, Vibes both on (above); a change of the pick only, so a save or a link that carries the
+// switches puts them back after its theme (they come after it in musicSettings and viewSettings).
+// The Streamers in music switch goes with them (Robert: "calm should turn streamers off, and vibes should turn it on").
+{ let was = musicTheme(); musicTheme.subscribe(t => { if (t === was) return; was = t; const on = t !== 'calm'; musicFlowEvents(on); musicHeatEvents(on); streamersInMusic(on) }) }
+// There was a Detector setting here (musicDetector: Original, as tuned, or Demucs trained, music.js
+// with the options fitted against split tracks on) while Robert listened to both. Demucs trained is
+// now the only detector, on in music.js itself (Robert: "let's make the demucs trained detector the
+// only detector for now, we don't need the old one any more"). A stored musicDetector in the views
+// is skipped by loadViews, as any key not in viewSettings is.
 export const defaultMusicSensitivity = 1
 export const musicSensitivity = fnstate(defaultMusicSensitivity)
 // Every this many beats a pot fires and, if there is room, an eddy is born, so the lamp moves on
@@ -450,6 +568,15 @@ export const eddyFalloff = fnstate(defaultEddyFalloff)
 export const eddyCurves = ['log', 'linear', 'exp']
 export const defaultEddyCurve = 'exp'
 export const eddyCurve = fnstate(defaultEddyCurve)
+// Rim pull in and Splat pull in (Robert, 2026-11-07: "the outside of the vortex dissipates faster than the center";
+// "all the eddies should work that way, I think, the splats would be a lot nicer if they shrank in like that too, but
+// probably much faster"): how far an eddy's reach pulls in to its core over its life, and how thin a splat's legs narrow
+// to spikes over its (Robert, of the ring pulled in first: "now we're getting roughly rounded blobs ... we should keep
+// the strength but just shrink the expanding blobs"); 0 is the old look exactly (simulation.js pullOf, splatNarrow).
+export const defaultEddyPullIn = 0.6
+export const eddyPullIn = fnstate(defaultEddyPullIn)
+export const defaultSplatPullIn = 0.6
+export const splatPullIn = fnstate(defaultSplatPullIn)
 
 // Themes: a name and every colour at once, the heat gradient, the back and the flow arrows
 // (Robert: "themes that set all of the colors"). Six contrast presets, gradients that jump hue
@@ -465,14 +592,24 @@ export const eddyCurve = fnstate(defaultEddyCurve)
 const rgb = (r, g, b) => ({ r, g, b })
 export const themes = [
   { name: 'Thermal', heatCold: rgb(0, 0, 0), heatCool: rgb(90, 0, 130), heatWarm: rgb(220, 30, 0), heatHot: rgb(255, 220, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(90, 0, 130), flowFast: rgb(255, 220, 0) },
-  { name: 'Spectrum', heatCold: rgb(30, 0, 90), heatCool: rgb(0, 170, 170), heatWarm: rgb(255, 230, 0), heatHot: rgb(230, 30, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(30, 0, 90), flowFast: rgb(255, 230, 0) },
-  { name: 'Neon', heatCold: rgb(0, 40, 60), heatCool: rgb(0, 220, 255), heatWarm: rgb(255, 0, 200), heatHot: rgb(255, 230, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(22, 14, 58), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0) },
-  { name: 'Radar', heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40) },
-  { name: 'Lava', heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(28, 15, 8), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120) },
-  { name: 'Acid', heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(38, 10, 62), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100) }
+  { name: 'Spectrum', heatCold: rgb(114, 0, 255), heatCool: rgb(0, 176, 255), heatWarm: rgb(44, 255, 0), heatHot: rgb(249, 255, 0), heatPeak: rgb(255, 0, 0), bgColor: rgb(0, 0, 0), flowSlow: rgb(30, 0, 90), flowFast: rgb(255, 230, 0), heatCoolAt: 0.261, heatWarmAt: 0.5, heatHotAt: 0.739 },
+  // Neon as Robert painted it, his "neonest" theme, with its own places along the heat (were the even 0.25, 0.5, 0.75):
+  { name: 'Neon', heatCold: rgb(0, 0, 0), heatCool: rgb(0, 174, 255), heatWarm: rgb(255, 0, 191), heatHot: rgb(255, 188, 2), heatPeak: rgb(235, 225, 139), bgColor: rgb(15, 10, 40), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0), heatCoolAt: 0.248, heatWarmAt: 0.44, heatHotAt: 0.674 },
+  // Radar renamed Fluoro and repainted to Robert's "radarded" (Robert: "is the new default setting for radar. let's also
+  // rename radar to Flourescent, unless that's too long then a shorter word that means the same thing"): Fluoro, the
+  // short form, fits the picker beside the others. Then his "flourtarded": the peak ffa855 and the stops 0.359, 0.477, 0.74.
+  { name: 'Fluoro', heatCold: rgb(0, 71, 255), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 95, 0), heatPeak: rgb(255, 0, 0), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40), heatCoolAt: 0.316, heatWarmAt: 0.449, heatHotAt: 0.7 },
+  // Nightbloom, Robert's own, takes Lava's slot (Robert: "Nightbloom, i like it"; his "barny the dinosour" scheme,
+  // replacing Lava): a violet cool, an amber warm, a green hot and a teal peak on black, with its own places along the heat.
+  { name: 'Nightbloom', heatCold: rgb(0, 0, 0), heatCool: rgb(90, 0, 130), heatWarm: rgb(191, 105, 18), heatHot: rgb(27, 137, 75), heatPeak: rgb(26, 91, 96), bgColor: rgb(0, 0, 0), flowSlow: rgb(90, 0, 130), flowFast: rgb(255, 220, 0), heatCoolAt: 0.25, heatWarmAt: 0.5, heatHotAt: 0.72 },
+  { name: 'Acid', heatCold: rgb(0, 0, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(52, 255, 0), bgColor: rgb(255, 255, 255), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100), heatCoolAt: 0.16, heatWarmAt: 0.327, heatHotAt: 0.84 }
 ]
+// Neon before it was repainted, so a setup still on it to the letter (its colours and the even places) is moved to the
+// new Neon as it loads (adoptNewNeon); a Neon edited by hand is kept.
+const NEON_BEFORE = { heatCold: rgb(0, 40, 60), heatCool: rgb(0, 220, 255), heatWarm: rgb(255, 0, 200), heatHot: rgb(255, 230, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(22, 14, 58), flowSlow: rgb(0, 120, 160), flowFast: rgb(255, 230, 0), heatCoolAt: 0.25, heatWarmAt: 0.5, heatHotAt: 0.75 }
 export const applyTheme = theme => {
   for (const [key, state] of Object.entries(colorSettings)) if (theme[key]) state({ ...theme[key] })
+  if (AT_KEYS.some(k => k in theme)) putPlaces(theme)
 }
 
 // The heat colours: five stops, Cold and Peak at the ends and Cool, Warm and Hot at places along
@@ -501,10 +638,10 @@ export const putPlaces = theme => AT_KEYS.forEach((k, i) => places[i](Number(the
 // of the heat map toggle, make heat map the default, and remove the code for the old color
 // mode"); old saves and links that still carry them are simply ignored.
 const colorSettings = { bgColor, heatCold, heatCool, heatWarm, heatHot, heatPeak, flowSlow, flowFast }
-const numberSettings = { heatCoolAt, heatWarmAt, heatHotAt, interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, musicVent, musicSections, seed }
+const numberSettings = { heatCoolAt, heatWarmAt, heatHotAt, interactionRadius, gravityStrength, pull, stiffnessNear, maxTemp, particleCount, particleSize, stir, conduction, pace, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, smooth, blend, settle, viscosity, reach, skin, wall, elementHeat, elementLife, elementRate, elementLifeScale, elementCore, floorHeat, floorGlow, reserve, lift, touchStrength, eddySpeed, eddyFalloff, eddyPullIn, splatPullIn, musicSensitivity, musicEvery, musicFloor, musicLift, musicTurb, musicKick, musicBeatLo, musicBeatHi, musicHeatLo, musicHeatHi, musicEddyLo, musicEddyHi, musicKickLo, musicKickHi, musicTempo, musicPulse, musicSpawn, musicSpin, musicLead, musicActivity, musicDrop, musicBoom, musicBusyEddies, musicFlip, musicWobble, musicVent, musicSections, seed }
 // Settings that may be zero or negative. Everything else has to be positive to make sense.
 // touchStrength and eddyFalloff: their knobs go to 0 (found by the round trip check, 2026-11-03).
-const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff', 'musicTempo', 'musicPulse', 'musicSpawn', 'musicSpin', 'musicLead', 'musicActivity', 'musicDrop', 'musicBoom', 'musicBusyEddies', 'musicFlip', 'musicWobble', 'musicVent', 'musicSections', 'musicFloor', 'musicLift', 'musicTurb', 'musicKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
+const signedSettings = new Set(['stir', 'conduction', 'turbulence', 'drifters', 'heatSpots', 'cupDepth', 'wobble', 'smooth', 'blend', 'wall', 'floorHeat', 'floorGlow', 'viscosity', 'wobbleKick', 'touchStrength', 'eddyFalloff', 'eddyPullIn', 'splatPullIn', 'musicTempo', 'musicPulse', 'musicSpawn', 'musicSpin', 'musicLead', 'musicActivity', 'musicDrop', 'musicBoom', 'musicBusyEddies', 'musicFlip', 'musicWobble', 'musicVent', 'musicSections', 'musicFloor', 'musicLift', 'musicTurb', 'musicKick']) // viscosity and wobbleKick: their knobs go to 0 and a saved 0 was dropped (2026-11-01)
 
 const defaults = () => ({
   bgColor: { ...defaultBgColor },
@@ -555,6 +692,8 @@ const defaults = () => ({
   touchStrength: defaultTouchStrength,
   eddySpeed: defaultEddySpeed,
   eddyFalloff: defaultEddyFalloff,
+  eddyPullIn: defaultEddyPullIn,
+  splatPullIn: defaultSplatPullIn,
   eddyCurve: defaultEddyCurve,
   musicSensitivity: defaultMusicSensitivity,
   musicEvery: defaultMusicEvery,
@@ -583,16 +722,35 @@ const defaults = () => ({
   musicWobble: defaultMusicWobble,
   musicSections: defaultMusicSections,
   musicVent: defaultMusicVent,
+  music: false,
+  musicTheme: 'live',
+  musicSource: 'mic',
+  musicFlow: defaultMusicFlow,
+  musicHeat: defaultMusicHeat,
+  musicSparkle: true,
+  musicGlow: true,
+  musicFlowEvents: true,
+  musicHeatEvents: true,
   seed: randomSeed()
 })
 
 // Every save and every link carries the version it was made on (Robert: "going forward, links
 // and settings need to always include the version"), so the root page can open the lamp it
 // belongs to.
+// Music mode is part of a save and a link (Robert: "music mode doesn't get saved on when save is clicked, it should be
+// saveable"): Music on or off, its theme and its source. A setup that comes back with Music on waits for the first
+// click or key on the page before it listens (app.js), since a browser starts no microphone, screen share or sound
+// without one; a file source plays the song the page kept last, or asks for one.
+// The theme's effects with them (musicFlow, musicHeat, musicSparkle, musicGlow, musicFlowEvents, musicHeatEvents): the two strengths any number 0 to 2.
+const EFFECT_STRENGTH = [0, 2]
+const strengthOk = v => typeof v === 'number' && v >= EFFECT_STRENGTH[0] && v <= EFFECT_STRENGTH[1]
+const musicChoices = () => ({ music: [true, false], musicTheme: musicThemes, musicSource: musicSources, musicFlow: strengthOk, musicHeat: strengthOk, musicSparkle: [true, false], musicGlow: [true, false], musicFlowEvents: [true, false], musicHeatEvents: [true, false] })
+const musicSettings = { music, musicTheme, musicSource, musicFlow, musicHeat, musicSparkle, musicGlow, musicFlowEvents, musicHeatEvents }
 export const getSettings = () => {
   const result = { version: CURRENT }
   for (const [key, state] of Object.entries({ ...colorSettings, ...numberSettings })) result[key] = state()
   result.eddyCurve = eddyCurve()
+  for (const [key, state] of Object.entries(musicSettings)) result[key] = state()
   return result
 }
 
@@ -614,6 +772,30 @@ export const applySettings = saved => {
     const value = Number(saved[key])
     if (Number.isFinite(value) && (value > 0 || signedSettings.has(key))) state(value)
   }
+  const music = { ...saved, musicTheme: themeId(saved.musicTheme) }
+  for (const [key, state] of Object.entries(musicSettings)) { if (!(key in music)) continue; const ok = musicChoices()[key], v = typeof ok === 'function' && typeof music[key] === 'string' ? Number(music[key]) : music[key]; if (typeof ok === 'function' ? ok(v) : ok.includes(v)) state(v) }
+}
+
+// Radar before it became Fluoro, so a setup still on it to the letter (its colours and the even places) moves to Fluoro.
+const RADAR_BEFORE = { heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 255, 230), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40), heatCoolAt: 0.25, heatWarmAt: 0.5, heatHotAt: 0.75 }
+// Fluoro's first colours (a darker blue cold, red hot, a peach peak), so a setup still on them moves to the new Fluoro.
+const FLUORO_BEFORE = { heatCold: rgb(0, 20, 117), heatCool: rgb(68, 255, 0), heatWarm: rgb(255, 126, 20), heatHot: rgb(255, 0, 0), heatPeak: rgb(255, 168, 85), bgColor: rgb(0, 0, 0), flowSlow: rgb(0, 55, 255), flowFast: rgb(255, 40, 40), heatCoolAt: 0.359, heatWarmAt: 0.477, heatHotAt: 0.74 }
+// Spectrum before Robert's Mine 3 (a dark purple cold, teal, yellow, red, a white peak), so a setup still on it moves to the new Spectrum.
+const SPECTRUM_BEFORE = { heatCold: rgb(30, 0, 90), heatCool: rgb(0, 170, 170), heatWarm: rgb(255, 230, 0), heatHot: rgb(230, 30, 0), heatPeak: rgb(255, 255, 255), bgColor: rgb(0, 0, 0), flowSlow: rgb(30, 0, 90), flowFast: rgb(255, 230, 0), heatCoolAt: 0.25, heatWarmAt: 0.5, heatHotAt: 0.75 }
+// Acid before Robert's acider (black cold, a lime peak on white), so a setup still on it to the letter moves to the new Acid.
+const ACID_BEFORE = { heatCold: rgb(0, 30, 0), heatCool: rgb(20, 140, 20), heatWarm: rgb(120, 240, 0), heatHot: rgb(230, 255, 60), heatPeak: rgb(255, 255, 230), bgColor: rgb(38, 10, 62), flowSlow: rgb(0, 80, 20), flowFast: rgb(240, 255, 100), heatCoolAt: 0.25, heatWarmAt: 0.5, heatHotAt: 0.75 }
+// Lava before Robert's Nightbloom took its slot (a dark red cold through orange to a cream peak on a cave brown), so a
+// setup still on it to the letter (its colours and the even places) moves to Nightbloom.
+const LAVA_BEFORE = { heatCold: rgb(40, 0, 0), heatCool: rgb(160, 20, 0), heatWarm: rgb(255, 90, 0), heatHot: rgb(255, 200, 40), heatPeak: rgb(255, 255, 220), bgColor: rgb(28, 15, 8), flowSlow: rgb(120, 40, 0), flowFast: rgb(255, 220, 120), heatCoolAt: 0.25, heatWarmAt: 0.5, heatHotAt: 0.75 }
+const adoptNewNeon = () => {
+  const now = { ...Object.fromEntries(Object.entries(colorSettings).map(([k, st]) => [k, st()])), ...takePlaces() }
+  const same = (a, b) => typeof a === 'number' ? Math.abs(a - b) < 1e-9 : a && b && a.r === b.r && a.g === b.g && a.b === b.b
+  if (Object.keys(NEON_BEFORE).every(k => same(now[k], NEON_BEFORE[k]))) applyTheme(themes.find(t => t.name === 'Neon'))
+  else if (Object.keys(RADAR_BEFORE).every(k => same(now[k], RADAR_BEFORE[k]))) applyTheme(themes.find(t => t.name === 'Fluoro'))
+  else if (Object.keys(ACID_BEFORE).every(k => same(now[k], ACID_BEFORE[k]))) applyTheme(themes.find(t => t.name === 'Acid'))
+  else if (Object.keys(FLUORO_BEFORE).every(k => same(now[k], FLUORO_BEFORE[k]))) applyTheme(themes.find(t => t.name === 'Fluoro'))
+  else if (Object.keys(SPECTRUM_BEFORE).every(k => same(now[k], SPECTRUM_BEFORE[k]))) applyTheme(themes.find(t => t.name === 'Spectrum'))
+  else if (Object.keys(LAVA_BEFORE).every(k => same(now[k], LAVA_BEFORE[k]))) applyTheme(themes.find(t => t.name === 'Nightbloom'))
 }
 
 export const resetSettings = () => applySettings(defaults())
@@ -645,8 +827,8 @@ const adoptLegacySave = () => {
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
 // reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
 const VIEW_KEY = `lavalamp.app-v${CURRENT}-views`
-const viewSettings = { showFlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource, showSpectrum }
-const viewChoices = { touchMode: touchModes, soundBed: soundBeds, musicSource: musicSources }
+const viewSettings = { showFlow, motionOn, firefly, iceFly, dyedFluid, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource, musicTheme, musicFlow, musicHeat, musicSparkle, musicGlow, musicFlowEvents, musicHeatEvents, showSpectrum, showFlyTrails }
+const viewChoices = { dyeMode: dyeModes, touchMode: touchModes, soundBed: soundBeds, musicSource: musicSources, musicTheme: musicThemes }
 const saveViews = () => {
   try {
     const out = {}
@@ -657,6 +839,7 @@ const saveViews = () => {
 const loadViews = () => {
   try {
     const views = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}')
+    if ('musicTheme' in views) views.musicTheme = themeId(views.musicTheme)
     for (const [key, state] of Object.entries(viewSettings)) {
       if (!(key in views)) continue
       const choices = viewChoices[key]
@@ -666,6 +849,9 @@ const loadViews = () => {
   for (const state of Object.values(viewSettings)) state.subscribe(saveViews)
 }
 
+// Music on or off as it was last left in this browser, over the saved setup and under a link, so a reload comes back
+// listening (or waiting for the click that lets it) without a Save.
+const MUSIC_KEY = `lavalamp.app-v${CURRENT}-music-on`
 // Views first, then saved settings, then a share link on top if the URL has one.
 export const loadSavedSettings = () => {
   loadViews()
@@ -674,10 +860,13 @@ export const loadSavedSettings = () => {
   if (saved) {
     try {
       applySettings(JSON.parse(saved))
+      adoptNewNeon()
     } catch {
       localStorage.removeItem(storageKey())
     }
   }
+  try { const was = localStorage.getItem(MUSIC_KEY); if (was === 'on' || was === 'off') music(was === 'on') } catch {}
+  music.subscribe(on => { try { localStorage.setItem(MUSIC_KEY, on ? 'on' : 'off') } catch {} }) // a link's too, below
   const query = new URLSearchParams(window.location.search)
   const shared = query.get('shared')
   if (shared) {
@@ -716,7 +905,7 @@ export const reloadWithSeed = value => {
 // it resets ALL defaults.
 export const resetAndReload = () => {
   clearSavedSettings()
-  try { localStorage.removeItem(VIEW_KEY) } catch {}
+  try { localStorage.removeItem(VIEW_KEY); localStorage.removeItem(MUSIC_KEY) } catch {}
   window.location.href = window.location.pathname
 }
 
@@ -759,8 +948,17 @@ const changedSettings = () => {
     if (key === 'seed' || !(Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b)))) out[key] = a
   }
   if (now.eddyCurve !== base.eddyCurve) out.eddyCurve = now.eddyCurve
+  for (const key of Object.keys(musicSettings)) if (now[key] !== base[key]) out[key] = now[key]
+  // The whole lamp (Robert: "we include the theme data in the share so they get the themes and all the settings all at
+  // once"): the View switches, the show's switches and Advanced's own switches too, which a link left out before, and w,
+  // which says the link has them, so the opener's are put to the defaults under them and an older link leaves them be.
+  out.w = 1
+  const views = linkViews(), viewBase = linkViewDefaults()
+  for (const key of Object.keys(views)) if (!near(views[key](), viewBase[key])) out[key] = views[key]()
   return out
 }
+const linkViews = () => ({ ...viewSwitches, streamersInMusic, motionInMusic, ...advancedViews })
+const linkViewDefaults = () => ({ ...viewDefaults(), streamersInMusic: true, motionInMusic: false, ...advancedViewDefaults() })
 const applyChanged = changed => {
   const full = {}
   for (const [key, value] of Object.entries(changed)) full[key] = colorSettings[key] ? fromHex(String(value)) : value
@@ -768,6 +966,77 @@ const applyChanged = changed => {
   delete base.seed
   applySettings(base)
   applySettings(full)
+  if (changed.w) put(linkViews(), linkViewDefaults(), changed)
 }
-export const shareLink = () =>
-  `${window.location.origin}${window.location.pathname}?v=${CURRENT}&s=${toBase64Url(JSON.stringify(changedSettings()))}`
+// extra: the theme data the panel adds (sharedExtras above).
+export const shareLink = (extra = {}) =>
+  `${window.location.origin}${window.location.pathname}?v=${CURRENT}&s=${toBase64Url(JSON.stringify({ ...changedSettings(), ...extra }))}`
+
+// Whole lamp themes (Robert: "I think we also need to combine color, music, global toggles, and all modified advanced
+// toggles into the themes"): the panel's Themes card keeps the colours, the show, the View switches and every Advanced
+// setting that differs from its default; this is their data, the panel (settingsPanel.js, themeList.js) their lists.
+// The show: the music theme and every effect setting over it (the Music card's My Shows). Its music theme comes first,
+// since picking one sets the event and streamers switches, which come after it.
+export const showSettings = { musicTheme, musicFlowEvents, musicHeatEvents, musicFlow, musicHeat, musicSparkle, musicGlow, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
+export const showDefaults = () => ({ musicTheme: 'live', musicFlowEvents: true, musicHeatEvents: true, musicFlow: defaultMusicFlow, musicHeat: defaultMusicHeat, musicSparkle: true, musicGlow: true, streamersInMusic: true, motionInMusic: false, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
+// The View card's switches and the lamp's own streamers' settings. Not Fullscreen: a browser forgets it on reload anyway.
+export const viewSwitches = { showFlow, motionOn, firefly, iceFly, dyedFluid, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
+export const viewDefaults = () => ({ showFlow: false, motionOn: true, firefly: false, iceFly: false, dyedFluid: false, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
+// Advanced: its knobs (every saved number but the heat places, which are the colours', Touch's strength and the seed,
+// drawn fresh on every load), the eddies' curve, and its switches.
+const advancedViews = { showHeater, showCups, showSpectrum, showFlyTrails, autoPixels, targetFps }
+const advancedViewDefaults = () => ({ showHeater: false, showCups: false, showSpectrum: false, showFlyTrails: false, autoPixels: true, targetFps: defaultTargetFps })
+const ADVANCED_NUMBERS = Object.keys(numberSettings).filter(k => !AT_KEYS.includes(k) && k !== 'touchStrength' && k !== 'seed')
+const choicesOf = { musicTheme: musicThemes, dyeMode: dyeModes, eddyCurve: eddyCurves }
+const fits = (key, v, base) => choicesOf[key] ? choicesOf[key].includes(v) : typeof v === typeof base && (typeof v !== 'number' || Number.isFinite(v))
+const near = (a, b) => typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b)) : a === b
+const put = (states, base, values) => { for (const [k, st] of Object.entries(states)) { const v = k in values && fits(k, values[k], base[k]) ? values[k] : base[k]; if (st() !== v) st(v) } }
+const take = states => Object.fromEntries(Object.entries(states).map(([k, st]) => [k, st()]))
+export const takeShow = () => take(showSettings)
+export const putShow = s => put(showSettings, showDefaults(), s)
+export const takeView = () => take(viewSwitches)
+export const putView = v => put(viewSwitches, viewDefaults(), v)
+// Every Advanced setting's default, by key, and the ones that differ from it now.
+export const advancedBase = () => { const d = defaults(); return { ...Object.fromEntries(ADVANCED_NUMBERS.map(k => [k, d[k]])), eddyCurve: d.eddyCurve, ...advancedViewDefaults() } }
+export const takeAdvanced = () => {
+  const base = advancedBase(), now = { ...Object.fromEntries(ADVANCED_NUMBERS.map(k => [k, numberSettings[k]()])), eddyCurve: eddyCurve(), ...take(advancedViews) }
+  return Object.fromEntries(Object.keys(base).filter(k => !near(now[k], base[k])).map(k => [k, now[k]]))
+}
+export const cleanAdvanced = a => { const base = advancedBase(); const out = {}; for (const k of Object.keys(base)) if (a && k in a && fits(k, a[k], base[k]) && (typeof a[k] !== 'number' || a[k] > 0 || signedSettings.has(k) || k in advancedViews)) out[k] = a[k]; return out }
+// Every Advanced setting to its default, then the theme's own on top, each set only if it moves.
+export const putAdvanced = a => {
+  const base = advancedBase(), want = { ...base, ...cleanAdvanced(a) }
+  for (const k of ADVANCED_NUMBERS) if (!near(numberSettings[k](), want[k])) numberSettings[k](want[k])
+  if (eddyCurve() !== want.eddyCurve) eddyCurve(want.eddyCurve)
+  put(advancedViews, advancedViewDefaults(), want)
+}
+// The colours of a theme in one order (the panel compares themes by their JSON): the places, then the stops, back and arrows.
+export const COLOUR_KEYS = ['heatCold', 'heatCool', 'heatWarm', 'heatHot', 'heatPeak', 'bgColor', 'flowSlow', 'flowFast']
+const colourDefaults = () => ({ ...defaultHeatColors, bgColor: defaultBgColor, flowSlow: defaultFlowSlow, flowFast: defaultFlowFast })
+export const normColours = t => {
+  const d = colourDefaults(), out = {}
+  AT_KEYS.forEach((k, i) => { out[k] = Number(t[k]) > 0 && Number(t[k]) < 1 ? Number(t[k]) : EVEN[i] })
+  for (const k of COLOUR_KEYS) { const c = t[k] && [t[k].r, t[k].g, t[k].b].every(v => Number.isFinite(v) && v >= 0 && v <= 255) ? t[k] : d[k]; out[k] = { r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b) } }
+  return out
+}
+// Short forms for a link: what differs from the defaults, colours as six hex digits, places to three decimals.
+export const packColours = t => {
+  const n = normColours(t), d = normColours({}), out = {}
+  for (const k of AT_KEYS) if (!near(n[k], d[k])) out[k] = Math.round(n[k] * 1000) / 1000
+  for (const k of COLOUR_KEYS) if (toHex(n[k]) !== toHex(d[k])) out[k] = toHex(n[k])
+  return out
+}
+export const unpackColours = o => { const t = {}; for (const [k, v] of Object.entries(o || {})) t[k] = COLOUR_KEYS.includes(k) ? fromHex(String(v)) : v; return normColours(t) }
+const packDiff = (values, base) => Object.fromEntries(Object.keys(base).filter(k => k in values && !near(values[k], base[k])).map(k => [k, values[k]]))
+const unpackDiff = (o, base) => { const out = { ...base }; for (const k of Object.keys(base)) if (o && k in o && fits(k, o[k], base[k])) out[k] = o[k]; return out }
+export const packShow = s => packDiff(s, showDefaults())
+export const unpackShow = o => unpackDiff(o, showDefaults())
+export const packView = v => packDiff(v, viewDefaults())
+export const unpackView = o => unpackDiff(o, viewDefaults())
+// The theme data a share link carries after the settings (_c a colour theme, _s a show, _t a whole theme), read by the
+// panel as it opens: a name alone when the link's own settings are that theme, its short form when they are not.
+export const sharedExtras = () => {
+  const code = new URLSearchParams(window.location.search).get('s')
+  if (!code) return null
+  try { const o = JSON.parse(fromBase64Url(code)); return o._c || o._s || o._t ? { c: o._c, s: o._s, t: o._t } : null } catch { return null }
+}

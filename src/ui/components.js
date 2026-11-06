@@ -17,7 +17,7 @@ export const row = (title, control, { value, reset, forId } = {}) => div(
 // A knob for a numeric state. Robert: "it would be cool if we had like cool retro knobs or
 // something. they need to still be easy to use in the panel though on desktop and mobile". So it
 // turns with a straight drag, sideways or up, not a circular one: KNOB_SWEEP px of drag runs
-// the whole range, a tenth of that with shift held, and the wheel and the arrow keys step it.
+// the whole range, a tenth of that with shift held, and the wheel (with super, ctrl or alt held) and the arrow keys step it.
 // Double click resets. `max` may be a number or a function, for ranges that follow the window.
 // With `scales` (the pinch lab), the knob's range is one of those decades, 1, 10, 100 and so on,
 // each stepping at a hundredth of itself, and a command or control click moves to the next one
@@ -140,7 +140,10 @@ export const knob = (title, id, state, { min, max, step, scales, slider = false 
       onpointerup: () => { drag = null; dial.classList.remove('turning') },
       onpointercancel: () => { drag = null; dial.classList.remove('turning') },
       onlostpointercapture: () => { drag = null; dial.classList.remove('turning') },
+      // The wheel turns a knob only with a modifier held (Robert: "let's make knobs only scrollable if holding super, ctrl,
+      // or alt (any modifier) then disable scrolling by default"), so scrolling the panel past a knob no longer moves it.
       onwheel: e => {
+        if (!(e.metaKey || e.ctrlKey || e.altKey)) return
         e.preventDefault()
         nudge(e.deltaY < 0 ? 1 : -1)
       },
@@ -413,15 +416,17 @@ export const swatchRow = (title, view, when, ...swatches) => div(
 )
 
 // A segmented control for a state that takes one of a few words.
-export const segmented = (idPrefix, state, options) => div(
+// labels: each option's words, as written (no capitals added), when they are not the option itself.
+export const segmented = (idPrefix, state, options, labels = null) => div(
   { class: 'segmented' },
   ...options.map(option => button(
     {
       id: `${idPrefix}-${option}`,
       class: state.bindAttr(() => state() === option ? 'on' : ''),
+      ...(labels ? { style: { textTransform: 'none' } } : {}),
       onclick: () => state(option)
     },
-    option
+    labels ? labels[option] : option
   ))
 )
 
@@ -461,6 +466,11 @@ export const pair = (titleA, controlA, titleB, controlB) => div(
   { class: 'pair' },
   div({ class: 'pair-cell' }, label({ class: 'row-label' }, titleA), controlA),
   titleB ? div({ class: 'pair-cell' }, label({ class: 'row-label' }, titleB), controlB) : div({ class: 'pair-cell' })
+)
+// Three in a row, as pair: [title, control] each.
+export const trio = (...cells) => div(
+  { class: 'pair trio' },
+  ...cells.map(([title, control]) => div({ class: 'pair-cell' }, label({ class: 'row-label' }, title), control))
 )
 
 // A section. With `open` (a fnstate holding whether it is open) the title bar folds it away;
