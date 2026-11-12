@@ -3,7 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <title>lavalamp.app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <!-- On an iPhone a page cannot go fullscreen; added to the Home Screen it opens as an app with no browser around it,
+         the page under the notch and the home bar (the settings button and panel keep clear of them, panel.css, app.js). -->
+    <link rel="manifest" href="./src/home/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="lavalamp.app">
+    <link rel="apple-touch-icon" href="./src/home/apple-touch-icon.png">
     <script type="importmap">
     {
       "imports": {

@@ -1,4 +1,5 @@
 import { drawCooling, drawCups, drawFlow, drawHeater, heatColor as paletteColor, paletteKey } from './overlays.js'
+import { createStaticColors } from './staticColors.js'
 
 const ALPHA_THRESHOLD = 70
 // The threshold pass touches every pixel in JavaScript, so the canvas has at most
@@ -29,6 +30,7 @@ export function createCanvasRenderer (canvas, look) {
   // Heat map discs, one per palette step, same size as the lava disc.
   const heatDiscs = []
   let heatKey = ''
+  const statics = createStaticColors() // Static colors: each particle's fixed step of the heat discs (staticColors.js)
   let width = 0 // of the canvas bitmap, where all the pixel work happens
   let height = 0
   let lampWidth = 0
@@ -56,10 +58,21 @@ export function createCanvasRenderer (canvas, look) {
     const { r, g, b } = look.lavaColor || { r: 0, g: 0, b: 0 }
     const view = overlays.view || { k: 1, ox: 0, oy: 0 }
     const size = look.particleSize * view.k * scale
+    const placeOf = statics.begin(look, state, count, overlays.lamp, lampWidth, lampHeight)
     const heat = look.showHeat && state.temp && overlays.neutral > 0
     let t = now()
     context.clearRect(0, 0, width, height)
-    if (heat) {
+    if (placeOf) {
+      prepareHeatDiscs(size)
+      const span = heatDiscs[0].width
+      const offset = span / 2
+      const top = HEAT_STEPS - 1
+      for (let i = 0; i < count; i++) {
+        const dy = (state.y[i] * view.k + view.oy) * scale - offset
+        if (dy < -span || dy > height) continue
+        context.drawImage(heatDiscs[Math.round(placeOf(i) * top)], (state.x[i] * view.k + view.ox) * scale - offset, dy, span, span)
+      }
+    } else if (heat) {
       prepareHeatDiscs(size)
       const span = heatDiscs[0].width
       const offset = span / 2
@@ -153,5 +166,5 @@ export function createCanvasRenderer (canvas, look) {
     }
   }
 
-  return { render, resize, profile, pixels: () => width * height }
+  return { render, resize, profile, pixels: () => width * height, takePlaces: statics.take }
 }

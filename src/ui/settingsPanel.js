@@ -1,4 +1,4 @@
-import { a, button, div, fnstate, input, span } from '@srfnstack/fntags'
+import { a, button, div, fnstate, input, li, ol, span } from '@srfnstack/fntags'
 import { TOUCH_UI, ask, chevron, group, picker, helpList, hint, iconChoice, knob, knobStyle, knobStyles, knobs, notify, pair, row, trio, section, sectionWith, segmented, subgroup, swatch, swatchRow, toggle, tooltips } from './components.js'
 import {
   bgColor,
@@ -98,10 +98,32 @@ import {
   putPlaces,
   soundPending,
   fullscreen,
+  fullscreenHow,
+  pageFullscreenWorks,
+  fromHomeScreen,
   motionOn,
   firefly,
   iceFly,
   dyedFluid,
+  staticColors,
+  staticColorsBy,
+  staticColorsBys,
+  staticColorsByNames,
+  staticColorsLayered,
+  defaultStaticColorsLayered,
+  densityMass,
+  defaultDensityMass,
+  densityHeat,
+  defaultDensityHeat,
+  densityCling,
+  defaultDensityCling,
+  layerCenter,
+  defaultLayerCenter,
+  layerCurve,
+  defaultLayerCurve,
+  layerBands,
+  defaultLayerBands,
+  layerReverse,
   streamersInMusic,
   motionInMusic,
   musicFlow,
@@ -220,6 +242,7 @@ import {
   sharedExtras
 } from './settings.js'
 import { themeList, confirmReset, sameData } from './themeList.js'
+import { homeScreenSteps } from './homeScreen.js'
 import { CURRENT, goTo, versions } from '../versions.js'
 
 // The panel's names, each in one place so a rename is one line (Robert: "We should rename color themes to My Colors.
@@ -250,7 +273,7 @@ const card = (open, title, { tools = [], before = [], always = [], cls = '' } = 
 const SETTING_NAMES = {
   musicFlowEvents: 'Flow events', musicHeatEvents: 'Heat events', musicFlow: 'Flow strength', musicHeat: 'Heat strength', musicSparkle: 'Sparkle', musicGlow: 'Glow',
   streamersInMusic: 'Streamers', motionInMusic: 'Motion in music', dyeMode: 'Drawn', dyeFade: 'Fade', dyeStamp: 'Stamp', dyeCurve: 'Streamer curve', dyeCut: 'Tail cut', dyeGlow: 'Streamer glow',
-  showFlow: 'Flow', motionOn: 'Motion', firefly: 'Firefly', iceFly: 'Ice fly', dyedFluid: 'Streamers',
+  showFlow: 'Flow', motionOn: 'Motion', firefly: 'Firefly', iceFly: 'Ice fly', dyedFluid: 'Streamers', staticColors: 'Static colors', staticColorsBy: 'Dealt by', staticColorsLayered: 'Density', layerCenter: 'Center', layerCurve: 'Layer curve', layerBands: 'Bands', layerReverse: 'Reverse', densityMass: 'Mass', densityHeat: 'Heat take', densityCling: 'Cling',
   stir: 'Stir', turbulence: 'Turb', drifters: 'Eddies', pace: 'Pace', eddySpeed: 'Speed', eddyFalloff: 'Fall off', eddyCurve: 'Curve', eddyPullIn: 'Rim pull in', splatPullIn: 'Splat pull in',
   conduction: 'Conduct', maxTemp: 'Max Temp', heatSpots: 'Period', elementHeat: 'Heat', elementLife: 'Duration', elementLifeScale: 'Big pot', elementRate: 'Pulses', elementCore: 'Core', floorHeat: 'Floor', floorGlow: 'Glow',
   particleCount: 'Count', interactionRadius: 'Radius', cupDepth: 'Bottles', reserve: 'Reserve', pull: 'Pull', stiffnessNear: 'Near', gravityStrength: 'Gravity', lift: 'Lift',
@@ -267,6 +290,8 @@ const settingWords = (k, v) => {
         : k === 'dyeCut' ? `${Number(v).toFixed(2)}/s`
           : k === 'dyeGlow' ? `${Number(v).toFixed(2)}x`
         : k === 'dyeMode' ? dyeModeNames[v] || v
+        : k === 'staticColorsBy' ? staticColorsByNames[v] || v
+        : k === 'layerBands' ? bandsWords(v)
           : typeof v === 'number' ? String(Math.round(v * 100) / 100) : String(v)
   return `${SETTING_NAMES[k] || k} ${value}`
 }
@@ -292,21 +317,21 @@ const ICE_FLY_ABOUT = 'The firefly\'s cold twin: an unseen ice fly loops round t
 // The Streamers switch's lines (settings.js dyedFluid, render/dye.js). Shown as Streamers (Robert, on first seeing it: "oh shit,
 // this is insane looking. Let's change it from dyed fluid to 'ghosting'", then "oh, no, not ghosting, streamers. yeah, like when
 // people are on drugs lol"); the code and stored keys keep the dye names.
-const DYE_ABOUT = 'Every bit of lava leaves a streamer of its heat colour in the water, carried by the lamp\'s own flow, so the plumes and wakes show; it moves nothing.'
+const DYE_ABOUT = 'Every bit of lava leaves a streamer of its colour in the water, carried by the flow, so you can see the plumes and wakes. It only changes the look.'
 const STREAMERS_MUSIC_ABOUT = 'Streamers come on by themselves whenever Music plays a theme; off, only the Streamers switch shows them.'
 // Motion in music (settings.js motionInMusic; Robert: "music mode should turn off motion by default in the lamp").
-const MOTION_MUSIC_ABOUT = 'While Music plays a theme the lava ignores the device\'s tilt and shakes and the floor stays at the bottom; on, Motion works under a theme as it does without one.'
+const MOTION_MUSIC_ABOUT = 'On, tilting and shaking the device moves the lava while music plays, as it does without music. Off, the lava ignores the device during music.'
 // The Music card's Effects (settings.js musicFlow, musicHeat, musicSparkle, musicGlow; Robert: "I had two mega sliders I want
 // for music, under a section titled 'effects', flow strength and heat strength. I think we could also add checkboxes for
 // turning off global sparkle and glow.").
-const FLOW_STRENGTH_ABOUT = 'How hard the theme moves the lava: its eddies, pushes, splats and ring waves, 1x as tuned, 0 moves nothing, 2x twice as hard.'
-const HEAT_STRENGTH_ABOUT = 'How much the theme heats and cools the lava: its pot blasts, sparkles, glow heat and cold touches, 1x as tuned, 0 heats nothing.'
-const SPARKLE_MUSIC_ABOUT = 'The sparkle on every beat the theme lays over the lava; off, only the lanes\' own sparkle effects still flash.'
-const GLOW_MUSIC_ABOUT = 'The glow that follows the music, and the heat it gives; off, only the lanes\' own glow pulses still light the lava.'
+const FLOW_STRENGTH_ABOUT = 'How hard the music moves the lava: 1x is normal, 0 moves nothing, 2x twice as hard.'
+const HEAT_STRENGTH_ABOUT = 'How much the music heats and cools the lava: 1x is normal, 0 none, 2x twice as much.'
+const SPARKLE_MUSIC_ABOUT = 'The sparkle on every beat. Off, only the theme\'s own sparkle effects on hits still flash.'
+const GLOW_MUSIC_ABOUT = 'The glow that follows the music, and the warmth it gives. Off, only the theme\'s own glow pulses still light the lava.'
 // Flow events and Heat events (settings.js musicFlowEvents, musicHeatEvents; Robert: "we should allow disabling heat or flow
 // events, some people may not like that so much").
-const FLOW_EVENTS_ABOUT = 'Whether the music\'s hits move the lava, their eddies, pushes, splats and ring waves; off, nothing a hit fires stirs it.'
-const HEAT_EVENTS_ABOUT = 'Whether the music\'s hits heat and cool the lava, their pot blasts, sparkle effects and cold bursts; off, only the sparkle on every beat and the glow still warm it.'
+const FLOW_EVENTS_ABOUT = 'Whether the music\'s hits stir the lava with eddies, pushes, splats and ring waves.'
+const HEAT_EVENTS_ABOUT = 'Whether the music\'s hits heat and cool the lava with pot blasts, sparkles and cold bursts. Off, only the beat sparkle and the glow still warm it.'
 // The Effects fold's tabs (Robert: "we should make heat and flow two sub cards with 50% width tab header, one says 'Flow'
 // one says 'Heat'. Each has an enabled toggle and strength... Oh, we should also move streamers as a tab, so 3 tabs"):
 // the open one remembered in this browser alone, not in a save.
@@ -314,11 +339,27 @@ const EFFECT_TABS = ['flow', 'heat', 'streamers']
 const EFFECT_TAB_NAMES = { flow: 'Flow', heat: 'Heat', streamers: 'Streamers' }
 const EFFECT_TAB_KEY = 'lavalamp.app-music-effects-tab'
 const DYE_MODE_ABOUT = 'Where the streamers are drawn: Under the lava, glowing in the water, Over it as faint smoke, or Alone with the lava hidden.'
-const DYE_FADE_ABOUT = 'How much of the streamers is gone each second, so a low Fade leaves long trails and a high one only the freshest.'
+const DYE_FADE_ABOUT = 'How fast the streamers fade: low leaves long trails, high keeps only the freshest.'
 const DYE_STAMP_ABOUT = 'How strongly each bit of lava leaves its streamer as it passes.'
-const DYE_CURVE_ABOUT = 'How much faster the dim end of a streamer fades than its bright head: 0 fades all of it alike, 1 holds the head at Fade and drops the tail away, so a slower Fade gives a strong head without a long tail.'
-const DYE_CUT_ABOUT = 'A fixed amount taken off every streamer each second, so the faint ends stop cleanly instead of trailing on: 0 takes nothing, 1 clears full strength dye in a second.'
-const DYE_GLOW_ABOUT = 'How brightly the streamers are drawn, 1x as they were; over 1 the brightest parts bend softly towards full instead of clipping flat.'
+const DYE_CURVE_ABOUT = 'How much faster a streamer\'s faint tail fades than its bright head. 0 fades it all alike; higher keeps a strong head with a shorter tail.'
+const DYE_CUT_ABOUT = 'Trims the faint ends of the streamers so they stop cleanly instead of trailing on. 0 trims nothing.'
+const DYE_GLOW_ABOUT = 'How brightly the streamers are drawn. Above 1x the brightest parts soften towards white instead of clipping flat.'
+// Static colors (settings.js staticColors, render/staticColors.js; Robert: "could be a view setting, 'static colors'").
+const STATIC_ABOUT = 'Each bit of lava keeps one colour for life instead of showing its heat. Each colour has its own weight, cold heaviest, so the lava sorts into bands of colour inside each blob. Fine tuning is under Advanced, Liquid, Static colors.'
+const STATIC_BY_ABOUT = 'How the colours are handed out when Static colors comes on: by Height, cold at the bottom to hot at the top; Across, left to right; or at Random.'
+// Density, once Layered (settings.js staticColorsLayered, simulation.js layerScale; Robert: "vary the density of the particles on a
+// gradient that matches the color gradient", then "we probably need some advanced tuning knobs in the settings for
+// particle density where can fiddle with the relationship to the gradient to find jsut the right settings").
+const LAYERED_ABOUT = 'How much heavier the cold colours are than the hot ones, so cold lava settles into layers of colour while heat still lifts it. 2 is the default and the most; 0 makes every colour weigh the same.'
+// Density physics (settings.js densityMass; Robert: "also I wanted controls for controlling the phsyics of the density").
+const DENSITY_MASS_ABOUT = 'How much the heavy colours also resist being pushed, so they shove the light ones aside. 0 turns it off.'
+const DENSITY_HEAT_ABOUT = 'How much slower the heavy colours heat and cool, so they linger on the floor before rising and stay hot longer once up. 0 turns it off.'
+const DENSITY_CLING_ABOUT = 'How much colours far apart on the gradient let go of each other, so each colour gathers into its own blobs, like oil and water. 0 turns it off.'
+const LAYER_CENTER_ABOUT = 'Which colour weighs the same as ordinary lava; colours colder than it are heavier, warmer ones lighter. Lower makes most of the lava lighter, higher most of it heavier; 0.5 is the middle.'
+const LAYER_CURVE_ABOUT = 'Where along the colours the weight changes most: 1 evenly, over 1 mostly among the hot colours, under 1 mostly among the cold.'
+const LAYER_BANDS_ABOUT = 'Smooth gives every colour its own weight; 2 or more groups the colours into that many weights, for sharper layers.'
+const LAYER_REVERSE_ABOUT = 'Makes the cold colours the lightest instead of the heaviest.'
+const bandsWords = v => v >= 2 ? String(Math.round(v)) : 'Smooth'
 // The streamers' Drawn, Fade and Stamp, shown under whichever switch turns the streamers on: the lamp's own Streamers
 // switch, and the Music card's Streamers (Robert: "oh we lost the streamer controls, can we have that back?", after the
 // music's switches moved to the Music card and the controls stayed hidden under the lamp's switch, off in music).
@@ -394,6 +435,7 @@ export function createSettingsPanel () {
   const touchOpen = fold('touch')
   const viewOpen = fold('view')
   const effectsOpen = fnstate(false) // the Music card's Effects fold, closed as the card opens
+  const staticDetailOpen = fnstate(false) // Advanced, Liquid: the Static colors fold, closed as the panel opens
   let tabWas = null
   try { tabWas = localStorage.getItem(EFFECT_TAB_KEY) } catch (e) {}
   const effectsTab = fnstate(EFFECT_TABS.includes(tabWas) ? tabWas : 'flow')
@@ -1101,11 +1143,11 @@ export function createSettingsPanel () {
           swatch('Slow', 'flowSlow', flowSlow),
           swatch('Fast', 'flowFast', flowFast)
         ),
-        hint(help, `The lava is coloured by its heat, coldest and sinking to hottest. The bar is the heat colours: click a dot to change it, drag the middle three along the bar. ${MY_COLORS} are starting points: click one to load it, and the plus saves what you have as a new one (the pencil renames a saved one or saves over it). The flow colours are the slowest to fastest arrow.`)
+        hint(help, `The lava is coloured by its heat, cold at the left of the bar to hot at the right. Click a dot to change its colour and drag the middle three to move them; the button under the bar is the background. ${MY_COLORS} are starting points: click one to load it, the plus saves yours as a new one, the pencil renames or overwrites a saved one, the plane shares one and the trash deletes one. Flow colours paint the flow arrows, slow to fast.`)
       ),
       card(themesOpen, THEMES_TITLE, { tools: [span({ class: 'sub-sub music-sub themes-sub' }, 'save and share every setting'), span({ class: 'theme-tools' }, lampThemes.plane, lampThemes.trash)] },
         lampThemes.element,
-        hint(help, `A theme is the whole lamp: its colours, its show, the ${VIEW_TITLE} switches and every Advanced setting you changed. Click one to load it (it asks first if that would reset something); the plus saves the lamp as it is now as a new one, the pencil renames one or saves over it, the trash deletes one. Default is the lamp as it comes.`)
+        hint(help, `A theme is the whole lamp: its colours, its show, the ${VIEW_TITLE} switches and every Advanced setting you changed. Click one to load it (it asks first if that would undo changes); the plus saves the lamp as a new theme, the pencil renames or overwrites one, the plane shares one and the trash deletes one. Default is the lamp as it comes.`)
       ),
       // Touch as its own boxed sub panel with pictures: a plain row of words was invisible to a
       // thirteen year old (Robert: "I want to make it look more like a sub panel"). Folded to its title.
@@ -1168,7 +1210,7 @@ export function createSettingsPanel () {
           button({ class: 'music-help-link', onclick: () => musicHelp(!musicHelp()) }, 'Music not working?'),
           musicHelpBody,
           // The show, picked from My Shows (the Music theme's two buttons before).
-          Object.assign(shows.element, { title: `What the lamp does with the music: Vibes is the tuned show over a still lamp, Calm the same with no hit moving or heating the lava and no streamers, its sparkles and glow alone. The plus saves the effects below as a show of your own.` }),
+          Object.assign(shows.element, { title: `What the lamp does with the music. While a show plays, the music drives the pots and eddies instead of the lamp. Vibes is the tuned show; Calm is Vibes with no hits moving or heating the lava and no streamers, only sparkles and glow; Trippy is Vibes at double strength, drawn as bright, slow-fading streamers with the lava hidden. The plus saves the effects below as a show of your own.` }),
           // Effects, one fold under the theme pick holding every switch and slider for how the theme looks (Robert: "our
           // toggles have become unkempt. these settings for music should be in the music panel"; "under a section titled
           // 'effects', flow strength and heat strength... checkboxes for turning off global sparkle and glow"; "let's make
@@ -1199,23 +1241,38 @@ export function createSettingsPanel () {
           ),
         )
       ),
-      hint(help, 'Music: the switch makes the lamp listen and move to the music. Mic hears whatever is playing in the room, or any input you choose; System, on a computer, hears what the computer plays, through a screen share of which only the sound is used. What the music does is under Advanced, Music. The beat finder hears what was learned from songs split into their drums and bass: the kick heard in a pumping drop, the kick told from the bass\'s notes, the hat from the very top of the spectrum (which System audio has and a microphone across a room may not) and a real snare.'),
+      hint(help, 'Music: the switch makes the lamp listen and move to the music. Mic hears the room, or any input you choose. On a computer, System hears what the computer plays (through a screen share; only the sound is used), and File plays a song you pick and can record a video of the lamp with it. The show and its Effects set what the music does; finer knobs are under Advanced, Music.'),
       // View: the lamp's own switches in a card, folded to its title (Robert: "I also think we should get all of those top
       // level toggles into a card").
       // Fullscreen on the card's title line, as Music's switch is on its own (Robert: "put the fullscreen checkbox on the
       // header line of view, kinda like how music enabled is there").
-      card(viewOpen, VIEW_TITLE, { tools: [span({ class: 'sub-sub music-sub' }, 'fullscreen'), toggle('fullscreen', fullscreen)] },
+      // On an iPhone the switch cannot work (no page fullscreen there): a ? in its place opens the steps to the lamp with
+      // nothing around it, from the Home Screen (Robert: "I think we should probably hide the checkbox on ios and replace it
+      // with a ? that explains how to make fullscreen work on the app. make the directions grandma friendly and consider
+      // the ios versions"; homeScreen.js has the steps). Opened from the Home Screen it already is, so neither shows.
+      card(viewOpen, VIEW_TITLE, {
+        tools: pageFullscreenWorks
+          ? [span({ class: 'sub-sub music-sub' }, 'fullscreen'), toggle('fullscreen', fullscreen)]
+          : fromHomeScreen ? [] : [span({ class: 'sub-sub music-sub' }, 'fullscreen'),
+              button({ class: fullscreenHow.bindAttr(() => fullscreenHow() ? 'panel-close panel-help fullscreen-help on' : 'panel-close panel-help fullscreen-help'), title: 'How to make the lamp fill the screen', 'aria-label': 'How to make the lamp fill the screen', onclick: e => { e.stopPropagation(); fullscreenHow(!fullscreenHow()) } }, '?')],
+        always: pageFullscreenWorks || fromHomeScreen ? [] : [div({ class: 'music-note fullscreen-how', role: 'status', style: { display: fullscreenHow.bindStyle(() => fullscreenHow() ? 'block' : 'none') } },
+          div({ class: 'fullscreen-how-head' }, span('To make the lamp fill the whole screen, put it on your Home Screen:'),
+            button({ class: 'version-banner-close', title: 'Close', 'aria-label': 'Close', onclick: () => fullscreenHow(false) }, '×')),
+          ol(...homeScreenSteps().map(step => li(step))))]
+      },
         // Two to a row: three did not fit the card's width.
         pair('Flow', toggle('flow', showFlow), 'Motion', toggle('motion', motionOn)),
         // The two flies side by side, each its own switch (the Ice fly the firefly's cold twin).
         pair('Firefly', Object.assign(toggle('firefly', firefly), { title: FIREFLY_ABOUT }), 'Ice fly', Object.assign(toggle('ice-fly', iceFly), { title: ICE_FLY_ABOUT })),
         hint(help, [
           ['Flow', 'Draw the stirring as arrows, like wind on a weather map.'],
-          ['Motion', 'The lava follows the device: a shake shoves it, and turning a phone turns the floor. Off, the floor stays at the bottom.'],
-          ['Fullscreen', 'The lamp over the whole screen with nothing around it. Esc brings the browser back.']
+          ['Motion', 'The lava follows the device: shaking the phone or moving the browser window shoves it, and tilting a phone tilts which way is down. Off, down is always the bottom of the screen. While a music show plays, Motion rests unless the show turns it on (Effects, Flow, Motion).'],
+          ['Fullscreen', 'Fills the whole screen with the lamp; Esc brings the browser back. On an iPhone the switch is a ?, which shows how to open the lamp full screen from the Home Screen.']
         ]),
         pair('Streamers', Object.assign(toggle('dyed-fluid', dyedFluid), { title: DYE_ABOUT })),
         dyeControls(dyedFluid, 'dye'),
+        pair('Static colors', Object.assign(toggle('static-colors', staticColors), { title: STATIC_ABOUT })),
+        hint(help, [['Static colors', STATIC_ABOUT]]),
         hint(help, [['Firefly', FIREFLY_ABOUT], ['Ice fly', ICE_FLY_ABOUT], ['Streamers', DYE_ABOUT], ['Drawn', DYE_MODE_ABOUT], ['Fade', DYE_FADE_ABOUT], ['Stamp', DYE_STAMP_ABOUT]])
       )
     ),
@@ -1247,15 +1304,15 @@ export function createSettingsPanel () {
             knob('Splat pull in', 'splat-pull-in', splatPullIn, { min: 0, max: 1, step: 0.05 }, () => defaultSplatPullIn, fixed(2))
           ),
         helpList(help, [
-          ['Speed', 'How fast an eddy comes in from the edge at birth, in px/s; each is a little faster or slower than the knob.'],
-          ['Fall off', 'How quickly an eddy loses that speed with age; 0 keeps it. It never drops below 15% of its birth speed.'],
-          ['Curve', 'The shape of the slowing: log falls fast then hobbles on, linear runs down steadily, exp drops off and levels.'],
-          ['Rim pull in', 'How far every eddy\'s reach pulls in to its core as it fades, so the outside dies first and the last thing left is a tight spin in the middle, the core outlasting the rim a little. 0 fades the whole eddy at once, as it was.'],
-          ['Splat pull in', 'How thin a splat\'s legs narrow as it flies: each starts as wide as ever and keeps its strength, then thins to a spike, so the lava is cut into spikes rather than thrown out in fat arms; the splat lives a little longer with it. 0 is the splat as it was.'],
-          ['Stir', 'Speed of the slow convection roll, up the middle and down the walls; negative runs it backwards.'],
-          ['Turb', 'Strength of all the eddies, the ones that appear in place and the drifting tornadoes, and how often the in place ones appear.'],
-          ['Eddies', 'How many drifting tornado eddies wander the lamp at once; Turb sets how strong they are.'],
-          ['Pace', 'Slow motion for the whole lamp.']
+          ['Speed', 'How fast an eddy travels in from the edge when it is born, in px/s on a big screen and less on smaller ones. Each eddy is a little faster or slower than this.'],
+          ['Fall off', 'How quickly an eddy slows as it ages; 0 keeps its speed. It never drops below 15% of its starting speed.'],
+          ['Curve', 'The shape of the slowing: log slows fast then creeps on, linear slows steadily, exp slows hard then levels off.'],
+          ['Rim pull in', 'As an eddy fades its outside dies first, so it shrinks to a tight spin in the middle. Higher shrinks it more; 0 fades the whole eddy evenly.'],
+          ['Splat pull in', 'How much a splat\'s arms thin to spikes as it flies, keeping their strength, so the lava is cut into spikes instead of thrown out in fat arms; it also lasts a little longer. 0 keeps the arms wide.'],
+          ['Stir', 'Speed of a slow roll through the whole lamp, up the middle and down the walls; negative runs it backwards. 0, as tuned, turns it off.'],
+          ['Turb', 'How strong the eddies are, the swirls that come in from the edges and wander the lamp. 0 stills them.'],
+          ['Eddies', 'How many eddies can be in the lamp at once, both kinds counted. They come in bursts with quiet gaps between; Turb sets how strong they are.'],
+          ['Pace', 'How fast the whole lamp runs: 1 is full speed, lower is slow motion.']
         ])
       ),
       group('Heating',
@@ -1276,16 +1333,16 @@ export function createSettingsPanel () {
             knob('Glow', 'floor-glow', floorGlow, { min: 0, max: 6, step: 0.1 }, () => defaultFloorGlow, fixed(1))
           ),
         helpList(help, [
-          ['Period', 'Seconds between rounds of pots lighting under the lava: lower is more often. 0 keeps the whole floor warm instead.'],
-          ['Conduct', 'How fast heat spreads between touching lava. High and a blob warms and lifts as one; too high and a rising blob heats the pool below it through its neck and feeds the stretch.'],
-          ['Max Temp', 'The hottest a particle can get, which is also the fastest it can rise.'],
+          ['Period', 'How often pots light under the lava: about Pulses lightings every Period seconds, so lower is more often. 0 turns the pots off and warms the whole floor evenly.'],
+          ['Conduct', 'How fast heat spreads between touching lava. Higher and a blob warms and rises as one; too high and a rising blob keeps heating the pool below through its neck and stretches into a long column.'],
+          ['Max Temp', 'The hottest the lava can get. Hotter lava rises faster, so this also caps how fast it rises.'],
           ['Heat', 'How strongly a lit pot heats the lava in it: higher heats faster.'],
-          ['Duration', 'How long a pot stays lit, in seconds, for the smallest pot. Bigger pots stay lit longer, up to Big pot times this.'],
-          ['Big pot', 'Duration multiplier for the biggest pot: how many times longer it stays lit than the smallest. 1 lights every pot for the same time.'],
-          ['Pulses', 'How many pots light per Period, between them; small pots near the middle light most.'],
-          ['Core', 'How wide a lit pot\'s hot core is at its narrowest, as a fraction of the shorter side; each lighting draws between this and the whole pot.'],
-          ['Floor', 'The floor\'s contact heat when nothing is lit, as a share of full power.'],
-          ['Glow', 'How much brighter the floor gets under a pot at full glow.']
+          ['Duration', 'The longest a small pot stays lit, in seconds; each lighting lasts between a third of this and all of it. Bigger pots stay lit longer, up to Big pot times this.'],
+          ['Big pot', 'How many times longer the biggest pot stays lit than the smallest. 1 lights every pot for the same time.'],
+          ['Pulses', 'How many pots light in each Period, all pots together; small pots near the middle light most often.'],
+          ['Core', 'The narrowest a lit pot\'s hot spot can be, as a share of the lamp\'s shorter side. Each lighting is somewhere between this and the whole pot, and a narrow one stays lit longer.'],
+          ['Floor', 'How warm the floor is between pots, as a share of full power.'],
+          ['Glow', 'How much extra heat the floor gives under a lit pot, on top of Floor.']
         ])
       ),
       group('Liquid',
@@ -1315,23 +1372,50 @@ export function createSettingsPanel () {
             knob('Skin', 'skin', skin, { min: 0.1, max: 300, step: 0.1 }, () => defaultSkin, fixed(1)),
             knob('Wall', 'wall', wall, { min: 0, max: 50, step: 1 }, () => defaultWall, v => `${v} px`)
           ),
+        // Static colors' knobs, moved here from the View card, which keeps only the switch (Robert: "These should be the
+        // default for the "static colors" in the view page, and the rest should move into a sub panel under rendering or
+        // liquid"). Liquid, since they are mostly how the lava moves. Folded as the panel opens and always shown, as the
+        // other Advanced knobs are; they act only while Static colors is on.
+        div({ class: staticDetailOpen.bindAttr(() => staticDetailOpen() ? 'sub-panel nested' : 'sub-panel nested folded') },
+          div({ class: 'sub-title foldable', onclick: () => staticDetailOpen(!staticDetailOpen()) }, span('Static colors'), chevron()),
+          div({ class: 'sub-body' },
+            hint(help, 'These act only while Static colors is on, in the View card.'),
+            Object.assign(row('Dealt by', segmented('static-colors-by', staticColorsBy, staticColorsBys, staticColorsByNames)), { title: STATIC_BY_ABOUT }),
+            knobs(
+              Object.assign(knob('Density', 'static-colors-layered', staticColorsLayered, { min: 0, max: 2, step: 0.01, slider: true }, () => defaultStaticColorsLayered, fixed(2)), { title: LAYERED_ABOUT }),
+              Object.assign(knob('Center', 'layer-center', layerCenter, { min: 0, max: 1, step: 0.05, slider: true }, () => defaultLayerCenter, fixed(2)), { title: LAYER_CENTER_ABOUT }),
+              Object.assign(knob('Curve', 'layer-curve', layerCurve, { min: 0.25, max: 4, step: 0.05, slider: true }, () => defaultLayerCurve, fixed(2)), { title: LAYER_CURVE_ABOUT }),
+              Object.assign(knob('Bands', 'layer-bands', layerBands, { min: 0, max: 12, step: 1, slider: true }, () => defaultLayerBands, bandsWords), { title: LAYER_BANDS_ABOUT })
+            ),
+            hint(help, [['Dealt by', STATIC_BY_ABOUT], ['Density', LAYERED_ABOUT], ['Center', LAYER_CENTER_ABOUT], ['Curve', LAYER_CURVE_ABOUT], ['Bands', LAYER_BANDS_ABOUT]]),
+            pair('Reverse', Object.assign(toggle('layer-reverse', layerReverse), { title: LAYER_REVERSE_ABOUT })),
+            hint(help, [['Reverse', LAYER_REVERSE_ABOUT]]),
+            // Density physics (Robert: "also I wanted controls for controlling the phsyics of the density"), named in small
+            // print over its row as a subgroup is.
+            div({ class: 'knob-sub' }, 'Density physics'),
+            knobs(
+              Object.assign(knob('Mass', 'density-mass', densityMass, { min: 0, max: 1, step: 0.05, slider: true }, () => defaultDensityMass, fixed(2)), { title: DENSITY_MASS_ABOUT }),
+              Object.assign(knob('Heat take', 'density-heat', densityHeat, { min: 0, max: 2, step: 0.05, slider: true }, () => defaultDensityHeat, fixed(2)), { title: DENSITY_HEAT_ABOUT }),
+              Object.assign(knob('Cling', 'density-cling', densityCling, { min: 0, max: 1, step: 0.05, slider: true }, () => defaultDensityCling, fixed(2)), { title: DENSITY_CLING_ABOUT })
+            ),
+            hint(help, [['Mass', DENSITY_MASS_ABOUT], ['Heat take', DENSITY_HEAT_ABOUT], ['Cling', DENSITY_CLING_ABOUT]]))),
         helpList(help, [
-          ['Count', 'How many particles make up the visible lava; the pots below fill themselves on top.'],
+          ['Count', 'How many particles make up the lava you see. The hidden pots under the floor get extra on top of this.'],
           ['Radius', 'How far apart two particles can be and still feel each other.'],
-          ['Pull', 'How hard every particle pulls on its neighbours within the Radius: the cohesion. Was Stiff times Density.'],
-          ['Near', 'The push at close range that balances the Pull: it sets how close particles sit at rest, and a low Near lets the surface pack into a skin.'],
-          ['Gravity', 'How fast cold lava sinks; a particle at this temperature hovers.'],
-          ['Bottles', 'How big the bottles above and the pots below are, as a fraction of their width; 0 is a flat ceiling and floor.'],
-          ['Reserve', 'How much lava the pots under the floor may hold, as a multiple of the visible lava; all is no cap. The pots are sized by the window, so at a coarse grain they can hold several times the pool and every step pays for it.'],
-          ['Lift', 'The most buoyancy one particle may carry, in gravities. With no cap a particle heated at the line can leave the liquid alone at several gravities, a spray of single dots.'],
-          ['Wobble', 'Inertia: how long the lava keeps moving the way it was going; 0 is thick wax, more makes pinched necks snap back and blobs jiggle.'],
-          ['Settle', 'Pressure passes per frame. 2 spaces the particles more evenly so the surface is less bumpy, for most of a step\'s time again.'],
+          ['Pull', 'How strongly the lava holds together: how hard each particle pulls on its neighbours within Radius.'],
+          ['Near', 'The push that stops particles crowding together, balancing Pull. Lower lets the surface pack into a tight skin.'],
+          ['Gravity', 'How hard gravity pulls: how fast cold lava sinks, and how hot lava must get to rise.'],
+          ['Bottles', 'How deep the bottles above and the pots below are, as a fraction of their width. 0 gives a flat ceiling and floor.'],
+          ['Reserve', 'How much lava the hidden pots under the floor may hold, as a multiple of the lava you see; all means no limit. A big reserve can slow the lamp down.'],
+          ['Lift', 'The most lift a hot particle can have, in gravities; none means no limit. Too much and single hot particles shoot off as a spray of dots.'],
+          ['Wobble', 'How long the lava keeps moving the way it was going, in seconds. 0 is thick wax; more makes stretched necks snap back and blobs jiggle.'],
+          ['Settle', 'How many times a frame the particles are evened out. 2 gives a smoother surface for nearly twice the work.'],
           ['Viscosity', 'How much neighbouring particles slow each other as they close in, so necks thin and tails pull in more slowly. Needs Wobble above 0.'],
-          ['Kick', 'How much of the surface tension pull on a neck or a skin is carried on as velocity: the recoil when blobs part or merge.'],
-          ['Cap', 'The fastest that carried velocity may get, in gravities.'],
-          ['Reach', 'The most the pressure step may move a particle in one go, in radii. The GPU solver is capped at 0.5: above it a packed cold pool bursts or settles into a honeycomb.'],
-          ['Skin', 'Which particles take the Kick: those below this fraction of the mean density. 300 is all of them.'],
-          ['Wall', 'Lava this close to a side wall is eased away from it, in px; a glass the wax does not wet.']
+          ['Kick', 'How much bounce the lava gets from its own pull: the snap when blobs split or merge. Skin picks which particles get it.'],
+          ['Cap', 'The top speed that bounce (Kick) can reach, in gravities.'],
+          ['Reach', 'The furthest a particle can be pushed in one step, in radii. On the GPU it stops at 0.5, since more makes a packed cold pool burst or set into a honeycomb.'],
+          ['Skin', 'Which particles get the Kick: low values give it only to the thin edges of the lava, 300 (the most) to all of it.'],
+          ['Wall', 'Nudges lava within this many pixels of a side wall away from it, so it does not cling to the glass. 0 is off.']
         ])
       ),
       group('Rendering',
@@ -1349,14 +1433,14 @@ export function createSettingsPanel () {
         pair('Fly trails', toggle('fly-trails', showFlyTrails)),
         helpList(help, [
           ['Size', 'Radius of each drawn particle, so how fat the lava looks.'],
-          ['Smooth', 'Rounds off the bumps along every edge by blurring the lava\'s shape before it is cut, by this many pixels. 0 is the raw metaballs.'],
-          ['Blend', 'How far the colours inside the lava blur into each other, in pixels, without touching the edge; below Smooth it does nothing extra.'],
-          ['Pixels', 'The budget the lamp is drawn within, in megapixels. A big window is drawn at half resolution within one megapixel, where a Size under 4 is a single pixel dot. Not saved.'],
-          ['Auto Pixels', 'The lamp picks Pixels itself: down a step after two seconds under Target, up a step after four seconds well over it, never past the window\'s own size. Moving Pixels by hand switches this off.'],
+          ['Smooth', 'Rounds off the bumpy edges of the lava by blurring its outline this many pixels. 0 shows every particle\'s bump.'],
+          ['Blend', 'How far the colours inside the lava blur into each other, in pixels, without softening the edge. Set below Smooth it adds nothing.'],
+          ['Pixels', 'How many pixels the lamp is drawn with, in megapixels: fewer runs faster but softer, and a small Size can shrink to single dots. Auto Pixels sets it for you. Not saved.'],
+          ['Auto Pixels', 'The lamp picks Pixels itself to hold Target: a step down after two seconds below it, a step up after one second at half again above it, never past the screen\'s own resolution. Moving Pixels by hand turns this off.'],
           ['Target', 'The frame rate Auto Pixels holds.'],
           ['Heater', 'Show the heater strip and its elements along the floor.'],
           ['Fly trails', 'Draw where each fly has been in the last 6 seconds as a fading line, fireflies orange and ice flies blue; the dot is hollow while a fly lights no lava.'],
-          ['Reservoirs', 'Pull the whole lamp into frame, the hidden bottles above and pots below and all, so you can watch the lava in them; with Heater on, the pots light up as their heaters do.']
+          ['Reservoirs', 'Zooms out to show the hidden bottles above and pots below, so you can watch the lava in them. With Heater on, the pots light up as they heat.']
         ])
       ),
       // The lamp listening to music, a card like the other groups (Robert: "why is sound a
@@ -1399,7 +1483,7 @@ export function createSettingsPanel () {
             knob('Kick Hi', 'music-kick-hi', musicKickHi, HZ, () => defaultMusicRanges.kickHi, hz)
           ),
         pair('Spectrum', toggle('spectrum', showSpectrum)),
-        row('Log', button({ class: 'small', title: 'Save what the lamp heard and did since Listen went on, ten rows a second, as a file', onclick: () => window.dispatchEvent(new Event('lavalamp-music-log')) }, 'Save')),
+        row('Log', button({ class: 'small', title: 'Save what the lamp heard and did since Music went on, ten rows a second, as a file', onclick: () => window.dispatchEvent(new Event('lavalamp-music-log')) }, 'Save')),
         ...(GLOOPS_SHOWN
           ? [pair('Gloops', div({ class: soundPending.bindAttr(() => soundPending() ? 'pending' : '') }, toggle('sound', sound))),
               row('Bed', segmented('bed', soundBed, soundBeds))]
@@ -1408,17 +1492,17 @@ export function createSettingsPanel () {
           ['Sense', 'How loud the music counts as: turn up for a quiet speaker, down for a loud one. The meter shows the heat, eddy and kick ranges, and flashes on the beat.'],
           ['Every', 'Every this many beats a pot fires under the lava and, if there is room, an eddy comes in: 4 is every bar of most songs, 8 every two, 16 a phrase.'],
           ['Floor', 'How much the heat range turns up the floor heat, on top of the Floor knob: at 1x a full signal doubles it.'],
-          ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop.'],
+          ['Lift', 'How much the heat range raises Lift, so blobs rise harder on the drop. Does nothing while Lift is at none.'],
           ['Eddies', 'How much the eddy range swells the eddies, so each hit shoves the lava.'],
-          ['Kick', 'The kick range (the yellow band, 2 to 8 kHz: hi-hats and the click of a kick): each hit throws a small splat into the lava, this big (1 is a drop\'s), and its level sharpens the recoil of necks and skins. 0 is off.'],
-          ['Lead', 'With Drop at 0: how many seconds before a beat a pot is lit, so the blob lifts on the beat rather than after it. The lamp learns the beat from the music and predicts the next one; 0 lights the pot as the beat is heard.'],
-          ['Drop', 'One pot is kept closed and superheating; on the beat it opens and is blasted, so a hot glob leaves exactly on the beat, and the next pot closes. It opens every Every beats, and on the first kick after a breakdown, when it has charged longest and goes up hottest. 0 lights the pots ahead of the beat instead, by Lead.'],
-          ['Boom', 'A deep bass note, one that comes in out of a quiet low end and holds, opens a pot while the song is busy, so a burst of lava goes up with it. Sets how hard it is blasted; 0 is off.'],
-          ['Flip', 'The chance a drop turns an eddy\'s spin round on the spot, so the swirl suddenly runs the other way; a deep bass note does it at an eighth of the chance. Each eddy flips once in its life at most. 0 is off.'],
-          ['Wobble', 'While a wobble bass is sweeping (the wah wah of dubstep), an eddy comes in on its second to fourth wah, then another every few wahs while it keeps going: more often turned up, 0 is off. As many as Busy eddies allows, and two more.'],
-          ['Sections', 'How hard the lamp answers the parts of a song around a drop: a snare roll or a riser winds the drop\'s pot up, the roll\'s end and a crash on the one fire it, half time turns the eddies, a key change is a drop. 0 is off.'],
-          ['Busy eddies', 'While the song is busy, at least this many eddies; an Eddies setting above it is kept. 0 leaves Eddies as set.'],
-          ['Vent', 'The chance a beat lifts the lid of the pot that is closed and charging, for a moment: a puff of its superheated lava goes up with the beat, and the pot closes again and keeps charging. 0 is off.'],
+          ['Kick', 'The kick range (the yellow band, 2 to 8 kHz: hi-hats and the click of a kick). Each hit throws a small splat into the lava, 1 being a drop\'s size, and adds snap when blobs split. 0 is off.'],
+          ['Lead', 'With Drop at 0: how many seconds ahead of the beat a pot is lit, so the blob rises on the beat, not after it. 0 lights it as the beat is heard.'],
+          ['Drop', 'One pot is kept closed and heating up, and opens on the beat so a hot blob leaves right on it: every Every beats, and on the first kick after a breakdown. Sets how hard it blasts; 0 lights pots ahead of the beat instead (Lead).'],
+          ['Boom', 'A deep, held bass note opens a pot while the song is busy, sending a burst of lava up with it. Sets how hard; 0 is off.'],
+          ['Flip', 'The chance a drop reverses an eddy, so the swirl suddenly runs the other way; a deep bass note does it at an eighth of the chance. Each eddy flips once at most. 0 is off.'],
+          ['Wobble', 'While a wobble bass is sweeping (the wah wah of dubstep), an eddy comes in on its second to fourth wah, then every few wahs after. Higher is more often; 0 is off.'],
+          ['Sections', 'How strongly the lamp reacts to a song building to a drop: a snare roll or riser charges the drop\'s pot, the roll\'s end or a crash fires it, half time turns the eddies, and a key change counts as a drop. 0 is off.'],
+          ['Busy eddies', 'The fewest eddies while the song is busy; a higher Eddies setting is kept. 0 leaves Eddies alone.'],
+          ['Vent', 'The chance a beat briefly opens the pot that is charging, letting a puff of hot lava up on the beat before it closes again. 0 is off.'],
           ['Activity', 'How much the song\'s sections change the lamp: calm in a breakdown, busy where everything is playing. 0 ignores them.'],
           ['Tempo', 'How much the lamp\'s pace follows the song\'s tempo, against 120 bpm, never more than a quarter slower or a third faster.'],
           ['Pulse', 'The chance a bass hit sends a pressure wave out from an eddy, a ring that pushes the lava out and lets it back.'],
@@ -1427,14 +1511,14 @@ export function createSettingsPanel () {
           ['Beat Lo', 'The frequencies the beat is counted in, Lo to Hi: around 40 to 150 Hz is the kick drum.'],
           ['Heat Lo', 'The frequencies that heat the lava, Lo to Hi.'],
           ['Eddy Lo', 'The frequencies that swell the eddies, Lo to Hi.'],
-          ['Kick Lo', 'The frequencies that sharpen the Kick, Lo to Hi.'],
-          ['Log', 'Saves what the lamp heard and did since Listen went on (activity, beats, surges, pots, drops), ten rows a second, as a file to tune by.'],
-          ['Spectrum', 'A strip along the bottom of the screen showing what the lamp hears: frequency up the side, low red to high violet, the four ranges as coloured lines, each sync\'s level along the top with the song\'s activity in violet, a white tick on every beat heard, a grey one on every beat predicted, and a white bar where a pot fires.'],
+          ['Kick Lo', 'The frequencies of the kick range, Lo to Hi: the hi-hats that throw splats.'],
+          ['Log', 'Saves what the lamp heard and did since Music went on (beats, pots, drops and more), ten rows a second, as a file to tune by.'],
+          ['Spectrum', 'A strip along the bottom showing what the lamp hears: pitch up the side from red bass to violet treble, the four ranges as coloured lines, their levels and the song\'s activity along the top, white ticks on heard beats, grey on predicted ones, and a white bar where a pot fires.'],
           ...(GLOOPS_SHOWN ? [['Gloops', 'Sounds made up from the lava as it moves: a bloop where a neck snaps or a blob lands, and a bed that follows how stirred up the lava is.']] : [])
         ])
       ),
       row('Seed', div({ class: 'seed-row' }, seedField, button({ class: 'small', onclick: () => reloadWithSeed(randomSeed()), title: 'A fresh random seed' }, 'New'))),
-      hint(help, 'The random seed behind this lamp: the same seed on the same window gives the same cups, elements and eddies. Type one or press New; either reloads. Save keeps it.'),
+      hint(help, 'The number behind this lamp\'s randomness: the same seed in the same size window gives the same bottles, pots and eddies. Type one or press New (the page reloads); Save keeps it.'),
       // The facts after the cards, and the versions last (Robert: "move all the text (backend,
       // version, etc) to after the cards instead of before the cards. It should go controls type
       // selector, cards, text info and version selector").
@@ -1448,7 +1532,7 @@ export function createSettingsPanel () {
       ),
       versionRow
     ),
-    hint(help, 'Share copies a link that carries these settings, Reset restores every default, Save keeps them in this browser.'),
+    hint(help, 'Share copies a link with these settings. Reset goes back to every default and forgets what was saved (saved themes stay). Save keeps these settings in this browser.' + (TOUCH_UI ? '' : ' Press H to hide the settings icon and leave only the lava; H, Escape or a reload brings it back.')),
     div(
       { class: 'actions' },
       button({ id: 'share', onclick: copyShareLink }, 'Share'),

@@ -141,6 +141,9 @@ self.onmessage = ({ data: m }) => {
       if (m.want) want = m.want
       setPace(m.pace)
       break
+    case 'places': // Layered: the colours' places by id (simulation.js setPlaces)
+      sim.setPlaces(m)
+      break
     case 'resize':
       sim.resize(m.width, m.height)
       cupsSent = null

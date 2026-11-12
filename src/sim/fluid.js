@@ -100,8 +100,13 @@ export function updatePressure (state, i, neighbours, stiffness, stiffnessNear, 
 // jumps". The visible pool is never capped: capping it kept the lava at the walls from relieving
 // its pressure and it was extruded up the walls in a column (111 to 162 particles at the walls
 // against 7 to 12).
+// Density physics (simulation.js layerScale; Robert, 2026-11-11: "also I wanted controls for controlling the phsyics of
+// the density"), both off unless given: inv, by particle index, is 1 over each particle's mass (Mass), so a heavy
+// particle takes less of every move and a light one more; place, by index, is each particle's place on the colour
+// gradient (-1 for none), and the pressure between two particles is taken at 1 - cling times how far apart their
+// places are (Cling), so unlike colours hold to each other less than like ones and like colours gather.
 export const RELAX_CAP = 20
-export function relax (state, i, neighbours, dt, cap = Infinity, share = 0.1) {
+export function relax (state, i, neighbours, dt, cap = Infinity, share = 0.1, inv = null, place = null, cling = 0) {
   const xi = state.x[i]
   const yi = state.y[i]
   const dtSq = dt * dt
@@ -110,15 +115,19 @@ export function relax (state, i, neighbours, dt, cap = Infinity, share = 0.1) {
   for (let k = 0; k < neighbours.length; k++) {
     const n = neighbours[k]
     const g = state.g[n]
-    const magnitude = (state.p[i] * g + state.pNear[i] * g * g) * dtSq
+    let hold = 1
+    if (place !== null && place[i] >= 0 && place[n] >= 0) hold = Math.max(0, 1 - cling * Math.abs(place[i] - place[n]))
+    const magnitude = (state.p[i] * g * hold + state.pNear[i] * g * g) * dtSq
     unitApprox(state.x[n] - xi, state.y[n] - yi)
     const dx = unit[0] * magnitude
     const dy = unit[1] * magnitude
     sx += dx
     sy += dy
-    state.x[n] += dx * share
-    state.y[n] += dy * share
+    const theirs = inv === null ? share : share * inv[n]
+    state.x[n] += dx * theirs
+    state.y[n] += dy * theirs
   }
+  if (inv !== null) { sx *= inv[i]; sy *= inv[i] }
   const shift = Math.sqrt(sx * sx + sy * sy)
   const capped = shift > cap
   if (capped) {

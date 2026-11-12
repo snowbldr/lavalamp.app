@@ -227,6 +227,11 @@ const TOUCH_HEAT = 12 // px/s of temperature per step
 // with just one high circle in the center instead of on a gradient"): full weight over its radius, then a sharp edge,
 // exp(-((q - 1) / TOUCH_EDGE)^2) past it, where a touch without it falls off as exp(-q^2) from its centre.
 const TOUCH_EDGE = 0.15
+// A particle with over CROWD_NEIGHBOURS neighbours (lava packed far past anything the lamp reaches by itself, a pull
+// packed onto a point) skips conduction and viscosity, as gpuSimulation.js CROWD does (there 1,200 candidates in its 3 by
+// 3 cells, about this many within the radius). Robert: "can we just take some kind of processing shortcut if there's
+// too many particles in one area? disable conduction or something maybe". Not measured on the CPU lamp.
+const CROWD_NEIGHBOURS = 420
 const touchWeight = (q, flat) => flat ? (q <= 1 ? 1 : Math.exp(-((q - 1) / TOUCH_EDGE) * ((q - 1) / TOUCH_EDGE))) : Math.exp(-q * q)
 // Stirring overrides inertia. Where a finger or a strong eddy is at work the carried velocity is
 // replaced by the buoyancy drift (the Wobble 0 lamp, which is where the fingers and the tornadoes
@@ -310,6 +315,21 @@ export const effectScaleFor = (width, height, tuning) => {
   return Math.abs(k - 1) < EFFECT_SNAP ? 1 : k
 }
 
+// Layered (Robert, 2026-11-10: "What if instead of plain static, we do it by density and vary the density of the
+// particles on a gradient that matches the color gradient. Then it has a natural order"): with Static colors on, each
+// particle's neutral buoyancy is gravity times layerScale of its place on the gradient (render/staticColors.js, 0 the
+// cold end, 1 the hot end), so the lava sorts itself by colour where it is cold; heat still conducts between particles
+// and the weight never does. layered is the spread in gravities between the heaviest place and the lightest (0 is
+// off, the lamp as tuned); center the place that weighs exactly gravity; curve a power on the place, so the weight
+// changes mostly at one end (over 1 at the hot end, under 1 at the cold end); bands, 2 or more, quantises the
+// places into that many weights, for crisp layers; reverse makes the cold end the lightest instead. A particle with
+// no place yet (not drawn since the deal, the pots' hidden lava) weighs gravity. gpuSimulation.js's drift is the same.
+export function layerScale (w, layered, center, curve, bands, reverse) {
+  let u = reverse ? 1 - w : w
+  if (bands >= 2) u = Math.min(bands - 1, Math.floor(u * bands)) / (bands - 1)
+  return Math.max(0, 1 + layered * (Math.pow(center, curve) - Math.pow(u, curve)))
+}
+
 // The whole simulation, with no knowledge of the DOM, settings or rendering.
 // `params` is a plain object the caller keeps up to date:
 //   particleCount, interactionRadius, stiffness, stiffnessNear, restDensity, maxTemp, gravity, particleSize, stir, conduction, turbulence, drifters, heatSpots, cupDepth, wobble, wobbleKick, wobbleMax, heater, touchHeat, touchRadius (px, 0 for the lamp's fraction of its size), settle, viscosity, reach (radii), wallPush (px), kickBelow (fraction of mean density, 0 for pressure below zero), share (the neighbour's share of each relaxation move, 0.1 as tuned, 1 reciprocal), elementHeat (a lit element's heat per step at its core, the top of its range; the bottom is 3/8 of it), elementLife (seconds a lighting burns, the top of its range; the bottom a third), elementRate, elementLifeScale, elementCore, floorHeat, floorGlow (see SPOT_BASE and ELEMENT_CORE), minTemp (no lava cools under it, 0 as tuned), emptyBoost (how much harder a drop heats a pot not charged for it, EMPTY_BOOST as tuned; a blast's share of lift, at once or tilted, is dropPot's third argument, not a param: see dropOpts; a ring wave's speed, width, push, life and start are pulseWave's argument, not params: see pulses; a splat's legs, length, speed, life, size over 1 and turn are splat's fourth argument: see splatRequests), worldOnly (no lava: the world alone, for the GPU lamp's shell)
@@ -330,6 +350,12 @@ export function createSimulation ({ width, height, params }) {
   // The live count follows params.particleCount; particles added later appear in the slab too.
   let alive = 0
   let nextId = 0 // birth index of the next particle spawned: never reused, so an id names one particle for the lamp's life
+  let placeById = new Float32Array(0) // Layered: each particle's place on the colour gradient by id, -1 for none (setPlaces)
+  // Density physics, by index for this step (filled after the reorder, only while a knob is on): the place, 1 over the
+  // mass (Mass) and the heat capacity (Heat take). See densityMass below.
+  let placeIdx = new Float32Array(0)
+  let invIdx = new Float32Array(0)
+  let capIdx = new Float32Array(0)
   let heaterTime = 0
   let lightRequests = 0 // pots asked to light on demand (the music's beat), taken at the next step
   // The drop (Robert: "pick the biggest pot that's cold, get it preheated to the point just before
@@ -1520,7 +1546,22 @@ export function createSimulation ({ width, height, params }) {
 
     const cell = Math.max(MIN_CELL, interactionRadius * CELL_FRACTION)
     if (hash.cellSize !== cell) hash.resize(width, height, cell)
+    const layered = params.layered > 0 ? params.layered : 0
+    const { layerCenter = 0.5, layerCurve = 1, layerBands = 0, layerReverse = false } = params
+    // Density physics (Robert, 2026-11-11: "also I wanted controls for controlling the phsyics of the density"), each
+    // off at 0, the lamp as tuned. With s a particle's weight over gravity (layerScale, 1 with Density off or no
+    // place): Mass gives it a mass of 1 + densityMass (s - 1), so in the pressure passes a heavy particle takes less of
+    // every move and shoves light lava aside; Heat take a heat capacity of 1 + densityHeat (s - 1), so its heat changes
+    // that many times slower, heavy lava lingering cold on the floor and light lava quick to heat and to cool; Cling
+    // takes the pressure between two particles at 1 - densityCling times how far apart their colours are, so unlike
+    // colours hold to each other less than like ones. Both lamps do the same (gpuSimulation.js layerS).
+    const massK = layered && params.densityMass > 0 ? params.densityMass : 0
+    const heatK = layered && params.densityHeat > 0 ? params.densityHeat : 0
+    const clingK = params.densityCling > 0 ? params.densityCling : 0
     for (let i = 0; i < alive; i++) {
+      const place = layered ? (state.id[i] < placeById.length ? placeById[state.id[i]] : -1) : -1
+      const scale = place >= 0 ? layerScale(place, layered, layerCenter, layerCurve, layerBands, layerReverse) : 1
+      const t0 = temp[i]
       temp[i] = Math.max(minTemp, nextTemperature(temp[i], y[i], height, maxTemp, particleSize, heater ? powerAt(x[i]) : 0, HEAT_IN_CUPS && cupDepthNow > 0 ? floorAt(x[i]) : height))
       if (maxReach > 0 && y[i] > elementReach && (HEAT_IN_CUPS || ELEMENTS_ARE_CUPS || y[i] <= height)) {
         const tilted = ELEMENTS_ARE_CUPS && state.home[i] >= 0 ? elements[state.home[i]] : null
@@ -1543,6 +1584,7 @@ export function createSimulation ({ width, height, params }) {
         finger[0] = 0
         finger[1] = 0
       }
+      if (heatK && scale !== 1) temp[i] = t0 + (temp[i] - t0) / Math.max(0.25, 1 + heatK * (scale - 1))
       // Velocity is rebuilt from scratch every frame instead of carried over, which makes the fluid
       // fully overdamped. The paper recomputes velocity from the previous position (Algorithm 1,
       // line 20); dropping that is what turns splashing water into wax.
@@ -1563,7 +1605,8 @@ export function createSimulation ({ width, height, params }) {
       const stirX = bottled ? 0 : fx - stir * Math.sin(kx * x[i]) * Math.cos(ky * y[i]) + eddy[0] + finger[0]
       const stirY = bottled ? 0 : fy + vertical * Math.cos(kx * x[i]) * Math.sin(ky * y[i]) + eddy[1] + finger[1]
       const driftX = 0
-      const driftY = Math.max(gravity - temp[i], -liftCap * gravity)
+      const weight = place >= 0 ? gravity * scale : gravity
+      const driftY = Math.max(weight - temp[i], -liftCap * gravity)
       if (wobble > 0) {
         // Inertia (Robert, with a video of a real lamp: "it's that snap back effect. and the
         // stretchiness and jiggle. we don't have those... This is a miss in our physics
@@ -1591,6 +1634,19 @@ export function createSimulation ({ width, height, params }) {
     hash.build(x, y, alive)
     reorder()
     planVisit()
+    const physics = massK > 0 || heatK > 0 || clingK > 0
+    if (physics) {
+      if (placeIdx.length < alive) { placeIdx = new Float32Array(alive * 2); invIdx = new Float32Array(alive * 2); capIdx = new Float32Array(alive * 2) }
+      for (let i = 0; i < alive; i++) {
+        const pl = state.id[i] < placeById.length ? placeById[state.id[i]] : -1
+        const sc = pl >= 0 && layered ? layerScale(pl, layered, layerCenter, layerCurve, layerBands, layerReverse) : 1
+        placeIdx[i] = pl
+        invIdx[i] = 1 / Math.max(0.2, 1 + massK * (sc - 1))
+        capIdx[i] = Math.max(0.25, 1 + heatK * (sc - 1))
+      }
+    }
+    const invMass = massK > 0 ? invIdx : null
+    const clingPlace = clingK > 0 ? placeIdx : null
 
     const { g, shared, home } = state
     // No particle moves more than one interaction radius in a relaxation step. Past that it has
@@ -1622,7 +1678,7 @@ export function createSimulation ({ width, height, params }) {
       let weight = 0
       let heat = 0
       const inBottle = home[i] >= 0
-      for (let k = 0; k < neighbours.length; k++) {
+      for (let k = 0, crowded = neighbours.length > CROWD_NEIGHBOURS; k < neighbours.length && !crowded; k++) {
         const n = neighbours[k]
         // Heat crossing from one bottle to another goes through glass: GLASS_CONDUCTION of the
         // usual (Robert: "the blobs can still share heat if they're close enough in the bottles,
@@ -1634,7 +1690,7 @@ export function createSimulation ({ width, height, params }) {
         heat += w * temp[n]
       }
       shared[i] = weight > 0 ? heat / weight : temp[i]
-      relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach, share)
+      relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach, share, invMass, clingPlace, clingK)
       // Only at a surface, a stretched neck or a blob's skin being pulled back toward its neighbours
       // (surface tension), does the pressure step's kick become velocity, capped at WOBBLE_MAX
       // gravities. The surface test is pressure below zero, which is density below the rest
@@ -1669,6 +1725,7 @@ export function createSimulation ({ width, height, params }) {
     if (sigma > 0 && wobble > 0) {
       for (let s = 0; s < alive; s++) {
         const i = visit[s]
+        if (nbEnd[i] - nbStart[i] > CROWD_NEIGHBOURS) continue // see CROWD_NEIGHBOURS
         const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbEnd[i], i, interactionRadius)
         viscosity(state, i, neighbours, dt, sigma)
       }
@@ -1685,7 +1742,7 @@ export function createSimulation ({ width, height, params }) {
         const i = visit[s]
         const neighbours = reuseNeighbours(state, nbList, nbStart[i], nbEnd[i], i, interactionRadius)
         updatePressure(state, i, neighbours, stiffness, stiffnessNear, restDensity)
-        relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach, share)
+        relax(state, i, neighbours, dt, home[i] >= 0 ? Math.min(RELAX_CAP, reach) : reach, share, invMass, clingPlace, clingK)
         contain(i)
       }
     }
@@ -1693,7 +1750,8 @@ export function createSimulation ({ width, height, params }) {
     for (let i = 0; i < alive; i++) densitySum += state.p[i] / stiffness + restDensity
     meanDensity = alive > 0 ? densitySum / alive : 0
     // Applied after the pass so every particle saw the same temperatures.
-    for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i])
+    if (heatK > 0) for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i]) / capIdx[i]
+    else for (let i = 0; i < alive; i++) temp[i] += conduction * (shared[i] - temp[i])
   }
 
   // The heater power under a point on the floor as of the last step, 0 up to SPOT_CAP, for
@@ -2103,6 +2161,15 @@ export function createSimulation ({ width, height, params }) {
     resize,
     push,
     setTouches,
+    // Layered: places on the colour gradient by particle id (render/staticColors.js take), reset forgetting the old.
+    setPlaces ({ keys, values, reset }) {
+      if (reset) placeById.fill(-1)
+      for (let k = 0; k < keys.length; k++) {
+        const key = keys[k]
+        if (key >= placeById.length) { const grown = new Float32Array(Math.max(key + 1, placeById.length * 2, 1024)).fill(-1); grown.set(placeById); placeById = grown }
+        placeById[key] = values[k]
+      }
+    },
     // Light a pot at the next step, as its clock would have (the music's beat).
     lightElement () { lightRequests++ },
     // A shape ({ x, y, hx, hy, speed, radius, spin, life, attack, release }, any of them; attack and release its own

@@ -159,6 +159,8 @@ export function createWorkerLamp ({ width, height, params, seed, frame, pace, wa
     endWarmup () { warmEnd = true },
     dropPot (strength, at, opts) { if (strength >= drop) dropOpts = opts || null; drop = Math.max(drop, strength); if (at >= 0) dropAt = at },
     setTouches (list) { touches = list || [] },
+    // Layered: the colours' places by id (simulation.js setPlaces), copied out of the renderer's reused arrays.
+    setPlaces ({ keys, values, reset }) { worker.postMessage({ type: 'places', keys: keys.slice(), values: values.slice(), reset }) },
     transform (fn) {
       const map = affine(fn)
       generation++

@@ -2,6 +2,7 @@ import { fnstate } from '@srfnstack/fntags'
 import { notify } from './components.js'
 import { CURRENT } from '../versions.js'
 import { seedRandom } from '../sim/random.js'
+import { staticColorsBys as STATIC_BYS, staticColorsByNames } from '../render/staticColors.js'
 
 // Defaults that depend on the window. They take the raw window size, not the capped lamp size,
 // because that is what the lamp was tuned against.
@@ -363,6 +364,51 @@ export const defaultDyeCut = 0.9
 export const dyeCut = fnstate(defaultDyeCut)
 export const defaultDyeGlow = 3
 export const dyeGlow = fnstate(defaultDyeGlow)
+// Static colors (render/staticColors.js; Robert: "having the color not be based on [heat], but instead a fixed gradient
+// and a fixed color for every particle. I bet some really interesting color patterns emerge from nowhere", then "could be
+// a view setting, 'static colors'"): every particle drawn in one place on the heat gradient for life, dealt by its
+// height (bands that the flow marbles), across the lamp, or at random. A view only, it moves nothing. Off as shipped;
+// remembered in this browser, kept in a theme's View switches and carried by a share link, as the other View switches are.
+export const staticColors = fnstate(false)
+export const staticColorsBys = STATIC_BYS
+export { staticColorsByNames }
+export const defaultStaticColorsBy = 'height'
+export const staticColorsBy = fnstate(defaultStaticColorsBy)
+// Layered (simulation.js layerScale; Robert: "What if instead of plain static, we do it by density and vary the density
+// of the particles on a gradient that matches the color gradient. Then it has a natural order", then "we probably need
+// some advanced tuning knobs in the settings for particle density where can fiddle with the relationship to the
+// gradient"): with Static colors on, each particle weighs by its colour, so the cold lava sorts itself into layers.
+// Shown as Density (it was Layered; the key stays staticColorsLayered, so saves and links still read). Robert,
+// 2026-11-11, with Static colors on and Layered at 0: "Where's the density color. also none of the static colors appear
+// to support density... like, ligther paritcles (hot) are less dense, but at a constant rate instead of like heating".
+// So density is part of Static colors now, on at DEFAULT_DENSITY whenever the switch is; with the switch off the lamp
+// is as tuned, whatever the knob says (app.js layeredNow).
+// Density is the spread in gravities from the heaviest colour to the lightest, 0 off; Center the
+// place on the gradient that weighs exactly gravity; Curve a power on the place; Bands, 2 or more, that many weights
+// instead of a smooth run; Reverse the cold end lightest. It moves the lava, but it belongs to Static colors, so it is
+// kept with it: remembered, in a theme's View switches and carried by a share link.
+// The defaults are Robert's tuning, 2026-11-11 (Robert: "I got it tuned so now we get these neat gradient globs. These
+// should be the default for the "static colors" in the view page"): Height, Density 2, Center 0.3, Curve 1.55, Smooth,
+// not reversed, Mass 0.25, Heat take 2, Cling 0.15. Before they were Density 1, Center 0.5, Curve 1 and the physics at 0.
+export const defaultStaticColorsLayered = 2
+export const staticColorsLayered = fnstate(defaultStaticColorsLayered)
+export const defaultLayerCenter = 0.3
+export const layerCenter = fnstate(defaultLayerCenter)
+export const defaultLayerCurve = 1.55
+export const layerCurve = fnstate(defaultLayerCurve)
+export const defaultLayerBands = 0
+export const layerBands = fnstate(defaultLayerBands)
+export const layerReverse = fnstate(false)
+// Density physics (simulation.js densityMass; Robert: "also I wanted controls for controlling the phsyics of the
+// density, please add those controls"): how the colours' weights act beyond moving each one's neutral buoyancy. Mass,
+// heavy lava taking less of every pressure move; Heat take, heavy lava heating and cooling slower; Cling, unlike colours
+// holding to each other less than like ones. Each does nothing at 0; kept with Static colors.
+export const defaultDensityMass = 0.25
+export const densityMass = fnstate(defaultDensityMass)
+export const defaultDensityHeat = 2
+export const densityHeat = fnstate(defaultDensityHeat)
+export const defaultDensityCling = 0.15
+export const densityCling = fnstate(defaultDensityCling)
 // Draw the heater strip and the heating elements along the floor, in either view. Remembered.
 export const showHeater = fnstate(false)
 // Pull the whole lamp into frame, hidden cups and all, scaled down, with the cup outlines drawn.
@@ -549,6 +595,14 @@ export const musicKick = fnstate(defaultMusicKick)
 // border"). Not saved: the browser forgets fullscreen on reload anyway. Follows the browser too,
 // so Esc flips the switch back.
 export const fullscreen = fnstate(false)
+// iPhone Safari has no page fullscreen (only a video's), so there the switch gives way to a ? with the steps to the
+// lamp with nothing around it (Robert: "also full screen doesn't work on ios"): added to the Home Screen, it opens as an
+// app with no browser around it (index.html, src/home/manifest.json, homeScreen.js). Whether this browser can make the
+// page fullscreen, and whether the lamp is already running from the Home Screen, where neither is shown.
+export const pageFullscreenWorks = typeof document !== 'undefined' && !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen)
+export const fromHomeScreen = typeof window !== 'undefined' && (window.navigator.standalone === true || ['standalone', 'fullscreen'].some(mode => window.matchMedia(`(display-mode: ${mode})`).matches))
+// The steps under View's title, open while the ? is pressed (settingsPanel.js).
+export const fullscreenHow = fnstate(false)
 // What a finger on the lamp does. Not saved.
 export const touchModes = ['push', 'pull', 'spin', 'heat', 'cool']
 export const touchMode = fnstate('push')
@@ -827,12 +881,14 @@ const adoptLegacySave = () => {
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
 // reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
 const VIEW_KEY = `lavalamp.app-v${CURRENT}-views`
-const viewSettings = { showFlow, motionOn, firefly, iceFly, dyedFluid, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource, musicTheme, musicFlow, musicHeat, musicSparkle, musicGlow, musicFlowEvents, musicHeatEvents, showSpectrum, showFlyTrails }
-const viewChoices = { dyeMode: dyeModes, touchMode: touchModes, soundBed: soundBeds, musicSource: musicSources, musicTheme: musicThemes }
+const viewSettings = { showFlow, motionOn, firefly, iceFly, dyedFluid, staticColors, staticColorsBy, staticColorsLayered, layerCenter, layerCurve, layerBands, layerReverse, densityMass, densityHeat, densityCling, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource, musicTheme, musicFlow, musicHeat, musicSparkle, musicGlow, musicFlowEvents, musicHeatEvents, showSpectrum, showFlyTrails }
+const viewChoices = { staticColorsBy: STATIC_BYS, dyeMode: dyeModes, touchMode: touchModes, soundBed: soundBeds, musicSource: musicSources, musicTheme: musicThemes }
 const saveViews = () => {
   try {
     const out = {}
     for (const [key, state] of Object.entries(viewSettings)) out[key] = state()
+    out.densityOn = true // written since Density came on by default; see loadViews
+    out.globsOn = true // written since the gradient globs became the defaults; see loadViews
     localStorage.setItem(VIEW_KEY, JSON.stringify(out))
   } catch {}
 }
@@ -840,6 +896,18 @@ const loadViews = () => {
   try {
     const views = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}')
     if ('musicTheme' in views) views.musicTheme = themeId(views.musicTheme)
+    // Views saved before Density came on by default hold Layered 0 for every browser that never touched it (all
+    // the views are saved together), which would hide the density there: those take the new default once.
+    if (!views.densityOn && views.staticColorsLayered === 0) delete views.staticColorsLayered
+    // Views saved before the gradient globs became the defaults hold the old ones in every browser that saved any
+    // view: if every Static colors knob there is still at an old default (Density 1, or 0 from before densityOn,
+    // Center 0.5, Curve 1, Bands Smooth, not reversed, Mass, Heat take and Cling 0; a knob not saved counts as at its
+    // default), the knobs take the new defaults, once: the next save writes globsOn. If any one was moved, the set was
+    // picked on purpose and is kept whole. Dealt by is the same Height either way and is left as saved.
+    if (!views.globsOn) {
+      const was = { staticColorsLayered: 1, layerCenter: 0.5, layerCurve: 1, layerBands: 0, layerReverse: false, densityMass: 0, densityHeat: 0, densityCling: 0 }
+      if (Object.entries(was).every(([key, old]) => !(key in views) || views[key] === old)) for (const key in was) delete views[key]
+    }
     for (const [key, state] of Object.entries(viewSettings)) {
       if (!(key in views)) continue
       const choices = viewChoices[key]
@@ -980,14 +1048,14 @@ export const shareLink = (extra = {}) =>
 export const showSettings = { musicTheme, musicFlowEvents, musicHeatEvents, musicFlow, musicHeat, musicSparkle, musicGlow, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
 export const showDefaults = () => ({ musicTheme: 'live', musicFlowEvents: true, musicHeatEvents: true, musicFlow: defaultMusicFlow, musicHeat: defaultMusicHeat, musicSparkle: true, musicGlow: true, streamersInMusic: true, motionInMusic: false, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
 // The View card's switches and the lamp's own streamers' settings. Not Fullscreen: a browser forgets it on reload anyway.
-export const viewSwitches = { showFlow, motionOn, firefly, iceFly, dyedFluid, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
-export const viewDefaults = () => ({ showFlow: false, motionOn: true, firefly: false, iceFly: false, dyedFluid: false, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
+export const viewSwitches = { showFlow, motionOn, firefly, iceFly, dyedFluid, staticColors, staticColorsBy, staticColorsLayered, layerCenter, layerCurve, layerBands, layerReverse, densityMass, densityHeat, densityCling, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
+export const viewDefaults = () => ({ showFlow: false, motionOn: true, firefly: false, iceFly: false, dyedFluid: false, staticColors: false, staticColorsBy: defaultStaticColorsBy, staticColorsLayered: defaultStaticColorsLayered, layerCenter: defaultLayerCenter, layerCurve: defaultLayerCurve, layerBands: defaultLayerBands, layerReverse: false, densityMass: defaultDensityMass, densityHeat: defaultDensityHeat, densityCling: defaultDensityCling, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
 // Advanced: its knobs (every saved number but the heat places, which are the colours', Touch's strength and the seed,
 // drawn fresh on every load), the eddies' curve, and its switches.
 const advancedViews = { showHeater, showCups, showSpectrum, showFlyTrails, autoPixels, targetFps }
 const advancedViewDefaults = () => ({ showHeater: false, showCups: false, showSpectrum: false, showFlyTrails: false, autoPixels: true, targetFps: defaultTargetFps })
 const ADVANCED_NUMBERS = Object.keys(numberSettings).filter(k => !AT_KEYS.includes(k) && k !== 'touchStrength' && k !== 'seed')
-const choicesOf = { musicTheme: musicThemes, dyeMode: dyeModes, eddyCurve: eddyCurves }
+const choicesOf = { musicTheme: musicThemes, dyeMode: dyeModes, staticColorsBy: STATIC_BYS, eddyCurve: eddyCurves }
 const fits = (key, v, base) => choicesOf[key] ? choicesOf[key].includes(v) : typeof v === typeof base && (typeof v !== 'number' || Number.isFinite(v))
 const near = (a, b) => typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b)) : a === b
 const put = (states, base, values) => { for (const [k, st] of Object.entries(states)) { const v = k in values && fits(k, values[k], base[k]) ? values[k] : base[k]; if (st() !== v) st(v) } }

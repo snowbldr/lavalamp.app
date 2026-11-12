@@ -1,5 +1,6 @@
 import { drawCooling, drawCups, drawFlow, drawHeater, heatColor, paletteKey } from './overlays.js'
 import { createDye } from './dye.js'
+import { createStaticColors } from './staticColors.js'
 const CULL_MARGIN = 48 // window px past the edge a drawn disc and its blur can still reach
 
 // The metaball pass on the GPU. Same picture as canvasRenderer.js, which it replaces wherever
@@ -182,6 +183,8 @@ export function createGlRenderer (canvas, look) {
   // Heat colours per temperature step, rebuilt when the palette changes.
   const heatTable = new Float32Array(HEAT_STEPS * 3)
   let heatKey = ''
+  // Static colors (staticColors.js): each particle's own fixed place on the same table, while look.staticColors is on.
+  const statics = createStaticColors()
 
   let width = 0
   let height = 0
@@ -237,7 +240,9 @@ export function createGlRenderer (canvas, look) {
   }
 
   function render (state, count, overlays = {}) {
-    const heat = look.showHeat && state.temp && overlays.neutral > 0
+    const placeOf = statics.begin(look, state, count, overlays.lamp, lampWidth, lampHeight)
+    const heat = !placeOf && look.showHeat && state.temp && overlays.neutral > 0
+    const coloured = heat || !!placeOf // drawn from the heat table, blended through Blend as the heat colours are
     // overlays.view, when set, fits the whole lamp into the frame: lamp px to window px.
     const view = overlays.view || IDENTITY
     let t = now()
@@ -246,7 +251,7 @@ export function createGlRenderer (canvas, look) {
     if (vertexData.length < floats) vertexData = new Float32Array(floats)
     const { r, g, b } = look.lavaColor || { r: 0, g: 0, b: 0 }
     const lava = [r / 255, g / 255, b / 255]
-    if (heat) prepareHeatTable()
+    if (coloured) prepareHeatTable()
     const top = HEAT_STEPS - 1
     const perTemp = heat ? top / (2 * overlays.neutral) : 0
     const floorY = overlays.floorY ?? Infinity
@@ -353,6 +358,12 @@ export function createGlRenderer (canvas, look) {
         cr = heatTable[step]
         cg = heatTable[step + 1]
         cb = heatTable[step + 2]
+      } else if (placeOf) {
+        const step = Math.round(placeOf(i) * top) * 3
+        cr = heatTable[step]
+        cg = heatTable[step + 1]
+        cb = heatTable[step + 2]
+        if (boost) { cr *= 1 + boost; cg *= 1 + boost; cb *= 1 + boost }
       } else if (boost) {
         cr *= 1 + boost
         cg *= 1 + boost
@@ -417,7 +428,7 @@ export function createGlRenderer (canvas, look) {
     // still comes from the field blurred by Smooth alone.
     const radius = Math.min(MAX_BLUR, (look.smooth || 0) * discScale)
     const blendRadius = Math.min(MAX_BLUR, (look.blend ?? look.smooth ?? 0) * discScale)
-    const separate = heat && blendRadius >= radius + 0.5
+    const separate = coloured && blendRadius >= radius + 0.5
     const blurInto = (source, target, r) => {
       gl.uniform1f(bLoc.uRadius, r)
       gl.bindFramebuffer(gl.FRAMEBUFFER, scratchTarget.framebuffer)
@@ -476,7 +487,7 @@ export function createGlRenderer (canvas, look) {
       const sizePx = Math.max(1, disc * discScale)
       gl.uniform1f(cLoc.uSoft, Math.min(0.12, Math.max(0.004, 0.7 / sizePx)))
       gl.uniform3f(cLoc.uLava, lava[0], lava[1], lava[2])
-      gl.uniform1f(cLoc.uHeat, heat ? 1 : 0)
+      gl.uniform1f(cLoc.uHeat, coloured ? 1 : 0)
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
     gl.disable(gl.BLEND)
@@ -508,7 +519,7 @@ export function createGlRenderer (canvas, look) {
     profile.overlays = now() - t
   }
 
-  return { render, resize, profile, pixels: () => width * height, kind: 'webgl' }
+  return { render, resize, profile, pixels: () => width * height, kind: 'webgl', takePlaces: statics.take }
 }
 
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]]

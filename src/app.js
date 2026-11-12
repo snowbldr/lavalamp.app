@@ -116,6 +116,16 @@ import {
   firefly,
   iceFly,
   dyedFluid,
+  staticColors,
+  staticColorsBy,
+  staticColorsLayered,
+  densityMass,
+  densityHeat,
+  densityCling,
+  layerCenter,
+  layerCurve,
+  layerBands,
+  layerReverse,
   streamersInMusic,
   motionInMusic,
   dyeMode,
@@ -361,6 +371,28 @@ export async function start () {
   look.dyedFluid = streamersOn()
   for (const st of [dyedFluid, music, musicTheme, streamersInMusic]) st.subscribe(() => { look.dyedFluid = streamersOn() })
   mirror(dyeMode, look, 'dyeMode')
+  // Static colors (render/staticColors.js): dealt again each time the switch goes on.
+  mirror(staticColors, look, 'staticColors')
+  mirror(staticColorsBy, look, 'staticColorsBy')
+  // Layered (simulation.js layerScale): the colours weigh the lava, only while Static colors is on; the places the
+  // renderer deals go to the lamp after each frame (below).
+  const layeredNow = () => { params.layered = staticColors() ? staticColorsLayered() : 0 }
+  layeredNow()
+  staticColors.subscribe(layeredNow)
+  staticColorsLayered.subscribe(layeredNow)
+  // Density physics (simulation.js densityMass): only while Static colors is on, as Density is.
+  const physicsNow = () => {
+    const on = staticColors()
+    params.densityMass = on ? densityMass() : 0
+    params.densityHeat = on ? densityHeat() : 0
+    params.densityCling = on ? densityCling() : 0
+  }
+  physicsNow()
+  for (const st of [staticColors, densityMass, densityHeat, densityCling]) st.subscribe(physicsNow)
+  mirror(layerCenter, params, 'layerCenter')
+  mirror(layerCurve, params, 'layerCurve')
+  mirror(layerBands, params, 'layerBands', Math.round)
+  mirror(layerReverse, params, 'layerReverse')
   mirror(dyeFade, look, 'dyeFade')
   mirror(dyeStamp, look, 'dyeStamp')
   mirror(dyeCurve, look, 'dyeCurve')
@@ -1153,7 +1185,7 @@ export async function start () {
   fullscreen.subscribe(on => {
     if (on === inFullscreen()) return
     const request = on ? (root.requestFullscreen || root.webkitRequestFullscreen) : (document.exitFullscreen || document.webkitExitFullscreen)
-    if (!request) { fullscreen(false); return } // iPhone Safari has no page fullscreen
+    if (!request) { fullscreen(false); return } // iPhone Safari has no page fullscreen (the panel shows a ? there instead)
     Promise.resolve(request.call(on ? root : document)).catch(() => fullscreen(inFullscreen()))
   })
   for (const event of ['fullscreenchange', 'webkitfullscreenchange']) document.addEventListener(event, () => fullscreen(inFullscreen()))
@@ -1274,7 +1306,33 @@ export async function start () {
 
   lamp.addEventListener('click', settingsPanel.close)
   const settingsButton = document.getElementById('settings')
-  settingsButton.addEventListener('click', settingsPanel.open)
+  // Nothing over the lamp but the lamp (Robert: "we should hadd a keyboard shortcut for hiding the settings icon so
+  // it's just fully animation", and "it should only hide the settings until next reload and should not persist...
+  // should be able to hide settings with a query param to prevent them from loading"). H hides the icon and closes the
+  // panel; H or Escape brings the icon back. Kept for this visit only, never saved. Not while typing in a field, and
+  // not with Cmd, Ctrl or Alt, so the browser's own shortcuts are untouched. ?nosettings in the address takes the icon
+  // out before it is ever shown and never wires it, so the panel cannot be opened at all and H does nothing (a tool
+  // records the lamp with it).
+  const noSettings = new URLSearchParams(window.location.search).has('nosettings')
+  // Clear of the notch and the rounded corners when the lamp runs from an iPhone's home screen, where the page goes
+  // under them (viewport-fit=cover in index.html); the insets are 0 everywhere else, so it sits where it always has.
+  const settingsHolder = div({ style: { position: 'fixed', top: 'calc(10px + env(safe-area-inset-top, 0px))', left: 'calc(20px + env(safe-area-inset-left, 0px))', cursor: 'pointer', 'z-index': 10 } })
+  if (noSettings) settingsButton.remove()
+  else {
+    settingsButton.addEventListener('click', settingsPanel.open)
+    settingsHolder.append(settingsButton)
+    const typing = t => t && t.closest && !!t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
+    const iconHidden = hidden => {
+      settingsHolder.style.display = hidden ? 'none' : ''
+      if (hidden) settingsPanel.close()
+    }
+    window.addEventListener('keydown', e => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat || typing(e.target)) return
+      const hidden = settingsHolder.style.display === 'none'
+      if (e.key === 'h' || e.key === 'H') iconHidden(!hidden)
+      else if (e.key === 'Escape' && hidden) iconHidden(false)
+    })
+  }
 
   document.body.append(
     div(
@@ -1294,18 +1352,7 @@ export async function start () {
         id: 'lamp-back'
       },
       lamp,
-      div(
-        {
-          style: {
-            position: 'fixed',
-            top: '10px',
-            left: '20px',
-            cursor: 'pointer',
-            'z-index': 10
-          }
-        },
-        settingsButton
-      )
+      settingsHolder
     )
     // The copyright is in Advanced, under the build, and in NOTICE: none on the lamp (Robert:
     // "Should we hide the copyright?... there's not really any text on the lava lamp ui").
@@ -1490,7 +1537,10 @@ export async function start () {
     // The Dyed fluid view (render/dye.js): the velocity grid it is carried by, read from the flow and the particles and
     // written nowhere, built only while the switch is on; the dye is advected by the lamp's own seconds this frame.
     const dyeField = streamersOn() ? dyeGrid.build({ width, height, flowAt: sim.flowAt, flowGrid: sim.flowGrid ? sim.flowGrid() : null, state: sim.state, count: sim.count }) : null
-    renderer.render(shown, count, { dyeField, dyeDt: FRAME * pace() * tempoPace, flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, floorY: sim.height, bottles: sim.bottles, ceilingCool: params.ceilingCool, view, glowBoost: params.glowBoost || 0, glowReach: params.glowReach || 0, glowKnee: params.glowKnee || 0 })
+    renderer.render(shown, count, { lamp: sim, dyeField, dyeDt: FRAME * pace() * tempoPace, flowAt: sim.flowAt, heaterAt: sim.heaterAt, elements: sim.heaterElements, neutral: params.gravity, floorY: sim.height, bottles: sim.bottles, ceilingCool: params.ceilingCool, view, glowBoost: params.glowBoost || 0, glowReach: params.glowReach || 0, glowKnee: params.glowKnee || 0 })
+    // Layered: the places Static colors dealt this frame, to the lamp that weighs them (render/staticColors.js take).
+    const places = renderer.takePlaces ? renderer.takePlaces() : null
+    if (places && sim.setPlaces) sim.setPlaces(places)
     if (gloop.enabled) gloop.update(sim.state, sim.count, width, height, params.gravity, FRAME * pace(), params.interactionRadius)
     // Real time for the music, not the lamp's fixed step: at 120 Hz FRAME ran its clock at
     // double speed and a 120 bpm song read as 62.
