@@ -409,6 +409,12 @@ export const defaultDensityHeat = 2
 export const densityHeat = fnstate(defaultDensityHeat)
 export const defaultDensityCling = 0.15
 export const densityCling = fnstate(defaultDensityCling)
+// Fly fade (render/staticColors.js fly; Robert: "we hsoul dhave the flys change the density instead of heat when static
+// color is enabled"): with Static colors on, the Firefly and Ice fly switches' glints move the colours they touch
+// instead of their heat, and a moved colour eases back to the one it was dealt over this many seconds (95% of the way),
+// as a glint's heat fades. Kept with Static colors.
+export const defaultStaticFlyFade = 4
+export const staticFlyFade = fnstate(defaultStaticFlyFade)
 // Draw the heater strip and the heating elements along the floor, in either view. Remembered.
 export const showHeater = fnstate(false)
 // Pull the whole lamp into frame, hidden cups and all, scaled down, with the cup outlines drawn.
@@ -881,7 +887,7 @@ const adoptLegacySave = () => {
 // a share link (a link is a look), but remembered in this browser as soon as they change, so a
 // reload comes back the way it was left. Sound and Fullscreen are not: browsers want a click.
 const VIEW_KEY = `lavalamp.app-v${CURRENT}-views`
-const viewSettings = { showFlow, motionOn, firefly, iceFly, dyedFluid, staticColors, staticColorsBy, staticColorsLayered, layerCenter, layerCurve, layerBands, layerReverse, densityMass, densityHeat, densityCling, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource, musicTheme, musicFlow, musicHeat, musicSparkle, musicGlow, musicFlowEvents, musicHeatEvents, showSpectrum, showFlyTrails }
+const viewSettings = { showFlow, motionOn, firefly, iceFly, dyedFluid, staticColors, staticColorsBy, staticColorsLayered, layerCenter, layerCurve, layerBands, layerReverse, densityMass, densityHeat, densityCling, staticFlyFade, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow, showHeater, showCups, touchMode, soundBed, autoPixels, targetFps, musicSource, musicTheme, musicFlow, musicHeat, musicSparkle, musicGlow, musicFlowEvents, musicHeatEvents, showSpectrum, showFlyTrails }
 const viewChoices = { staticColorsBy: STATIC_BYS, dyeMode: dyeModes, touchMode: touchModes, soundBed: soundBeds, musicSource: musicSources, musicTheme: musicThemes }
 const saveViews = () => {
   try {
@@ -1048,8 +1054,8 @@ export const shareLink = (extra = {}) =>
 export const showSettings = { musicTheme, musicFlowEvents, musicHeatEvents, musicFlow, musicHeat, musicSparkle, musicGlow, streamersInMusic, motionInMusic, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
 export const showDefaults = () => ({ musicTheme: 'live', musicFlowEvents: true, musicHeatEvents: true, musicFlow: defaultMusicFlow, musicHeat: defaultMusicHeat, musicSparkle: true, musicGlow: true, streamersInMusic: true, motionInMusic: false, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
 // The View card's switches and the lamp's own streamers' settings. Not Fullscreen: a browser forgets it on reload anyway.
-export const viewSwitches = { showFlow, motionOn, firefly, iceFly, dyedFluid, staticColors, staticColorsBy, staticColorsLayered, layerCenter, layerCurve, layerBands, layerReverse, densityMass, densityHeat, densityCling, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
-export const viewDefaults = () => ({ showFlow: false, motionOn: true, firefly: false, iceFly: false, dyedFluid: false, staticColors: false, staticColorsBy: defaultStaticColorsBy, staticColorsLayered: defaultStaticColorsLayered, layerCenter: defaultLayerCenter, layerCurve: defaultLayerCurve, layerBands: defaultLayerBands, layerReverse: false, densityMass: defaultDensityMass, densityHeat: defaultDensityHeat, densityCling: defaultDensityCling, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
+export const viewSwitches = { showFlow, motionOn, firefly, iceFly, dyedFluid, staticColors, staticColorsBy, staticColorsLayered, layerCenter, layerCurve, layerBands, layerReverse, densityMass, densityHeat, densityCling, staticFlyFade, dyeMode, dyeFade, dyeStamp, dyeCurve, dyeCut, dyeGlow }
+export const viewDefaults = () => ({ showFlow: false, motionOn: true, firefly: false, iceFly: false, dyedFluid: false, staticColors: false, staticColorsBy: defaultStaticColorsBy, staticColorsLayered: defaultStaticColorsLayered, layerCenter: defaultLayerCenter, layerCurve: defaultLayerCurve, layerBands: defaultLayerBands, layerReverse: false, densityMass: defaultDensityMass, densityHeat: defaultDensityHeat, densityCling: defaultDensityCling, staticFlyFade: defaultStaticFlyFade, dyeMode: defaultDyeMode, dyeFade: defaultDyeFade, dyeStamp: defaultDyeStamp, dyeCurve: defaultDyeCurve, dyeCut: defaultDyeCut, dyeGlow: defaultDyeGlow })
 // Advanced: its knobs (every saved number but the heat places, which are the colours', Touch's strength and the seed,
 // drawn fresh on every load), the eddies' curve, and its switches.
 const advancedViews = { showHeater, showCups, showSpectrum, showFlyTrails, autoPixels, targetFps }

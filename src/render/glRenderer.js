@@ -519,7 +519,7 @@ export function createGlRenderer (canvas, look) {
     profile.overlays = now() - t
   }
 
-  return { render, resize, profile, pixels: () => width * height, kind: 'webgl', takePlaces: statics.take }
+  return { render, resize, profile, pixels: () => width * height, kind: 'webgl', takePlaces: statics.take, flyPlaces: statics.fly, placesNow: statics.placesNow }
 }
 
 const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]]

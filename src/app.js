@@ -122,6 +122,7 @@ import {
   densityMass,
   densityHeat,
   densityCling,
+  staticFlyFade,
   layerCenter,
   layerCurve,
   layerBands,
@@ -704,6 +705,73 @@ export async function start () {
   // music"). Its glints wait for a slot rather than being lost, as the theme's do. The Ice fly switch keeps its own two
   // the same way, so with both on and both waiting four of the eight are the flies'.
   const FIREFLY_ROOM = 2
+  // Static colors' flies (render/staticColors.js fly): a glint's heat a step, as the lamp's touchAt adds it (times
+  // Touch's strength, as a glint without its own takes), over twice neutral, the heat colours' top, times this frame's
+  // steps; and the frame's seconds for Fly fade. Every frame the switch is on, so the moved colours keep easing home.
+  const placeFlies = (list, seconds) => renderer.flyPlaces(list, (params.touchStrength ?? 1) * pace() * tempoPace / (2 * params.gravity), seconds, staticFlyFade())
+  // The music show's flies the same way (Robert: "music show flies should get the same treatment yes"). Their moves
+  // (src/sync/moves firefly.js and ice-fly.js, compiled) drop each glint through the kit's place; startSync hands those
+  // two moves a kit whose place, while Static colors is on, keeps the glint here instead of in the kit's touch queue.
+  // Held as the kit would hold it (from its first frame until its seconds have passed, two frames at least, its heat
+  // times the Music card's Heat, none while heat events are off unless it is a layer's), and sent with the switches'
+  // glints to placeFlies every frame. Other moves' glints, and these with Static colors off, go to the kit as before.
+  const showGlints = [] // { x, y, mode, radius, heat, seconds, until, shown, layer, kit }
+  const staticFlies = () => !!(look.staticColors && renderer.flyPlaces)
+  // With Static colors on the flies also pick their lava by colour, not heat (Robert, after the first try: "fly behavior
+  // isn't right, maybe need to target density instead of heat to keep a similar effect"): their lava map (sim/flyFlight.js
+  // scan) is given each particle's place now as a heat, place times twice the heat where lava floats (the gradient's top,
+  // as placeFlies scales), so dark, heavy lava reads as cold, the firefly's, and light lava as hot, the ice fly's. null
+  // with the switch off, and the flies read the lava's heat as before.
+  const placeTemps = (st, count) => staticFlies() && renderer.placesNow && st ? renderer.placesNow(st, count, 2 * params.gravity) : null
+  const flySims = new WeakMap()
+  const flySim = real => {
+    if (!real || typeof real !== 'object') return real
+    let p = flySims.get(real)
+    if (!p) {
+      p = new Proxy(real, {
+        get: (t, key) => {
+          const v = Reflect.get(t, key, t)
+          if (key !== 'state' || !v || !v.x) return v
+          const temp = placeTemps(v, Math.min(t.count, v.x.length))
+          return temp ? { x: v.x, y: v.y, id: v.id, temp } : v
+        }
+      })
+      flySims.set(real, p)
+    }
+    return p
+  }
+  const flyKits = new WeakMap()
+  const flyKit = kit => {
+    if (!kit || typeof kit !== 'object') return kit
+    let k = flyKits.get(kit)
+    if (!k) {
+      const place = (points, o = {}) => {
+        if (!staticFlies()) return kit.place(points, o)
+        for (const p of points) showGlints.push({ x: p.x, y: p.y, mode: o.cold ? 'cool' : 'heat', radius: o.size, heat: o.heat, seconds: o.seconds || 0, until: 0, shown: 0, layer: !!kit.layer, kit })
+        if (showGlints.length > 256) showGlints.splice(0, showGlints.length - 256)
+        return points.length
+      }
+      k = new Proxy(kit, { get: (t, key) => key === 'place' ? place : key === 'sim' ? flySim(t.sim) : Reflect.get(t, key, t) })
+      flyKits.set(kit, k)
+    }
+    return k
+  }
+  const showFlyTouches = now => {
+    if (!staticFlies()) { showGlints.length = 0; return [] }
+    const out = []
+    let kept = 0
+    for (const g of showGlints) {
+      if (g.shown >= 2 && now >= g.until) continue
+      if (!g.layer && g.kit.heatEvents === false) continue
+      if (!g.shown) g.until = now + g.seconds * 1000
+      g.shown++
+      const h = Number(g.kit.heatStrength)
+      out.push({ x: g.x, y: g.y, mode: g.mode, radius: g.radius, heat: (g.heat ?? (Number(params.touchHeat) || 12)) * (Number.isFinite(h) ? h : 1) })
+      showGlints[kept++] = g
+    }
+    showGlints.length = kept
+    return out
+  }
   const flyRoom = () => (firefly() ? Math.min(FIREFLY_ROOM, fireflies.waiting) : 0) + (iceFly() ? Math.min(FIREFLY_ROOM, iceFlies.waiting) : 0)
   // Motion under a theme (settings.js motionInMusic; Robert: "music mode should turn off motion by default in the lamp"):
   // while a theme plays the device's tilt and shakes and the window's moves are not given to the lava, the floor stays
@@ -716,6 +784,7 @@ export async function start () {
   const stopSync = () => {
     syncWant++
     syncOn = false
+    showGlints.length = 0
     if (!sync) return
     sync.stop()
     sync = null
@@ -739,6 +808,12 @@ export async function start () {
     try {
       const [live, doc] = await Promise.all([import('./sync/live.js'), fetch(new URL('./sync/themes/' + file, import.meta.url)).then(r => r.json())])
       const moves = await live.loadMoves(live.movesOf(doc))
+      // The fly moves get the kit that keeps their glints for Static colors (flyKit); their other kit calls go through.
+      for (const name of ['firefly.js', 'ice-fly.js']) {
+        const m = moves.get(name)
+        if (!m) continue
+        for (const fn of ['run', 'cold']) if (typeof m[fn] === 'function') { const f = m[fn]; m[fn] = (kit, ...rest) => f.call(m, flyKit(kit), ...rest) }
+      }
       if (want !== syncWant || !music()) return
       sync = live.createLiveTheme({ doc, getSim: () => sim, params, settings: { gravityStrength }, listener, ranges: musicRanges, sensitivity: musicSensitivity, moves, effects: { flow: musicFlow, heat: musicHeat, sparkle: musicSparkle, glow: musicGlow, flowEvents: musicFlowEvents, heatEvents: musicHeatEvents } }) // the Music card's Effects (settings.js musicFlow, musicFlowEvents)
     } catch (e) { console.error(e); params.elementRate = elementRate(); delete params.kickOff; notify('Music theme: ', 'could not load, the lamp\'s own moves play') }
@@ -1477,12 +1552,22 @@ export async function start () {
     const fireflyNow = performance.now()
     if (firefly() || iceFly()) {
       const st = sim.state, dt = fireflyAt ? Math.min(0.1, Math.max(0, (fireflyNow - fireflyAt) / 1000)) : FRAME
-      const lamp = st && st.x ? { width, height, x: st.x, y: st.y, temp: st.temp, count: Math.min(sim.count, st.x.length, st.y.length), float: params.gravity } : null
+      const n = st && st.x ? Math.min(sim.count, st.x.length, st.y.length) : 0
+      const lamp = st && st.x ? { width, height, x: st.x, y: st.y, temp: placeTemps(st, n) || st.temp, count: n, float: params.gravity } : null
       // Each its own share of what is left: with both on, the firefly may take no more than leaves the ice fly its room.
       const iceRoom = iceFly() ? Math.min(FIREFLY_ROOM, iceFlies.waiting || 1) : 0
-      if (lamp && firefly()) touches.push(...fireflies.tick(lamp, dt, 8 - touches.length - iceRoom))
-      if (lamp && iceFly()) touches.push(...iceFlies.tick(lamp, dt, 8 - touches.length))
-    }
+      // With Static colors on, the glints move the colours they touch instead of their heat (render/staticColors.js fly;
+      // Robert: "we hsoul dhave the flys change the density instead of heat when static color is enabled"): they go to
+      // the renderer, which owns the colours and hands the moved ones to the lamp with the dealt ones, and not to the
+      // lamp as heat. They take the room they took as heat, so the flies fly and glint as before.
+      const flies = staticFlies() ? [] : touches
+      const room = () => 8 - touches.length - (flies === touches ? 0 : flies.length)
+      if (lamp && firefly()) flies.push(...fireflies.tick(lamp, dt, room() - iceRoom))
+      if (lamp && iceFly()) flies.push(...iceFlies.tick(lamp, dt, room()))
+      if (flies !== touches) placeFlies([...flies, ...showFlyTouches(fireflyNow)], dt)
+      else showGlints.length = 0
+    } else if (staticFlies()) placeFlies(showFlyTouches(fireflyNow), fireflyAt ? Math.min(0.1, Math.max(0, (fireflyNow - fireflyAt) / 1000)) : FRAME)
+    else showGlints.length = 0
     fireflyAt = fireflyNow
     if (profiling) tally.music += performance.now() - tm0
     sim.setTouches(touches)

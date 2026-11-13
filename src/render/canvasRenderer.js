@@ -166,5 +166,5 @@ export function createCanvasRenderer (canvas, look) {
     }
   }
 
-  return { render, resize, profile, pixels: () => width * height, takePlaces: statics.take }
+  return { render, resize, profile, pixels: () => width * height, takePlaces: statics.take, flyPlaces: statics.fly, placesNow: statics.placesNow }
 }

@@ -117,6 +117,8 @@ import {
   defaultDensityHeat,
   densityCling,
   defaultDensityCling,
+  staticFlyFade,
+  defaultStaticFlyFade,
   layerCenter,
   defaultLayerCenter,
   layerCurve,
@@ -273,7 +275,7 @@ const card = (open, title, { tools = [], before = [], always = [], cls = '' } = 
 const SETTING_NAMES = {
   musicFlowEvents: 'Flow events', musicHeatEvents: 'Heat events', musicFlow: 'Flow strength', musicHeat: 'Heat strength', musicSparkle: 'Sparkle', musicGlow: 'Glow',
   streamersInMusic: 'Streamers', motionInMusic: 'Motion in music', dyeMode: 'Drawn', dyeFade: 'Fade', dyeStamp: 'Stamp', dyeCurve: 'Streamer curve', dyeCut: 'Tail cut', dyeGlow: 'Streamer glow',
-  showFlow: 'Flow', motionOn: 'Motion', firefly: 'Firefly', iceFly: 'Ice fly', dyedFluid: 'Streamers', staticColors: 'Static colors', staticColorsBy: 'Dealt by', staticColorsLayered: 'Density', layerCenter: 'Center', layerCurve: 'Layer curve', layerBands: 'Bands', layerReverse: 'Reverse', densityMass: 'Mass', densityHeat: 'Heat take', densityCling: 'Cling',
+  showFlow: 'Flow', motionOn: 'Motion', firefly: 'Firefly', iceFly: 'Ice fly', dyedFluid: 'Streamers', staticColors: 'Static colors', staticColorsBy: 'Dealt by', staticColorsLayered: 'Density', layerCenter: 'Center', layerCurve: 'Layer curve', layerBands: 'Bands', layerReverse: 'Reverse', densityMass: 'Mass', densityHeat: 'Heat take', densityCling: 'Cling', staticFlyFade: 'Fly fade',
   stir: 'Stir', turbulence: 'Turb', drifters: 'Eddies', pace: 'Pace', eddySpeed: 'Speed', eddyFalloff: 'Fall off', eddyCurve: 'Curve', eddyPullIn: 'Rim pull in', splatPullIn: 'Splat pull in',
   conduction: 'Conduct', maxTemp: 'Max Temp', heatSpots: 'Period', elementHeat: 'Heat', elementLife: 'Duration', elementLifeScale: 'Big pot', elementRate: 'Pulses', elementCore: 'Core', floorHeat: 'Floor', floorGlow: 'Glow',
   particleCount: 'Count', interactionRadius: 'Radius', cupDepth: 'Bottles', reserve: 'Reserve', pull: 'Pull', stiffnessNear: 'Near', gravityStrength: 'Gravity', lift: 'Lift',
@@ -358,6 +360,9 @@ const DENSITY_CLING_ABOUT = 'How much colours far apart on the gradient let go o
 const LAYER_CENTER_ABOUT = 'Which colour weighs the same as ordinary lava; colours colder than it are heavier, warmer ones lighter. Lower makes most of the lava lighter, higher most of it heavier; 0.5 is the middle.'
 const LAYER_CURVE_ABOUT = 'Where along the colours the weight changes most: 1 evenly, over 1 mostly among the hot colours, under 1 mostly among the cold.'
 const LAYER_BANDS_ABOUT = 'Smooth gives every colour its own weight; 2 or more groups the colours into that many weights, for sharper layers.'
+// Fly fade (settings.js staticFlyFade, render/staticColors.js fly; Robert: "we hsoul dhave the flys change the density
+// instead of heat when static color is enabled"; the music show's flies too: "music show flies should get the same treatment yes").
+const STATIC_FLY_FADE_ABOUT = 'With Static colors on, the Firefly and Ice fly (the switches and the music show\'s) change the colour of the lava they touch instead of its heat: lighter, so it rises, or darker, so it sinks. How many seconds that lava takes to fade back to its own colour.'
 const LAYER_REVERSE_ABOUT = 'Makes the cold colours the lightest instead of the heaviest.'
 const bandsWords = v => v >= 2 ? String(Math.round(v)) : 'Smooth'
 // The streamers' Drawn, Fade and Stamp, shown under whichever switch turns the streamers on: the lamp's own Streamers
@@ -1398,7 +1403,9 @@ export function createSettingsPanel () {
               Object.assign(knob('Heat take', 'density-heat', densityHeat, { min: 0, max: 2, step: 0.05, slider: true }, () => defaultDensityHeat, fixed(2)), { title: DENSITY_HEAT_ABOUT }),
               Object.assign(knob('Cling', 'density-cling', densityCling, { min: 0, max: 1, step: 0.05, slider: true }, () => defaultDensityCling, fixed(2)), { title: DENSITY_CLING_ABOUT })
             ),
-            hint(help, [['Mass', DENSITY_MASS_ABOUT], ['Heat take', DENSITY_HEAT_ABOUT], ['Cling', DENSITY_CLING_ABOUT]]))),
+            hint(help, [['Mass', DENSITY_MASS_ABOUT], ['Heat take', DENSITY_HEAT_ABOUT], ['Cling', DENSITY_CLING_ABOUT]]),
+            knobs(Object.assign(knob('Fly fade', 'static-fly-fade', staticFlyFade, { min: 0.5, max: 20, step: 0.5, slider: true }, () => defaultStaticFlyFade, v => `${Number(v).toFixed(1)} s`), { title: STATIC_FLY_FADE_ABOUT })),
+            hint(help, [['Fly fade', STATIC_FLY_FADE_ABOUT]]))),
         helpList(help, [
           ['Count', 'How many particles make up the lava you see. The hidden pots under the floor get extra on top of this.'],
           ['Radius', 'How far apart two particles can be and still feel each other.'],
